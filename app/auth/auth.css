@@ -1,0 +1,41 @@
+.auth-page {
+  --a-ink: #163300;
+  --a-green: #9fe870;
+  --a-pale: #e2f6d5;
+  --a-soft: #f2f5f0;
+  --a-line: #d5d9d3;
+  --a-muted: #454745;
+  min-height: 100vh;
+  background: white;
+  color: var(--a-ink);
+  display: flex;
+  flex-direction: column;
+  padding: 36px 5vw 24px;
+}
+.auth-logo { width: fit-content; display: flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: -.03em; }
+.auth-logo span { width: 36px; height: 36px; border-radius: 50%; background: var(--a-green); display: grid; place-items: center; font-weight: 900; }
+.auth-panel { width: min(100%, 520px); margin: auto; padding: 45px 0 70px; }
+.auth-intro > span, .auth-success > span { color: var(--a-muted); font-size: 10px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+.auth-emoji { margin-right: 6px; font-size: 16px; line-height: 1; vertical-align: -3px; }
+.auth-intro h1, .auth-success h1 { font-size: clamp(43px, 5vw, 61px); line-height: .95; letter-spacing: -.06em; margin: 17px 0 20px; }
+.auth-intro > p, .auth-success > p { color: var(--a-muted); font-size: 16px; line-height: 1.55; margin: 0 0 32px; }
+.auth-panel form { display: grid; gap: 12px; }
+.auth-config { padding: 20px; border-radius: 8px; background: #fff4e5; color: #5f3b00; }
+.auth-config p { margin: 7px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
+.auth-divider { display: flex; align-items: center; gap: 15px; margin: 28px 0 20px; color: #737872; font-size: 11px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--a-line); }
+.provider-list { display: grid; gap: 10px; }
+.provider-list .provider-button { display: grid; grid-template-columns: 28px 1fr auto; text-align: left; }
+.provider-list .provider-button span { color: #777c75; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.auth-terms { color: #6f746d; text-align: center; font-size: 11px; line-height: 1.45; margin: 25px 20px 0; }
+.auth-success { text-align: center; }
+.auth-success > div { width: 64px; height: 64px; margin: 0 auto 24px; display: grid; place-items: center; border-radius: 50%; background: var(--a-pale); color: var(--a-ink); }
+.auth-success > p strong { color: var(--a-ink); }
+.auth-footer { min-height: 0; padding: 0; background: transparent; display: flex; grid-template-columns: none; align-items: center; justify-content: space-between; gap: 20px; color: var(--a-muted); font-size: 11px; }
+.auth-footer a { color: var(--a-ink); font-weight: 800; }
+
+@media (max-width: 560px) {
+  .auth-page { padding: 24px 20px 18px; }
+  .auth-panel { padding: 70px 0 50px; }
+  .auth-intro h1, .auth-success h1 { font-size: 44px; }
+}
