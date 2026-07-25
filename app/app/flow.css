@@ -89,6 +89,7 @@
 .card-overview-add > span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 9px; background: var(--p-sky); }
 .card-overview-add small { color: var(--p-muted); }
 .card-detail-topbar { min-height: 58px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; border-radius: 10px; background: white; box-shadow: 0 8px 24px rgba(22,51,0,.04); }
+.card-detail-topbar > button:first-child { width: max-content; justify-self: start; }
 .card-detail-topbar > div:nth-child(2) { display: grid; justify-items: center; gap: 2px; }
 .card-detail-topbar > div:nth-child(2) span { color: var(--p-muted); font-size: 8px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .card-detail-topbar > div:last-child { display: flex; justify-content: flex-end; gap: 6px; }
