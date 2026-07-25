@@ -14,7 +14,8 @@ import "../product.css";
 import "../flow.css";
 
 type Method = { id: string; type: string; value: string; label: string };
-type Profile = { name: string; role: string; company: string; bio: string; email: string; website: string; theme: string; photo: string; methods: Method[] };
+type Profile = { slug?: string; name: string; role: string; company: string; bio: string; email: string; website: string; theme: string; photo: string; methods: Method[] };
+type ErrorCorrectionLevel = "L" | "M" | "Q" | "H";
 const fallback: Profile = {
   name: "Alex Morgan", role: "Independent Consultant", company: "Northstar Advisory",
   bio: "I help growing teams turn messy ideas into clear products people want.",
@@ -29,33 +30,58 @@ export default function CardsPage() {
   const [profile, setProfile] = useState(fallback);
   const [photo, setPhoto] = useState("");
   const [qr, setQr] = useState("");
+  const [qrSvg, setQrSvg] = useState("");
   const [copied, setCopied] = useState(false);
-  const shareUrl = typeof window === "undefined" ? "http://localhost:3000/app" : `${window.location.origin}/app`;
+  const [svgCopied, setSvgCopied] = useState(false);
+  const [errorCorrection, setErrorCorrection] = useState<ErrorCorrectionLevel>("M");
+  const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
 
   useEffect(() => {
+    let nextProfile = fallback;
     try {
       const current = localStorage.getItem("aftermeet-card-v2");
       if (current) {
         const card = JSON.parse(current);
-        setProfile({
+        nextProfile = {
           ...fallback, ...card,
           email: card.methods?.find((item: Method) => item.type === "email")?.value || "",
           website: card.methods?.find((item: Method) => item.type === "website")?.value || "",
-        });
+        };
+        setProfile(nextProfile);
         setPhoto(card.photo || "");
       } else {
         const stored = localStorage.getItem("aftermeet-profile-v1");
-        if (stored) setProfile({ ...fallback, ...JSON.parse(stored) });
+        if (stored) {
+          nextProfile = { ...fallback, ...JSON.parse(stored) };
+          setProfile(nextProfile);
+        }
         setPhoto(localStorage.getItem("aftermeet-profile-photo-v1") || "");
       }
     } catch {}
-    QRCode.toDataURL(shareUrl, { width: 900, margin: 2, color: { dark: "#163300", light: "#ffffff" } }).then(setQr);
-  }, [shareUrl]);
+    setShareUrl(`${window.location.origin}/c/${nextProfile.slug || "alex-morgan"}`);
+  }, []);
+
+  useEffect(() => {
+    const options = {
+      width: 900,
+      margin: 2,
+      errorCorrectionLevel: errorCorrection,
+      color: { dark: "#163300", light: "#ffffff" },
+    } as const;
+    QRCode.toDataURL(shareUrl, options).then(setQr);
+    QRCode.toString(shareUrl, { ...options, type: "svg" }).then(setQrSvg);
+  }, [errorCorrection, shareUrl]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  async function copySvg() {
+    await navigator.clipboard.writeText(qrSvg);
+    setSvgCopied(true);
+    window.setTimeout(() => setSvgCopied(false), 1400);
   }
 
   const initials = profile.name.split(" ").map((word) => word[0]).join("").slice(0, 2);
@@ -98,12 +124,32 @@ export default function CardsPage() {
           </article>
           <section className="inline-qr-panel">
             <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Scan to connect</h2><p>Point a phone camera at this code to open your card.</p></div></div>
-            {qr && <img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} />}
+            <div className="qr-correction">
+              <div>
+                <strong>Scan resilience</strong>
+                <span>{errorCorrection === "L" ? "Compact" : errorCorrection === "M" ? "Balanced" : errorCorrection === "Q" ? "Durable" : "Maximum"}</span>
+              </div>
+              <div className="qr-correction-options" aria-label="QR error correction level">
+                {(["L", "M", "Q", "H"] as const).map((level) => (
+                  <button
+                    aria-pressed={errorCorrection === level}
+                    className={errorCorrection === level ? "selected" : ""}
+                    key={level}
+                    onClick={() => setErrorCorrection(level)}
+                    type="button"
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {qr && <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div>}
             <div className="inline-qr-url">{shareUrl}</div>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>
               {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
             </div>
+            <Button fullWidth variant="ghost" onClick={copySvg}><CopyIcon size={17} weight="bold" />{svgCopied ? "SVG copied" : "Copy as SVG"}</Button>
             <p className="qr-helper">After someone scans, add their details and meeting context so you know what to do next.</p>
             <LinkButton fullWidth variant="ghost" href="/app/contacts/new">Add someone you met</LinkButton>
           </section>
