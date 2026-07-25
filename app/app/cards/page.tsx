@@ -9,6 +9,9 @@ import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { AppShell } from "../../components/AppShell";
 import { Button, LinkButton } from "../../components/Button";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contact-methods";
@@ -48,6 +51,7 @@ export default function CardsPage() {
   const [qrSvg, setQrSvg] = useState("");
   const [copied, setCopied] = useState(false);
   const [svgCopied, setSvgCopied] = useState(false);
+  const [showWidgetHelp, setShowWidgetHelp] = useState(false);
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
 
   useEffect(() => {
@@ -125,6 +129,10 @@ export default function CardsPage() {
     window.setTimeout(() => setSvgCopied(false), 1400);
   }
 
+  function openInApp() {
+    window.location.href = `aftermeet://share-card?slug=${encodeURIComponent(profile.slug)}`;
+  }
+
   const initials = profile.name.split(" ").map((word) => word[0]).join("").slice(0, 2);
   const actionMethods = profile.methods.length
     ? profile.methods
@@ -141,28 +149,35 @@ export default function CardsPage() {
       actions={<Button size="small" disabled={cards.length >= MAX_CARDS} onClick={createCard}><PlusIcon size={16} weight="bold" /> New card</Button>}
     >
       <div className="flow-page">
-        <div className="flow-heading"><div><span className="step-pill">Cards + permanent QR</span><h1>One card for every context.</h1><p>Create up to five cards. Each receives its own permanent, high-resilience QR code that never changes when you edit the card.</p></div></div>
+        <div className="flow-heading"><div><span className="step-pill">My cards</span><h1>Choose what you want to share.</h1><p>Select a card below to preview it, show its QR code, or make it available from your phone.</p></div></div>
         <section className="card-library" aria-label="Your cards">
-          <div className="card-library-list">
-            {cards.map((card) => (
-              <button
-                aria-pressed={card.id === activeId}
-                className={card.id === activeId ? "selected" : ""}
-                key={card.id}
-                onClick={() => selectCard(card)}
-                type="button"
-              >
-                <span style={{ background: card.theme }}><QrCodeIcon weight="bold" /></span>
-                <span><strong>{card.label}</strong><small>{card.name || "Not finished yet"}</small></span>
-              </button>
-            ))}
-            {cards.length < MAX_CARDS && <button className="add-card" onClick={createCard} type="button"><PlusIcon weight="bold" /><span><strong>Add card</strong><small>{MAX_CARDS - cards.length} remaining</small></span></button>}
+          <div className="card-library-copy">
+            <strong>Your cards</strong>
+            <span>{cards.length} of {MAX_CARDS} created</span>
           </div>
-          <div className="card-library-actions">
-            <LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit selected</LinkButton>
-            <Button size="small" variant="ghost" disabled={cards.length <= 1} onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button>
+          <div className="card-library-main">
+            <div className="card-library-list">
+              {cards.map((card, index) => (
+                <button
+                  aria-pressed={card.id === activeId}
+                  className={card.id === activeId ? "selected" : ""}
+                  key={card.id}
+                  onClick={() => selectCard(card)}
+                  type="button"
+                >
+                  <span style={{ background: card.theme }}><QrCodeIcon weight="bold" /></span>
+                  <span><strong>{card.label || `Card ${index + 1}`}</strong><small>{card.name || "Finish setting up"}</small></span>
+                </button>
+              ))}
+              {cards.length < MAX_CARDS && <button className="add-card" onClick={createCard} type="button"><PlusIcon weight="bold" /><span><strong>Create another</strong><small>{MAX_CARDS - cards.length} remaining</small></span></button>}
+            </div>
+            <div className="card-library-actions">
+              <LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit selected</LinkButton>
+              <Button size="small" variant="ghost" disabled={cards.length <= 1} onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button>
+            </div>
           </div>
         </section>
+        <div className="selected-card-heading"><div><span>Selected card</span><h2>{profile.label}</h2></div><small>Preview and sharing options</small></div>
         <div className="card-share-layout" id="share">
           <article className="share-card-preview">
             <div className="share-card-cover" style={{ background: profile.theme }}><span>{profile.company[0] || "A"}</span><strong>{profile.company || "Your company"}</strong></div>
@@ -185,16 +200,31 @@ export default function CardsPage() {
             </div>
           </article>
           <section className="inline-qr-panel">
-            <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Scan to connect</h2><p>Point a phone camera at this code to open your card.</p></div></div>
+            <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Let someone scan this card</h2><p>They only need their phone camera—no app or account required.</p></div></div>
+            <ol className="scan-steps">
+              <li><span>1</span>Open the camera</li>
+              <li><span>2</span>Point at the QR</li>
+              <li><span>3</span>Open your card</li>
+            </ol>
             {qr && <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div>}
-            <div className="inline-qr-url">{shareUrl}</div>
+            <div className="inline-qr-url"><span>Public card link</span><strong>{shareUrl}</strong></div>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>
               {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
             </div>
-            <Button fullWidth variant="ghost" onClick={copySvg}><CopyIcon size={17} weight="bold" />{svgCopied ? "SVG copied" : "Copy as SVG"}</Button>
-            <p className="qr-helper">After someone scans, add their details and meeting context so you know what to do next.</p>
-            <LinkButton fullWidth variant="ghost" href="/app/contacts/new">Add someone you met</LinkButton>
+            <Button fullWidth size="small" variant="ghost" onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : "Copy QR as SVG"}</Button>
+            <section className="phone-widget-panel">
+              <div className="phone-widget-head"><span><DeviceMobileIcon size={22} weight="bold" /></span><div><h3>Use this card from your phone</h3><p>Open it instantly from the AfterMeet app or your Home Screen widget.</p></div></div>
+              <div className="phone-widget-actions">
+                <Button onClick={openInApp}><DeviceMobileIcon size={17} weight="bold" /> Open in app</Button>
+                <Button variant="secondary" aria-expanded={showWidgetHelp} onClick={() => setShowWidgetHelp((current) => !current)}>Add a widget {showWidgetHelp ? <CaretUpIcon /> : <CaretDownIcon />}</Button>
+              </div>
+              {showWidgetHelp && <div className="widget-instructions">
+                <article><strong>iPhone or iPad</strong><p>Install and open AfterMeet once. Touch and hold the Home Screen, tap <b>Edit</b>, then <b>Add Widget</b>. Search for AfterMeet and choose Quick Share.</p></article>
+                <article><strong>Android</strong><p>Install and open AfterMeet once. Touch and hold an empty part of the Home Screen, tap <b>Widgets</b>, then choose AfterMeet Quick Share.</p></article>
+                <small>Apple and Android require widgets to be added from the device’s widget picker.</small>
+              </div>}
+            </section>
           </section>
         </div>
       </div>
