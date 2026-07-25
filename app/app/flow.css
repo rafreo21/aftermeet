@@ -86,9 +86,6 @@
 .inline-qr-image { width: 100%; aspect-ratio: 1; display: block; object-fit: contain; image-rendering: pixelated; }
 .inline-qr-url { padding: 11px 13px; border-radius: 7px; background: var(--p-ice); color: var(--p-muted); font-size: 11px; overflow-wrap: anywhere; }
 .inline-qr-actions { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.permanent-qr-note { margin: 10px 0 0; padding: 11px 12px; display: grid; gap: 3px; border-radius: 7px; background: var(--p-sky); }
-.permanent-qr-note strong { font-size: 11px; }
-.permanent-qr-note span { color: var(--p-muted); font-size: 10px; line-height: 1.4; }
 .qr-helper { margin: 20px 0 8px; color: var(--p-muted); font-size: 12px; line-height: 1.5; }
 .empty-state { min-height: 440px; padding: 40px; border-radius: 12px; background: white; display: grid; place-items: center; text-align: center; box-shadow: 0 10px 30px rgba(22,51,0,.05); }
 .empty-state > div { max-width: 420px; }

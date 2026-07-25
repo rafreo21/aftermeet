@@ -188,7 +188,6 @@ export default function CardsPage() {
             <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Scan to connect</h2><p>Point a phone camera at this code to open your card.</p></div></div>
             {qr && <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div>}
             <div className="inline-qr-url">{shareUrl}</div>
-            <p className="permanent-qr-note"><strong>Permanent QR</strong><span>Maximum error correction is always on. Editing this card will not change its code.</span></p>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>
               {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
