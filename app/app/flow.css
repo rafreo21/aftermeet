@@ -56,7 +56,14 @@
 .share-card-body h2 { margin: 18px 0 5px; font-size: 34px; letter-spacing: -.045em; }
 .share-card-body > p { color: var(--p-muted); line-height: 1.5; }
 .share-role { margin-top: 0; font-size: 12px; }
-.share-contact { margin: 22px 0; padding: 16px; display: grid; gap: 7px; border-radius: 8px; background: var(--p-ice); font-size: 13px; overflow-wrap: anywhere; }
+.share-contact { margin: 22px 0; display: grid; gap: 7px; font-size: 13px; overflow-wrap: anywhere; }
+.share-contact a, .share-contact .unavailable-method { min-width: 0; padding: 12px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: 7px; background: var(--p-ice); color: var(--p-navy); text-decoration: none; }
+.share-contact a:hover { background: var(--p-sky); }
+.share-contact a:focus-visible { outline: 3px solid rgba(159,232,112,.65); outline-offset: 2px; }
+.share-contact a > span, .share-contact .unavailable-method { min-width: 0; }
+.share-contact a > span { display: grid; gap: 2px; }
+.share-contact small { color: var(--p-muted); overflow-wrap: anywhere; }
+.share-contact svg { flex: 0 0 auto; }
 .inline-qr-panel { padding: 26px; }
 .inline-qr-head { display: flex; align-items: flex-start; gap: 12px; }
 .inline-qr-head > span { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 8px; background: var(--p-sky); }

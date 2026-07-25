@@ -153,8 +153,10 @@
 .method-library button > svg:last-child { grid-column: 2; grid-row: 1; }
 .method-library button span { grid-column: 1 / 3; align-self: end; font-size: 11px; font-weight: 800; }
 .preview-methods { margin-top: 22px; display: grid; gap: 9px; }
-.preview-methods > div { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; }
-.preview-methods > div > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: var(--p-navy); }
+.preview-methods > div, .preview-methods > a { padding: 4px; display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; border-radius: 8px; color: inherit; text-decoration: none; }
+.preview-methods > a:hover { background: var(--p-ice); }
+.preview-methods > a:focus-visible { outline: 3px solid rgba(159,232,112,.65); outline-offset: 2px; }
+.preview-methods > div > span, .preview-methods > a > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: var(--p-navy); }
 .preview-methods p { min-width: 0; margin: 0; display: grid; gap: 2px; }
 .preview-methods strong { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
 .preview-methods small { color: var(--p-muted); overflow-wrap: anywhere; }

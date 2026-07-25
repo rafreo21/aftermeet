@@ -39,6 +39,7 @@ import { YoutubeLogoIcon } from "@phosphor-icons/react/dist/csr/YoutubeLogo";
 import { AppShell } from "../../../components/AppShell";
 import { Button, IconButton, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
+import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
 import "../../product.css";
 
 type MethodType =
@@ -414,7 +415,14 @@ export default function CardEditor() {
                 <h2>{draft.name || "Your name"}</h2><p className="card-role">{draft.role || "Your role"}{draft.company && ` · ${draft.company}`}</p>
                 <p className="card-bio">{draft.bio || "Your introduction will appear here."}</p>
                 <div className="card-actions"><Button fullWidth style={{ background: draft.theme }}>Save contact</Button><Button fullWidth variant="secondary">Share details</Button></div>
-                <div className="preview-methods">{draft.methods.map((method) => { const meta = methodMeta[method.type]; return <div key={method.id}><span style={{ background: draft.theme }}><meta.Icon weight="bold" /></span><p><strong>{method.label}</strong><small>{method.value}</small></p></div>; })}</div>
+                <div className="preview-methods">{draft.methods.map((method) => {
+                  const meta = methodMeta[method.type];
+                  const href = contactMethodHref(method);
+                  const content = <><span style={{ background: draft.theme }}><meta.Icon weight="bold" /></span><p><strong>{method.label}</strong><small>{method.value}</small></p></>;
+                  return href
+                    ? <a key={method.id} href={href} target={contactMethodOpensNewTab(href) ? "_blank" : undefined} rel={contactMethodOpensNewTab(href) ? "noreferrer" : undefined} aria-label={`${method.label}: ${meta.name}`}>{content}</a>
+                    : <div key={method.id}>{content}</div>;
+                })}</div>
               </div>
             </article>
           </aside>

@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "AfterMeet",
+    "slug": "aftermeet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "aftermeet",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.aftermeet.app",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.aftermeet.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#9FE870",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#163300",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow AfterMeet to scan contact card QR codes."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow AfterMeet to save people you meet to your contacts."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow AfterMeet to use photos on your contact card."
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.aftermeet.app.widgets",
+          "groupIdentifier": "group.com.aftermeet.app",
+          "widgets": [
+            {
+              "name": "QuickShareWidget",
+              "displayName": "AfterMeet Quick Share",
+              "description": "Open your contact card and QR code from the Home Screen.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "accessoryRectangular"
+              ]
+            }
+          ]
+        }
+      ],
+      "./plugins/withAndroidQuickShareWidget"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "publicCardBaseUrl": "http://localhost:3000"
+    }
+  }
+}

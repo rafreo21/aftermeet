@@ -6,8 +6,10 @@ import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { AppShell } from "../../components/AppShell";
 import { Button, LinkButton } from "../../components/Button";
+import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contact-methods";
 import "../product.css";
 import "../flow.css";
 
@@ -57,6 +59,12 @@ export default function CardsPage() {
   }
 
   const initials = profile.name.split(" ").map((word) => word[0]).join("").slice(0, 2);
+  const actionMethods = profile.methods.length
+    ? profile.methods
+    : [
+        { id: "legacy-email", type: "email", value: profile.email, label: "Email" },
+        { id: "legacy-website", type: "website", value: profile.website, label: "Website" },
+      ].filter((method) => method.value);
 
   return (
     <AppShell
@@ -76,7 +84,14 @@ export default function CardsPage() {
               <p className="share-role">{profile.role}{profile.company ? ` · ${profile.company}` : ""}</p>
               <p>{profile.bio}</p>
               <div className="share-contact">
-                {profile.methods.length ? profile.methods.map((method) => <span key={method.id}><strong>{method.label}:</strong> {method.value}</span>) : <><span>{profile.email}</span><span>{profile.website}</span></>}
+                {actionMethods.map((method) => {
+                  const href = contactMethodHref(method);
+                  return href
+                    ? <a key={method.id} href={href} target={contactMethodOpensNewTab(href) ? "_blank" : undefined} rel={contactMethodOpensNewTab(href) ? "noreferrer" : undefined}>
+                        <span><strong>{method.label}</strong><small>{method.value}</small></span><ArrowSquareOutIcon weight="bold" />
+                      </a>
+                    : <span className="unavailable-method" key={method.id}><strong>{method.label}</strong><small>{method.value}</small></span>;
+                })}
               </div>
               <LinkButton fullWidth variant="secondary" href="/app/card/edit"><PencilSimpleIcon size={17} weight="bold" />Edit card</LinkButton>
             </div>
