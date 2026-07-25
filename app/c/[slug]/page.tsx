@@ -16,8 +16,13 @@ import "./public-card.css";
 type Params = Promise<{ slug: string }>;
 
 async function getCard(slug: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    process.env.SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) return null;
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const { data } = await supabase
@@ -55,21 +60,6 @@ export default async function PublicCardPage({ params }: { params: Params }) {
   const methods = [...(card.card_methods || [])].sort(
     (a, b) => a.sort_order - b.sort_order,
   );
-  const email = methods.find((method) => method.method_type === "email")?.value || "";
-  const phone = methods.find((method) => method.method_type === "phone")?.value || "";
-  const website = methods.find((method) => method.method_type === "website")?.value || "";
-  const vcard = [
-    "BEGIN:VCARD",
-    "VERSION:3.0",
-    `FN:${card.full_name}`,
-    card.job_title ? `TITLE:${card.job_title}` : "",
-    card.company ? `ORG:${card.company}` : "",
-    email ? `EMAIL:${email}` : "",
-    phone ? `TEL:${phone}` : "",
-    website ? `URL:${website}` : "",
-    "END:VCARD",
-  ].filter(Boolean).join("\n");
-
   return (
     <main
       className="public-card-page"
@@ -124,10 +114,9 @@ export default async function PublicCardPage({ params }: { params: Params }) {
           </div>
           <a
             className="public-card-return"
-            download={`${slug}.vcf`}
-            href={`data:text/vcard;charset=utf-8,${encodeURIComponent(vcard)}`}
+            href={`/c/${encodeURIComponent(slug)}/contact.vcf`}
           >
-            Save to contacts
+            Save contact
           </a>
           <p className="public-card-private">
             Save this card now. AfterMeet never exposes private meeting notes here.

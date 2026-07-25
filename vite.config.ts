@@ -1,5 +1,6 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
+import tailwindcss from "@tailwindcss/vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -34,6 +35,28 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  // Vercel and Supabase integrations commonly create unprefixed variables.
+  // Only the public URL and publishable key are intentionally exposed.
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??= process.env.SUPABASE_URL;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??=
+    process.env.SUPABASE_PUBLISHABLE_KEY;
+
+  const isVercel =
+    process.env.VERCEL === "1" || process.env.NITRO_PRESET === "vercel";
+
+  if (isVercel) {
+    const { nitro } = await import("nitro/vite");
+    return {
+      plugins: [
+        vinext(),
+        tailwindcss(),
+        nitro({
+          preset: "vercel",
+        }),
+      ],
+    };
+  }
+
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
