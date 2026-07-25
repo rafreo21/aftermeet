@@ -45,6 +45,19 @@
 .saved-card-cover { height: 110px; border-radius: 8px; background: var(--p-blue); }
 .saved-card h2 { margin: auto 0 5px; font-size: 25px; }
 .saved-card p { margin: 0 0 20px; color: var(--p-muted); }
+.card-library { padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-radius: 11px; background: white; box-shadow: 0 10px 30px rgba(22,51,0,.05); }
+.card-library-list { min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.card-library-list > button { min-width: 145px; min-height: 54px; padding: 8px 10px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: 8px; background: var(--p-ice); color: var(--p-navy); font: inherit; text-align: left; cursor: pointer; box-shadow: inset 0 0 0 1px transparent; }
+.card-library-list > button:hover { background: var(--p-sky); }
+.card-library-list > button.selected { background: var(--p-sky); box-shadow: inset 0 0 0 2px var(--p-navy); }
+.card-library-list > button > span:first-child { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 6px; }
+.card-library-list > button > span:last-child { min-width: 0; display: grid; gap: 3px; }
+.card-library-list strong, .card-library-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-library-list strong { font-size: 11px; }
+.card-library-list small { max-width: 105px; color: var(--p-muted); font-size: 9px; }
+.card-library-list > button.add-card { min-width: 120px; border: 1px dashed var(--p-line); background: transparent; }
+.card-library-list > button.add-card > svg { margin: 0 6px; }
+.card-library-actions { flex: 0 0 auto; display: flex; gap: 6px; }
 .card-share-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(340px, 1.1fr); gap: 20px; align-items: start; }
 .share-card-preview, .inline-qr-panel { border-radius: 12px; background: white; box-shadow: 0 12px 36px rgba(22,51,0,.07); overflow: hidden; }
 .share-card-cover { min-height: 150px; padding: 24px; display: flex; align-items: flex-start; gap: 9px; background: var(--p-blue); }
@@ -73,14 +86,9 @@
 .inline-qr-image { width: 100%; aspect-ratio: 1; display: block; object-fit: contain; image-rendering: pixelated; }
 .inline-qr-url { padding: 11px 13px; border-radius: 7px; background: var(--p-ice); color: var(--p-muted); font-size: 11px; overflow-wrap: anywhere; }
 .inline-qr-actions { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.qr-correction { margin-top: 22px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: 9px; background: var(--p-ice); }
-.qr-correction > div:first-child { display: grid; gap: 3px; }
-.qr-correction strong { color: var(--p-navy); font-size: 12px; }
-.qr-correction span { color: var(--p-muted); font-size: 10px; }
-.qr-correction-options { display: flex; gap: 5px; }
-.qr-correction-options button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: white; color: var(--p-navy); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: inset 0 0 0 1px var(--p-line); }
-.qr-correction-options button.selected { background: var(--p-lime); box-shadow: inset 0 0 0 2px var(--p-navy); }
-.qr-correction-options button:focus-visible { outline: 3px solid rgba(22,51,0,.2); outline-offset: 2px; }
+.permanent-qr-note { margin: 10px 0 0; padding: 11px 12px; display: grid; gap: 3px; border-radius: 7px; background: var(--p-sky); }
+.permanent-qr-note strong { font-size: 11px; }
+.permanent-qr-note span { color: var(--p-muted); font-size: 10px; line-height: 1.4; }
 .qr-helper { margin: 20px 0 8px; color: var(--p-muted); font-size: 12px; line-height: 1.5; }
 .empty-state { min-height: 440px; padding: 40px; border-radius: 12px; background: white; display: grid; place-items: center; text-align: center; box-shadow: 0 10px 30px rgba(22,51,0,.05); }
 .empty-state > div { max-width: 420px; }
@@ -128,6 +136,8 @@
   .flow-heading { align-items: flex-start; flex-direction: column; }
   .onboarding-shell { padding: 14px; }
   .onboarding-fields { grid-template-columns: 1fr; }
+  .card-library { align-items: stretch; flex-direction: column; }
+  .card-library-actions { justify-content: flex-end; }
 }
 @media (max-width: 520px) {
   .contact-row { grid-template-columns: 44px 1fr; }

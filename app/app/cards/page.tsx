@@ -7,19 +7,32 @@ import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimpl
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { AppShell } from "../../components/AppShell";
 import { Button, LinkButton } from "../../components/Button";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contact-methods";
+import {
+  createLibraryCard,
+  getActiveCardId,
+  type LibraryCard,
+  MAX_CARDS,
+  readCardLibrary,
+  removeLibraryCard,
+  setActiveCardId,
+  upsertLibraryCard,
+} from "../../../lib/card-library";
 import "../product.css";
 import "../flow.css";
 
 type Method = { id: string; type: string; value: string; label: string };
-type Profile = { slug?: string; name: string; role: string; company: string; bio: string; email: string; website: string; theme: string; photo: string; methods: Method[] };
-type ErrorCorrectionLevel = "L" | "M" | "Q" | "H";
+type Profile = LibraryCard & { email: string; website: string };
 const fallback: Profile = {
+  id: "primary-card", slug: "alex-morgan", label: "My primary card",
   name: "Alex Morgan", role: "Independent Consultant", company: "Northstar Advisory",
   bio: "I help growing teams turn messy ideas into clear products people want.",
-  email: "alex@example.com", website: "https://northstar.example", theme: "#9fe870", photo: "",
+  email: "alex@example.com", website: "https://northstar.example", theme: "#9fe870", photo: "", companyLogo: "", coverPhoto: "",
+  createdAt: "", updatedAt: "",
   methods: [
     { id: "email", type: "email", value: "alex@example.com", label: "Work" },
     { id: "website", type: "website", value: "https://northstar.example", label: "Visit my website" },
@@ -28,49 +41,77 @@ const fallback: Profile = {
 
 export default function CardsPage() {
   const [profile, setProfile] = useState(fallback);
+  const [cards, setCards] = useState<LibraryCard[]>([]);
+  const [activeId, setActiveId] = useState(fallback.id);
   const [photo, setPhoto] = useState("");
   const [qr, setQr] = useState("");
   const [qrSvg, setQrSvg] = useState("");
   const [copied, setCopied] = useState(false);
   const [svgCopied, setSvgCopied] = useState(false);
-  const [errorCorrection, setErrorCorrection] = useState<ErrorCorrectionLevel>("M");
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
 
   useEffect(() => {
     let nextProfile = fallback;
     try {
-      const current = localStorage.getItem("aftermeet-card-v2");
-      if (current) {
-        const card = JSON.parse(current);
-        nextProfile = {
-          ...fallback, ...card,
-          email: card.methods?.find((item: Method) => item.type === "email")?.value || "",
-          website: card.methods?.find((item: Method) => item.type === "website")?.value || "",
-        };
-        setProfile(nextProfile);
-        setPhoto(card.photo || "");
-      } else {
-        const stored = localStorage.getItem("aftermeet-profile-v1");
-        if (stored) {
-          nextProfile = { ...fallback, ...JSON.parse(stored) };
-          setProfile(nextProfile);
-        }
-        setPhoto(localStorage.getItem("aftermeet-profile-photo-v1") || "");
+      let library = readCardLibrary(localStorage);
+      if (!library.length) {
+        const primary = createLibraryCard(fallback);
+        library = upsertLibraryCard(localStorage, primary);
       }
+      const selectedId = getActiveCardId(localStorage, library);
+      const selected = library.find((card) => card.id === selectedId) || library[0];
+      nextProfile = toProfile(selected);
+      setCards(library);
+      setActiveId(selected.id);
+      setProfile(nextProfile);
+      setPhoto(selected.photo || "");
     } catch {}
-    setShareUrl(`${window.location.origin}/c/${nextProfile.slug || "alex-morgan"}`);
+    setShareUrl(`${window.location.origin}/c/${nextProfile.slug}`);
   }, []);
 
   useEffect(() => {
     const options = {
       width: 900,
       margin: 2,
-      errorCorrectionLevel: errorCorrection,
+      errorCorrectionLevel: "H",
       color: { dark: "#163300", light: "#ffffff" },
     } as const;
     QRCode.toDataURL(shareUrl, options).then(setQr);
     QRCode.toString(shareUrl, { ...options, type: "svg" }).then(setQrSvg);
-  }, [errorCorrection, shareUrl]);
+  }, [shareUrl]);
+
+  function toProfile(card: LibraryCard): Profile {
+    return {
+      ...card,
+      email: card.methods.find((item) => item.type === "email")?.value || "",
+      website: card.methods.find((item) => item.type === "website")?.value || "",
+    };
+  }
+
+  function selectCard(card: LibraryCard) {
+    setActiveCardId(localStorage, card.id);
+    setActiveId(card.id);
+    setProfile(toProfile(card));
+    setPhoto(card.photo || "");
+    setShareUrl(`${window.location.origin}/c/${card.slug}`);
+  }
+
+  function createCard() {
+    if (cards.length >= MAX_CARDS) return;
+    const card = createLibraryCard({
+      label: `Card ${cards.length + 1}`,
+      theme: ["#9fe870", "#2495e8", "#ff9f43", "#a83df0", "#14b8a6"][cards.length],
+    });
+    upsertLibraryCard(localStorage, card);
+    window.location.href = `/app/card/edit?id=${card.id}`;
+  }
+
+  function deleteActiveCard() {
+    if (cards.length <= 1 || !window.confirm(`Delete “${profile.label}”? This cannot be undone.`)) return;
+    const next = removeLibraryCard(localStorage, activeId);
+    setCards(next);
+    selectCard(next[0]);
+  }
 
   async function copyLink() {
     await navigator.clipboard.writeText(shareUrl);
@@ -95,12 +136,33 @@ export default function CardsPage() {
   return (
     <AppShell
       active="cards"
-      title="My card"
-      subtitle="Create once, share everywhere, then capture what happens next."
-      actions={<LinkButton size="small" href="/app/card/edit"><PencilSimpleIcon size={16} weight="bold" /> Edit card</LinkButton>}
+      title="My cards"
+      subtitle={`${cards.length || 1} of ${MAX_CARDS} cards created`}
+      actions={<Button size="small" disabled={cards.length >= MAX_CARDS} onClick={createCard}><PlusIcon size={16} weight="bold" /> New card</Button>}
     >
       <div className="flow-page">
-        <div className="flow-heading"><div><span className="step-pill">My card + QR</span><h1>Everything you share, in one place.</h1><p>Edit your identity, present your card, and open a scannable QR without moving between separate pages.</p></div></div>
+        <div className="flow-heading"><div><span className="step-pill">Cards + permanent QR</span><h1>One card for every context.</h1><p>Create up to five cards. Each receives its own permanent, high-resilience QR code that never changes when you edit the card.</p></div></div>
+        <section className="card-library" aria-label="Your cards">
+          <div className="card-library-list">
+            {cards.map((card) => (
+              <button
+                aria-pressed={card.id === activeId}
+                className={card.id === activeId ? "selected" : ""}
+                key={card.id}
+                onClick={() => selectCard(card)}
+                type="button"
+              >
+                <span style={{ background: card.theme }}><QrCodeIcon weight="bold" /></span>
+                <span><strong>{card.label}</strong><small>{card.name || "Not finished yet"}</small></span>
+              </button>
+            ))}
+            {cards.length < MAX_CARDS && <button className="add-card" onClick={createCard} type="button"><PlusIcon weight="bold" /><span><strong>Add card</strong><small>{MAX_CARDS - cards.length} remaining</small></span></button>}
+          </div>
+          <div className="card-library-actions">
+            <LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit selected</LinkButton>
+            <Button size="small" variant="ghost" disabled={cards.length <= 1} onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button>
+          </div>
+        </section>
         <div className="card-share-layout" id="share">
           <article className="share-card-preview">
             <div className="share-card-cover" style={{ background: profile.theme }}><span>{profile.company[0] || "A"}</span><strong>{profile.company || "Your company"}</strong></div>
@@ -119,32 +181,14 @@ export default function CardsPage() {
                     : <span className="unavailable-method" key={method.id}><strong>{method.label}</strong><small>{method.value}</small></span>;
                 })}
               </div>
-              <LinkButton fullWidth variant="secondary" href="/app/card/edit"><PencilSimpleIcon size={17} weight="bold" />Edit card</LinkButton>
+              <LinkButton fullWidth variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={17} weight="bold" />Edit card</LinkButton>
             </div>
           </article>
           <section className="inline-qr-panel">
             <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Scan to connect</h2><p>Point a phone camera at this code to open your card.</p></div></div>
-            <div className="qr-correction">
-              <div>
-                <strong>Scan resilience</strong>
-                <span>{errorCorrection === "L" ? "Compact" : errorCorrection === "M" ? "Balanced" : errorCorrection === "Q" ? "Durable" : "Maximum"}</span>
-              </div>
-              <div className="qr-correction-options" aria-label="QR error correction level">
-                {(["L", "M", "Q", "H"] as const).map((level) => (
-                  <button
-                    aria-pressed={errorCorrection === level}
-                    className={errorCorrection === level ? "selected" : ""}
-                    key={level}
-                    onClick={() => setErrorCorrection(level)}
-                    type="button"
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </div>
             {qr && <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div>}
             <div className="inline-qr-url">{shareUrl}</div>
+            <p className="permanent-qr-note"><strong>Permanent QR</strong><span>Maximum error correction is always on. Editing this card will not change its code.</span></p>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>
               {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}

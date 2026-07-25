@@ -40,6 +40,14 @@ import { AppShell } from "../../../components/AppShell";
 import { Button, IconButton, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
+import {
+  createLibraryCard,
+  getActiveCardId,
+  MAX_CARDS,
+  readCardLibrary,
+  setActiveCardId,
+  upsertLibraryCard,
+} from "../../../../lib/card-library";
 import "../../product.css";
 
 type MethodType =
@@ -50,6 +58,7 @@ type MethodType =
   | "paypal" | "venmo" | "cashapp";
 type ContactMethod = { id: string; type: MethodType; value: string; label: string };
 type CardDraft = {
+  id: string; slug: string; createdAt: string; updatedAt: string;
   label: string; name: string; role: string; company: string; bio: string;
   theme: string; photo: string; companyLogo: string; coverPhoto: string; methods: ContactMethod[];
 };
@@ -120,6 +129,10 @@ function suggestionsFor(type: MethodType) {
 }
 
 const initialDraft: CardDraft = {
+  id: "primary-card",
+  slug: "alex-morgan",
+  createdAt: "",
+  updatedAt: "",
   label: "My primary card",
   name: "Alex Morgan",
   role: "Independent Consultant",
@@ -145,8 +158,30 @@ const steps = [
 function loadDraft() {
   if (typeof window === "undefined") return initialDraft;
   try {
-    const current = localStorage.getItem("aftermeet-card-v2");
-    if (current) return { ...initialDraft, ...JSON.parse(current) } as CardDraft;
+    let cards = readCardLibrary(localStorage);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1" && cards.length < MAX_CARDS) {
+      const created = createLibraryCard({
+        ...initialDraft,
+        id: undefined,
+        slug: undefined,
+        label: `Card ${cards.length + 1}`,
+        name: "",
+        role: "",
+        company: "",
+        bio: "",
+        methods: [],
+      });
+      cards = upsertLibraryCard(localStorage, created);
+      window.history.replaceState(null, "", `/app/card/edit?id=${created.id}`);
+      return created as CardDraft;
+    }
+    const requestedId = params.get("id") || getActiveCardId(localStorage, cards);
+    const selected = cards.find((card) => card.id === requestedId) || cards[0];
+    if (selected) {
+      setActiveCardId(localStorage, selected.id);
+      return { ...initialDraft, ...selected } as CardDraft;
+    }
     const legacy = JSON.parse(localStorage.getItem("aftermeet-profile-v1") || "null");
     const photo = localStorage.getItem("aftermeet-profile-photo-v1") || "";
     if (legacy) {
@@ -167,6 +202,8 @@ export default function CardEditor() {
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [editing, setEditing] = useState<ContactMethod | null>(null);
   const [methodError, setMethodError] = useState("");
   const photoInput = useRef<HTMLInputElement>(null);
@@ -191,6 +228,8 @@ export default function CardEditor() {
 
   function persistDraft(next: CardDraft) {
     if (!hydrated) return;
+    upsertLibraryCard(localStorage, next);
+    setActiveCardId(localStorage, next.id);
     localStorage.setItem("aftermeet-card-v2", JSON.stringify(next));
     localStorage.setItem("aftermeet-profile-v1", JSON.stringify({
       name: next.name, role: next.role, company: next.company, bio: next.bio,
@@ -210,9 +249,24 @@ export default function CardEditor() {
     });
   };
 
-  function save() {
+  async function save() {
     persistDraft(draft);
-    setSaved(true);
+    setPublishing(true);
+    setSaveError("");
+    try {
+      const response = await fetch("/api/cards/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "We couldn’t publish this card.");
+      setSaved(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "We couldn’t publish this card.");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   function selectPhoto(event: React.ChangeEvent<HTMLInputElement>) {
@@ -264,13 +318,13 @@ export default function CardEditor() {
   }
 
   function continueFlow() {
-    if (step === 2) { save(); return; }
+    if (step === 2) { void save(); return; }
     goToStep(step + 1);
   }
 
   return (
-    <AppShell active="cards" title="Create your card" subtitle="A simple three-step setup"
-      actions={<Button size="small" onClick={save}>{saved ? <><CheckCircleIcon weight="fill" /> Saved</> : "Save draft"}</Button>}>
+    <AppShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
+      actions={<Button size="small" disabled={publishing} onClick={save}>{publishing ? "Publishing…" : saved ? <><CheckCircleIcon weight="fill" /> Published</> : "Save and publish"}</Button>}>
       <section className="card-creator">
         <nav className="creator-steps" aria-label="Card creation progress">
           {steps.map(({ label, Icon }, index) => (
@@ -399,8 +453,9 @@ export default function CardEditor() {
             )}
 
             <footer className="creator-actions">
+              {saveError ? <p className="creator-save-error" role="alert">{saveError}</p> : null}
               <Button variant="ghost" disabled={step === 0} onClick={() => goToStep(step - 1)}><ArrowLeftIcon /> Back</Button>
-              <Button onClick={continueFlow}>{step === 2 ? "Save card" : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
+              <Button disabled={publishing} onClick={continueFlow}>{step === 2 ? publishing ? "Publishing…" : "Save and publish" : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
             </footer>
           </section>
 

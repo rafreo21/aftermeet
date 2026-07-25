@@ -114,6 +114,7 @@
 .image-options img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; }
 .image-options .remove-image { position: absolute; top: 7px; right: 7px; padding: 3px 6px; border: 0; border-radius: 4px; background: rgba(255,255,255,.92); color: #a1281d; font-size: 10px; font-weight: 750; cursor: pointer; }
 .creator-actions { min-height: 76px; padding: 16px 24px; display: flex; grid-template-columns: none; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--p-line); background: white; color: var(--p-navy); }
+.creator-save-error { margin: 0 auto 0 0; color: #b42318; font-size: 12px; font-weight: 700; }
 .creator-preview { position: sticky; top: 100px; padding: 20px; border-radius: 12px; background: var(--p-sky); }
 .creator-preview-head { margin-bottom: 12px; display: flex; justify-content: space-between; color: var(--p-muted); font-size: 9px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .theme-panel { padding: 22px; border-radius: 9px; background: var(--p-ice); }
