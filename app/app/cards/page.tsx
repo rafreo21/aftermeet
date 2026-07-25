@@ -12,6 +12,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { AppShell } from "../../components/AppShell";
 import { Button, LinkButton } from "../../components/Button";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contact-methods";
@@ -52,6 +53,7 @@ export default function CardsPage() {
   const [copied, setCopied] = useState(false);
   const [svgCopied, setSvgCopied] = useState(false);
   const [showWidgetHelp, setShowWidgetHelp] = useState(false);
+  const [viewingCard, setViewingCard] = useState(false);
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
 
   useEffect(() => {
@@ -59,16 +61,21 @@ export default function CardsPage() {
     try {
       let library = readCardLibrary(localStorage);
       if (!library.length) {
-        const primary = createLibraryCard(fallback);
-        library = upsertLibraryCard(localStorage, primary);
+        setCards([]);
+        setViewingCard(false);
+        return;
       }
       const selectedId = getActiveCardId(localStorage, library);
-      const selected = library.find((card) => card.id === selectedId) || library[0];
+      const requestedId = new URLSearchParams(window.location.search).get("id");
+      const selected = library.find((card) => card.id === requestedId)
+        || library.find((card) => card.id === selectedId)
+        || library[0];
       nextProfile = toProfile(selected);
       setCards(library);
       setActiveId(selected.id);
       setProfile(nextProfile);
       setPhoto(selected.photo || "");
+      setViewingCard(Boolean(requestedId && library.some((card) => card.id === requestedId)));
     } catch {}
     setShareUrl(`${window.location.origin}/c/${nextProfile.slug}`);
   }, []);
@@ -100,6 +107,20 @@ export default function CardsPage() {
     setShareUrl(`${window.location.origin}/c/${card.slug}`);
   }
 
+  function openCard(card: LibraryCard) {
+    selectCard(card);
+    setViewingCard(true);
+    window.history.pushState(null, "", `/app/cards?id=${card.id}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function showCardLibrary() {
+    setViewingCard(false);
+    setShowWidgetHelp(false);
+    window.history.pushState(null, "", "/app/cards");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function createCard() {
     if (cards.length >= MAX_CARDS) return;
     const card = createLibraryCard({
@@ -111,10 +132,12 @@ export default function CardsPage() {
   }
 
   function deleteActiveCard() {
-    if (cards.length <= 1 || !window.confirm(`Delete “${profile.label}”? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete “${profile.label}”? This cannot be undone.`)) return;
     const next = removeLibraryCard(localStorage, activeId);
     setCards(next);
-    selectCard(next[0]);
+    setViewingCard(false);
+    window.history.replaceState(null, "", "/app/cards");
+    if (next[0]) selectCard(next[0]);
   }
 
   async function copyLink() {
@@ -145,40 +168,45 @@ export default function CardsPage() {
     <AppShell
       active="cards"
       title="My cards"
-      subtitle={`${cards.length || 1} of ${MAX_CARDS} cards created`}
+      subtitle={`${cards.length} of ${MAX_CARDS} cards created`}
       actions={<Button size="small" disabled={cards.length >= MAX_CARDS} onClick={createCard}><PlusIcon size={16} weight="bold" /> New card</Button>}
     >
       <div className="flow-page">
-        <div className="flow-heading"><div><span className="step-pill">My cards</span><h1>Choose what you want to share.</h1><p>Select a card below to preview it, show its QR code, or make it available from your phone.</p></div></div>
-        <section className="card-library" aria-label="Your cards">
-          <div className="card-library-copy">
-            <strong>Your cards</strong>
-            <span>{cards.length} of {MAX_CARDS} created</span>
-          </div>
-          <div className="card-library-main">
-            <div className="card-library-list">
-              {cards.map((card, index) => (
-                <button
-                  aria-pressed={card.id === activeId}
-                  className={card.id === activeId ? "selected" : ""}
-                  key={card.id}
-                  onClick={() => selectCard(card)}
-                  type="button"
-                >
-                  <span style={{ background: card.theme }}><QrCodeIcon weight="bold" /></span>
-                  <span><strong>{card.label || `Card ${index + 1}`}</strong><small>{card.name || "Finish setting up"}</small></span>
-                </button>
-              ))}
-              {cards.length < MAX_CARDS && <button className="add-card" onClick={createCard} type="button"><PlusIcon weight="bold" /><span><strong>Create another</strong><small>{MAX_CARDS - cards.length} remaining</small></span></button>}
+        {!cards.length ? (
+          <section className="cards-empty-state">
+            <div className="cards-empty-visual"><div><QrCodeIcon size={42} weight="bold" /></div><span><PlusIcon size={22} weight="bold" /></span></div>
+            <span className="step-pill">Your first card</span>
+            <h1>Create a card people can remember.</h1>
+            <p>Add your identity and the ways people can reach you. AfterMeet creates the QR code when you save the card.</p>
+            <Button onClick={createCard}><PlusIcon size={18} weight="bold" /> Create your first card</Button>
+            <small>You can create up to five cards for different roles, businesses, or occasions.</small>
+          </section>
+        ) : !viewingCard ? (
+          <>
+            <div className="flow-heading"><div><span className="step-pill">My cards</span><h1>Choose a card to open.</h1><p>Open a card to see its details, QR code, sharing tools, and phone widget options.</p></div></div>
+            <section className="card-library-overview" aria-label="Your cards">
+              <header><div><h2>Your cards</h2><p>{cards.length} of {MAX_CARDS} created</p></div>{cards.length < MAX_CARDS && <Button size="small" onClick={createCard}><PlusIcon size={16} weight="bold" /> Create another</Button>}</header>
+              <div className="card-overview-grid">
+                {cards.map((card, index) => (
+                  <article key={card.id} className="card-overview-item">
+                    <button onClick={() => openCard(card)} type="button">
+                      <div className="card-overview-cover" style={{ background: card.theme }}><span>{card.company[0] || card.name[0] || "A"}</span><QrCodeIcon size={22} weight="bold" /></div>
+                      <div className="card-overview-copy"><small>Card {index + 1}</small><h3>{card.label || `Card ${index + 1}`}</h3><p>{card.name || "Finish setting up this card"}</p><strong>View card <ArrowSquareOutIcon size={15} weight="bold" /></strong></div>
+                    </button>
+                  </article>
+                ))}
+                {cards.length < MAX_CARDS && <button className="card-overview-add" onClick={createCard} type="button"><span><PlusIcon size={24} weight="bold" /></span><strong>Create another card</strong><small>{MAX_CARDS - cards.length} remaining</small></button>}
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <div className="card-detail-topbar">
+              <Button size="small" variant="ghost" onClick={showCardLibrary}><ArrowLeftIcon size={16} weight="bold" /> All cards</Button>
+              <div><span>Viewing</span><strong>{profile.label}</strong></div>
+              <div><LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit card</LinkButton><Button size="small" variant="ghost" onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button></div>
             </div>
-            <div className="card-library-actions">
-              <LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit selected</LinkButton>
-              <Button size="small" variant="ghost" disabled={cards.length <= 1} onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button>
-            </div>
-          </div>
-        </section>
-        <div className="selected-card-heading"><div><span>Selected card</span><h2>{profile.label}</h2></div><small>Preview and sharing options</small></div>
-        <div className="card-share-layout" id="share">
+            <div className="card-share-layout" id="share">
           <article className="share-card-preview">
             <div className="share-card-cover" style={{ background: profile.theme }}><span>{profile.company[0] || "A"}</span><strong>{profile.company || "Your company"}</strong></div>
             <div className="share-card-body">
@@ -226,7 +254,9 @@ export default function CardsPage() {
               </div>}
             </section>
           </section>
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </AppShell>
   );

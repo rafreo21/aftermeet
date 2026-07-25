@@ -106,5 +106,10 @@ export function removeLibraryCard(storage: StorageLike, id: string) {
   const next = readCardLibrary(storage).filter((card) => card.id !== id);
   writeCardLibrary(storage, next);
   setActiveCardId(storage, next[0]?.id || "");
+  if (!next.length) {
+    storage.removeItem("aftermeet-card-v2");
+    storage.removeItem("aftermeet-profile-v1");
+    storage.removeItem("aftermeet-profile-photo-v1");
+  }
   return next;
 }
