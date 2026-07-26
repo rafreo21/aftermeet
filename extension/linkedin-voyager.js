@@ -16,7 +16,14 @@
   let contactCacheKey = "";
 
   function clean(value) {
-    return (value ?? "").replace(/\s+/g, " ").trim();
+    const raw = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (!raw || !/&/.test(raw)) return raw;
+    if (typeof document !== "undefined") {
+      const textarea = document.createElement("textarea");
+      textarea.innerHTML = raw;
+      return textarea.value.replace(/\s+/g, " ").trim();
+    }
+    return raw.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
   }
 
   function parsePublicId(url) {
@@ -129,7 +136,8 @@
   }
 
   function parseContactInfo(data) {
-    if (!data) return {};
+    if (!data) return { email: "", phone: "" };
+
     let companyWebsite = "";
     let personalWebsite = "";
     for (const item of data.websites ?? []) {
@@ -153,6 +161,115 @@
       companyWebsite,
       personalWebsite,
     };
+  }
+
+  function parseContactInfoResponse(data) {
+    const direct = parseContactInfo(data);
+    if (direct.email || direct.phone) return direct;
+
+    for (const item of data?.included ?? []) {
+      const parsed = parseContactInfo(item);
+      if (parsed.email || parsed.phone) return parsed;
+      if (item?.data && typeof item.data === "object") {
+        const nested = parseContactInfo(item.data);
+        if (nested.email || nested.phone) return nested;
+      }
+    }
+
+    return direct;
+  }
+
+  function parseContactFromStream(text) {
+    const result = { email: "", phone: "" };
+    mergeContactFields(result, parseEmbeddedFromHtml(text));
+    mergeContactFields(result, parseContactInfoFromText(text));
+
+    const chunks = text.match(/\{[^{}]*"emailAddress"[^{}]*\}/g) ?? [];
+    for (const chunk of chunks) {
+      try {
+        mergeContactFields(result, parseContactInfo(JSON.parse(chunk)));
+      } catch {
+        /* ignore malformed chunks */
+      }
+    }
+
+    if (!result.email) {
+      const match = text.match(/"emailAddress"\s*:\s*"([^"]+)"/i);
+      if (match) result.email = match[1].toLowerCase();
+    }
+    if (!result.phone) {
+      const match = text.match(/"phoneNumbers"\s*:\s*\[\s*\{[^}]*"number"\s*:\s*"([^"]+)"/i);
+      if (match) result.phone = normalizePhone(match[1]);
+    }
+
+    return result;
+  }
+
+  function discoverContactInfoQueryIds() {
+    const html = document.documentElement?.innerHTML ?? "";
+    return [...new Set(html.match(/voyagerIdentityDashProfileContactInfo\.[a-f0-9]{32}/gi) ?? [])];
+  }
+
+  async function fetchContactInfoGraphql(urnId, publicId) {
+    const id = clean(urnId) || findProfileUrnInPage();
+    if (!id) return { email: "", phone: "" };
+
+    const referer = `https://www.linkedin.com/in/${encodeURIComponent(clean(publicId))}/`;
+    const queryIds = discoverContactInfoQueryIds();
+    for (const queryId of queryIds) {
+      const variables = `(profileUrn:urn:li:fsd_profile:${id})`;
+      const data = await voyagerGet(
+        `/graphql?includeWebMetadata=true&variables=${variables}&queryId=${queryId}`,
+        true,
+        referer,
+      );
+      const parsed = parseContactInfoResponse(data);
+      if (parsed.email || parsed.phone) return { email: parsed.email, phone: parsed.phone };
+    }
+    return { email: "", phone: "" };
+  }
+
+  async function fetchSduiContactInfo(publicId, urnId) {
+    const token = csrfToken();
+    const id = clean(publicId);
+    if (!token || !id) return { email: "", phone: "" };
+
+    const referer = `https://www.linkedin.com/in/${encodeURIComponent(id)}/`;
+    const profileUrn = clean(urnId) ? `urn:li:fsd_profile:${clean(urnId)}` : "";
+    const urls = [
+      "https://www.linkedin.com/flagship-web/rsc-action/voyagerIdentityDashProfileContactInfo",
+    ];
+    const bodies = [
+      { profileUrn, vanityName: id, publicIdentifier: id },
+      { variables: { profileUrn, vanityName: id } },
+      { memberIdentity: id },
+    ];
+
+    for (const url of urls) {
+      for (const body of bodies) {
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              accept: "*/*",
+              "content-type": "application/json",
+              "csrf-token": token,
+              "x-restli-protocol-version": "2.0.0",
+              Referer: referer,
+            },
+            body: JSON.stringify(body),
+          });
+          if (!response.ok) continue;
+          const parsed = parseContactFromStream(await response.text());
+          if (parsed.email || parsed.phone) return parsed;
+        } catch {
+          /* try next body */
+        }
+      }
+    }
+
+    return { email: "", phone: "" };
   }
 
   function normalizePhone(value) {
@@ -244,15 +361,23 @@
     if (contactCache && contactCacheKey === cacheKey) return contactCache;
 
     const result = { email: "", phone: "" };
-    mergeContactFields(result, parseEmbeddedSnapshot());
+    const seed = parseEmbeddedSnapshot();
+    mergeContactFields(result, seed);
 
     const referer = `https://www.linkedin.com/in/${encodeURIComponent(id)}/`;
-    const api = await voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`, false, referer);
-    mergeContactFields(result, parseContactInfo(api));
+    const [apiJson, apiNormalized, sdui, graphql, overlay] = await Promise.all([
+      voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`, false, referer),
+      voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`, true, referer),
+      fetchSduiContactInfo(id, seed.urnId),
+      fetchContactInfoGraphql(seed.urnId, id),
+      fetchContactInfoOverlayPage(id),
+    ]);
 
-    if (!result.email || !result.phone) {
-      mergeContactFields(result, await fetchContactInfoOverlayPage(id));
-    }
+    mergeContactFields(result, parseContactInfoResponse(apiJson));
+    mergeContactFields(result, parseContactInfoResponse(apiNormalized));
+    mergeContactFields(result, sdui);
+    mergeContactFields(result, graphql);
+    mergeContactFields(result, overlay);
 
     if (result.email || result.phone) {
       contactCache = result;
@@ -591,7 +716,7 @@
     ]);
 
     mergeFields(parsed, parseProfileView(profileView));
-    mergeFields(parsed, parseContactInfo(contactInfo));
+    mergeContactFields(parsed, parseContactInfoResponse(contactInfo));
 
     if (!hasCompleteExperience(parsed)) {
       mergeExperienceFields(parsed, await fetchLinkedInExperience(id, parsed));

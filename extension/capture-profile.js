@@ -1,6 +1,10 @@
 (function initAfterMeetCapture() {
   function clean(value) {
-    return (value ?? "").replace(/\s+/g, " ").trim();
+    const raw = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (!raw || !/&/.test(raw)) return raw;
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = raw;
+    return textarea.value.replace(/\s+/g, " ").trim();
   }
 
   function normalizeProfileName(value) {
@@ -274,10 +278,58 @@
     return [...document.querySelectorAll("a, button")].find((node) => /^contact info$/i.test(clean(node.textContent))) || null;
   }
 
+  function findContactInfoSurfaces(root = document) {
+    return [...root.querySelectorAll('[role="dialog"], .artdeco-modal, .artdeco-offcanvas, aside, section')]
+      .filter((node) => {
+        const text = node.innerText || "";
+        return /contact info/i.test(text)
+          || Boolean(node.querySelector('a[href^="mailto:"], a[href^="tel:"]'));
+      });
+  }
+
+  function scanForContactInfo(root = document) {
+    for (const surface of findContactInfoSurfaces(root)) {
+      const parsed = {
+        ...extractLinksFrom(surface),
+        ...parseContactInfoFromText(surface.innerText || ""),
+      };
+      if (parsed.email || parsed.phone) return parsed;
+    }
+    return { email: "", phone: "" };
+  }
+
+  function clickElement(node) {
+    if (!node) return;
+    ["pointerdown", "mousedown", "mouseup", "click"].forEach((type) => {
+      node.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+    });
+  }
+
+  async function fetchContactInfoFromHref(href) {
+    if (!href) return { email: "", phone: "" };
+    const url = new URL(href, window.location.origin).href;
+    const response = await fetch(url, {
+      credentials: "include",
+      headers: {
+        accept: "text/html,application/xhtml+xml,*/*",
+        "x-restli-protocol-version": "2.0.0",
+      },
+    });
+    if (!response.ok) return { email: "", phone: "" };
+    const html = await response.text();
+    return {
+      ...parseContactInfoFromText(html.replace(/<[^>]+>/g, "\n")),
+      ...extractLinksFrom({ querySelectorAll(selector) {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        return doc.querySelectorAll(selector);
+      } }),
+    };
+  }
+
   function findContactInfoModal() {
-    return document.querySelector(
-      ".artdeco-modal[role='dialog'], div[role='dialog'][aria-labelledby*='contact' i], .artdeco-modal",
-    );
+    return findContactInfoSurfaces().find((node) => /contact info/i.test(node.innerText || ""))
+      || findContactInfoSurfaces()[0]
+      || null;
   }
 
   function closeContactInfoModal() {
@@ -286,38 +338,44 @@
   }
 
   async function captureContactInfoFromModal() {
-    const openModal = findContactInfoModal();
-    if (openModal) {
-      const fromOpen = {
-        ...extractLinksFrom(openModal),
-        ...parseContactInfoFromText(openModal.innerText || ""),
-      };
-      if (fromOpen.email || fromOpen.phone) return fromOpen;
-    }
+    const existing = scanForContactInfo();
+    if (existing.email || existing.phone) return existing;
 
     const trigger = findContactInfoTrigger();
     if (!trigger) return { email: "", phone: "" };
 
+    const href = trigger.getAttribute("href") || "";
     scrollNodeIntoView(trigger);
-    await sleep(150);
-    trigger.click();
+    await sleep(120);
 
-    for (let attempt = 0; attempt < 14; attempt += 1) {
+    let resolved = null;
+    const observer = new MutationObserver(() => {
+      const found = scanForContactInfo();
+      if (found.email || found.phone) resolved = found;
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    clickElement(trigger);
+
+    const hrefPromise = fetchContactInfoFromHref(href).catch(() => ({ email: "", phone: "" }));
+
+    for (let attempt = 0; attempt < 24 && !resolved; attempt += 1) {
       await sleep(250);
-      const modal = findContactInfoModal();
-      if (!modal) continue;
-
-      const links = extractLinksFrom(modal);
-      const text = parseContactInfoFromText(modal.innerText || "");
-      const email = links.email || text.email;
-      const phone = links.phone || text.phone;
-      if (email || phone) {
-        closeContactInfoModal();
-        return { email, phone };
+      const found = scanForContactInfo();
+      if (found.email || found.phone) {
+        resolved = found;
+        break;
       }
     }
 
+    observer.disconnect();
     closeContactInfoModal();
+
+    if (resolved) return resolved;
+
+    const hrefResult = await hrefPromise;
+    if (hrefResult.email || hrefResult.phone) return hrefResult;
+
     return { email: "", phone: "" };
   }
 
@@ -325,22 +383,20 @@
     let email = clean(seed.email).toLowerCase();
     let phone = normalizePhone(seed.phone);
 
-    if (email && phone) return { email, phone };
+    if (!email || !phone) {
+      const modal = await captureContactInfoFromModal();
+      email = email || clean(modal.email).toLowerCase();
+      phone = phone || normalizePhone(modal.phone);
+    }
 
-    if (publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
+    if ((!email || !phone) && publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
       try {
         const fetched = await window.aftermeetFetchLinkedInContactInfo(publicId);
         email = email || clean(fetched.email).toLowerCase();
         phone = phone || normalizePhone(fetched.phone);
       } catch {
-        /* fall back to modal */
+        /* keep modal values if any */
       }
-    }
-
-    if (!email || !phone) {
-      const modal = await captureContactInfoFromModal();
-      email = email || clean(modal.email).toLowerCase();
-      phone = phone || normalizePhone(modal.phone);
     }
 
     return { email, phone };
