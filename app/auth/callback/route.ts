@@ -9,17 +9,9 @@ import {
 import { sanitizeIntendedDestination } from "../../../lib/auth/redirect";
 import { requirePublicSupabaseConfig } from "../../../lib/supabase/env";
 
-async function linkVisitorConnections(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  intent: ReturnType<typeof parseVisitorIntent>,
-) {
-  if (!intent) return;
-  if (intent.exchangeId) {
-    await supabase.rpc("link_people_connection_from_exchange", { p_exchange_id: intent.exchangeId });
-  } else if (intent.slug) {
-    await supabase.rpc("link_people_connection_from_scan", { p_slug: intent.slug });
-  }
-}
+type ProvisionResult = {
+  onboarding_status?: string;
+};
 
 function createClient(request: NextRequest, response: NextResponse) {
   const config = requirePublicSupabaseConfig();
@@ -31,31 +23,77 @@ function createClient(request: NextRequest, response: NextResponse) {
   });
 }
 
+function redirectWithSession(request: NextRequest, sessionResponse: NextResponse, target: string) {
+  const redirect = NextResponse.redirect(new URL(target, request.url));
+  redirect.headers.set("Cache-Control", "private, no-store");
+  sessionResponse.cookies.getAll().forEach((cookie) => {
+    redirect.cookies.set(cookie);
+  });
+  return redirect;
+}
+
+function redirectToAuth(request: NextRequest, error: "callback" | "provisioning") {
+  return NextResponse.redirect(new URL(`/auth?error=${error}`, request.url));
+}
+
+async function linkVisitorConnections(
+  supabase: ReturnType<typeof createClient>,
+  intent: ReturnType<typeof parseVisitorIntent>,
+) {
+  if (!intent) return;
+  if (intent.exchangeId) {
+    await supabase.rpc("link_people_connection_from_exchange", { p_exchange_id: intent.exchangeId });
+  } else if (intent.slug) {
+    await supabase.rpc("link_people_connection_from_scan", { p_slug: intent.slug });
+  }
+}
+
+async function readOnboardingStatus(supabase: ReturnType<typeof createClient>) {
+  const { data: provisioned, error: provisionError } = await supabase
+    .rpc("provision_personal_workspace")
+    .single<ProvisionResult>();
+  if (!provisionError && provisioned?.onboarding_status) {
+    return provisioned.onboarding_status;
+  }
+
+  const { data: context, error: contextError } = await supabase.rpc("get_my_app_context").single<ProvisionResult>();
+  if (!contextError && context?.onboarding_status) {
+    return context.onboarding_status;
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const intent = parseVisitorIntent(request.nextUrl.searchParams);
   const next = sanitizeIntendedDestination(request.nextUrl.searchParams.get("next"))
     || (intent ? VISITOR_DEFAULT_DESTINATION : "/app");
-  const response = NextResponse.redirect(new URL(next, request.url));
-  response.headers.set("Cache-Control", "private, no-store");
-  const supabase = createClient(request, response);
+  const sessionResponse = NextResponse.redirect(new URL(next, request.url));
+  sessionResponse.headers.set("Cache-Control", "private, no-store");
+  const supabase = createClient(request, sessionResponse);
+
   const code = request.nextUrl.searchParams.get("code");
   const oauthError = request.nextUrl.searchParams.get("error");
-  if (oauthError || !code) return NextResponse.redirect(new URL("/auth?error=callback", request.url));
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) return NextResponse.redirect(new URL("/auth?error=callback", request.url));
-  const { data, error: provisionError } = await supabase.rpc("provision_personal_workspace").single();
-  if (provisionError) {
+  if (oauthError || !code) return redirectToAuth(request, "callback");
+
+  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+  if (exchangeError) return redirectToAuth(request, "callback");
+
+  const onboardingStatus = await readOnboardingStatus(supabase);
+  if (!onboardingStatus) {
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/auth?error=provisioning", request.url));
+    return redirectToAuth(request, "provisioning");
   }
-  const onboardingStatus = (data as { onboarding_status?: string } | null)?.onboarding_status;
+
   if (onboardingStatus !== "completed") {
     const destination = intent ? visitorOnboardingPath(intent) : "/onboarding";
-    return NextResponse.redirect(new URL(destination, request.url), { headers: response.headers });
+    return redirectWithSession(request, sessionResponse, destination);
   }
+
   if (intent) {
     await linkVisitorConnections(supabase, intent);
-    return NextResponse.redirect(new URL(VISITOR_DEFAULT_DESTINATION, request.url), { headers: response.headers });
+    return redirectWithSession(request, sessionResponse, VISITOR_DEFAULT_DESTINATION);
   }
-  return response;
+
+  return redirectWithSession(request, sessionResponse, next);
 }

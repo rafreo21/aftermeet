@@ -11,7 +11,7 @@ AfterMeet already supports social sign-in in the app. Providers stay disabled un
 
 - `http://localhost:3000/auth/callback`
 - `http://localhost:3001/auth/callback` (if port 3000 is taken)
-- Your production URL, e.g. `https://your-domain.com/auth/callback`
+- Your production URL, e.g. `https://aftermeet-beta.vercel.app/auth/callback`
 
 When a provider is enabled, `/auth` picks it up automatically — no deploy required.
 
@@ -73,10 +73,17 @@ Guide: [Supabase — Login with X](https://supabase.com/docs/guides/auth/social-
 1. [Supabase → Authentication → Providers](https://supabase.com/dashboard/project/tgpzxgrvdmmwnodxrooh/auth/providers)
 2. Enable **Google**, **LinkedIn (OIDC)**, and **X / Twitter (OAuth 2.0)** with the client IDs/secrets from above.
 3. [Supabase → Authentication → URL Configuration](https://supabase.com/dashboard/project/tgpzxgrvdmmwnodxrooh/auth/url-configuration)
-   - **Site URL:** `http://localhost:3000` (or production)
-   - **Redirect URLs:** add both localhost callback URLs and your production callback
+   - **Site URL:** `https://aftermeet-beta.vercel.app` (production) or `http://localhost:3000` (local)
+   - **Redirect URLs:** add production and localhost callback URLs listed above
 
-### Option B — Script (recommended)
+### Option C — Redirect URLs only
+
+If OAuth credentials are already configured and you only need production redirects:
+
+```bash
+export SUPABASE_ACCESS_TOKEN="sbp_..."
+node scripts/configure-auth-redirects.mjs
+```
 
 1. Create a [Supabase personal access token](https://supabase.com/dashboard/account/tokens).
 2. Export credentials and run:
