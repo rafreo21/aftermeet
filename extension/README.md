@@ -27,7 +27,8 @@ Then reload the extension again.
 
 ## Notes
 
-- The extension only reads what is visible in your browser tab.
+- The extension reads the visible profile card, open-graph metadata, and page text.
+- Role and company are parsed from headlines like `Designer at Northstar` or `Product Designer · Nexleaf Analytics`.
 - Email and phone appear only when LinkedIn shows them to you.
 - AI cleanup runs when you are signed into AfterMeet and AI Gateway is configured.
 

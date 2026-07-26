@@ -98,7 +98,7 @@ export default function LinkedInImportPage() {
         : "Added from LinkedIn.",
     });
     setLookupStatus("ready");
-    setLookupMessage("Imported visible page details from your browser. Review before saving.");
+    setLookupMessage("Imported visible page details from your browser. Checking LinkedIn for anything else we can verify…");
   }, []);
 
   function applyVerifiedProfile(payload: LinkedInProfileResponse) {
@@ -142,7 +142,6 @@ export default function LinkedInImportPage() {
   }
 
   useEffect(() => {
-    if (extensionImportRef.current) return;
     if (!parsed?.url || !parsed.handle) {
       activeHandleRef.current = "";
       setLookupStatus("idle");
@@ -153,18 +152,20 @@ export default function LinkedInImportPage() {
     if (activeHandleRef.current !== parsed.handle) {
       activeHandleRef.current = parsed.handle;
       setSavedId("");
-      setForm((current) => ({
-        ...current,
-        ...emptyProfileFields,
-        context: current.context,
-      }));
+      if (!extensionImportRef.current) {
+        setForm((current) => ({
+          ...current,
+          ...emptyProfileFields,
+          context: current.context,
+        }));
+      }
     }
 
     const requestId = lookupRequestRef.current + 1;
     lookupRequestRef.current = requestId;
     const timeout = window.setTimeout(() => {
       void loadProfileDetails(parsed.url, parsed.handle, requestId);
-    }, 450);
+    }, extensionImportRef.current ? 0 : 450);
 
     return () => window.clearTimeout(timeout);
   }, [parsed?.url, parsed?.handle]);

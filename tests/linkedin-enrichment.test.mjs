@@ -17,6 +17,15 @@ test("parseLinkedInOpenGraphTitle extracts name, role, and company", () => {
   assert.equal(profile.company, "Northstar");
 });
 
+test("parseLinkedInOpenGraphTitle supports middle-dot headlines", () => {
+  const profile = parseLinkedInOpenGraphTitle("Raphael Okojie - Product Designer · Nexleaf Analytics | LinkedIn");
+  assert.ok(profile);
+  assert.equal(profile.firstName, "Raphael");
+  assert.equal(profile.lastName, "Okojie");
+  assert.equal(profile.role, "Product Designer");
+  assert.equal(profile.company, "Nexleaf Analytics");
+});
+
 test("parseLinkedInOpenGraphTitle rejects generic LinkedIn titles", () => {
   assert.equal(parseLinkedInOpenGraphTitle("Sign In | LinkedIn"), null);
   assert.equal(parseLinkedInOpenGraphTitle("LinkedIn"), null);

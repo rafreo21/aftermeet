@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AfterMeet Capture",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Capture people from LinkedIn and the web into AfterMeet.",
   "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
@@ -27,8 +27,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/in/*"],
-      "js": ["content.js"]
+      "matches": ["*://*.linkedin.com/in/*", "*://linkedin.com/in/*"],
+      "js": ["capture-profile.js", "content.js"],
+      "run_at": "document_idle"
     }
   ]
 }

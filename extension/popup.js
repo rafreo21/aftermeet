@@ -20,7 +20,7 @@ function renderPreview(profile) {
     profile.companyWebsite,
     profile.linkedinUrl,
   ].filter(Boolean);
-  preview.textContent = lines.join("\n");
+  preview.textContent = lines.length ? lines.join("\n") : "No profile details found on this page.";
 }
 
 async function loadSettings() {
@@ -30,6 +30,48 @@ async function loadSettings() {
 
 async function saveSettings() {
   await chrome.storage.sync.set({ aftermeetBaseUrl: baseUrlInput.value.trim() || "http://localhost:3000" });
+}
+
+async function captureActiveTab(tabId) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, { type: "aftermeet-capture" });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["capture-profile.js"],
+    });
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => window.aftermeetCapturePage(),
+    });
+    return result;
+  }
+}
+
+async function enrichProfile(baseUrl, profile, pageText) {
+  try {
+    const response = await fetch(`${baseUrl}/api/contacts/capture`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile, pageText }),
+    });
+    if (!response.ok) return { profile, message: "" };
+    const payload = await response.json();
+    if (!payload?.profile) return { profile, message: "" };
+    return {
+      profile: {
+        ...profile,
+        ...payload.profile,
+        linkedinUrl: profile.linkedinUrl || payload.profile.linkedinUrl || "",
+        sourceUrl: profile.sourceUrl || payload.profile.sourceUrl || "",
+        source: "extension",
+      },
+      message: typeof payload.message === "string" ? payload.message : "Cleaned captured profile details.",
+    };
+  } catch {
+    return { profile, message: "" };
+  }
 }
 
 captureButton.addEventListener("click", async () => {
@@ -44,45 +86,10 @@ captureButton.addEventListener("click", async () => {
 
   let payload;
   try {
-    payload = await chrome.tabs.sendMessage(tab.id, { type: "aftermeet-capture" });
+    payload = await captureActiveTab(tab.id);
   } catch {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        const clean = (value) => (value ?? "").replace(/\s+/g, " ").trim();
-        const splitName = (fullName) => {
-          const parts = clean(fullName).split(/\s+/).filter(Boolean);
-          return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") };
-        };
-        const normalizeUrl = (value) => {
-          const trimmed = clean(value);
-          if (!trimmed) return "";
-          if (/^https?:\/\//i.test(trimmed)) return trimmed.split("?")[0].replace(/\/+$/, "");
-          return `https://${trimmed.replace(/^\/\//, "")}`;
-        };
-        const sourceUrl = normalizeUrl(window.location.href.split("?")[0]);
-        const title = clean(document.title);
-        const h1 = clean(document.querySelector("h1")?.textContent);
-        const { firstName, lastName } = splitName(h1 || title.split("|")[0] || title);
-        return {
-          profile: {
-            firstName,
-            lastName,
-            email: "",
-            phone: "",
-            company: "",
-            role: "",
-            companyWebsite: /linkedin\.com/i.test(sourceUrl) ? "" : sourceUrl,
-            personalWebsite: "",
-            linkedinUrl: /linkedin\.com\/in\//i.test(sourceUrl) ? sourceUrl : "",
-            sourceUrl,
-            source: "extension",
-          },
-          pageText: document.body?.innerText?.slice(0, 6000) ?? "",
-        };
-      },
-    });
-    payload = result;
+    status.textContent = "Could not read this page.";
+    return;
   }
 
   const profile = payload?.profile;
@@ -92,24 +99,19 @@ captureButton.addEventListener("click", async () => {
   }
 
   renderPreview(profile);
+  status.textContent = "Cleaning captured details…";
 
-  try {
-    await fetch(`${baseUrl}/api/contacts/capture`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile, pageText: payload.pageText ?? "" }),
-    });
-  } catch {
-    // Opening AfterMeet still works without AI cleanup.
-  }
+  const enriched = await enrichProfile(baseUrl, profile, payload.pageText ?? "");
+  renderPreview(enriched.profile);
 
   const target = new URL("/app/contacts/linkedin", baseUrl);
-  if (profile.linkedinUrl || profile.sourceUrl) target.searchParams.set("url", profile.linkedinUrl || profile.sourceUrl);
-  target.searchParams.set("capture", encodePayload(profile));
+  if (enriched.profile.linkedinUrl || enriched.profile.sourceUrl) {
+    target.searchParams.set("url", enriched.profile.linkedinUrl || enriched.profile.sourceUrl);
+  }
+  target.searchParams.set("capture", encodePayload(enriched.profile));
   target.searchParams.set("source", "extension");
   chrome.tabs.create({ url: target.toString() });
-  status.textContent = "Opened AfterMeet for review.";
+  status.textContent = enriched.message || "Opened AfterMeet for review.";
 });
 
 baseUrlInput.addEventListener("change", saveSettings);

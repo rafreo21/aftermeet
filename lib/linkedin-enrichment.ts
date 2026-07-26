@@ -58,7 +58,13 @@ export function parseLinkedInOpenGraphTitle(title: string) {
       role = atMatch[1].trim();
       company = atMatch[2].trim();
     } else {
-      role = headline;
+      const dotParts = headline.split(/\s*[·|@]\s*/).map((part) => part.trim()).filter(Boolean);
+      if (dotParts.length >= 2) {
+        role = dotParts[0];
+        company = dotParts.slice(1).join(" · ");
+      } else {
+        role = headline;
+      }
     }
   }
 
