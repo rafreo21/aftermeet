@@ -21,7 +21,8 @@ export default function RootLayout() {
                 animation: 'slide_from_right',
               }}>
               <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="auth" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="auth/callback" options={{ presentation: 'modal', headerShown: false }} />
               <Stack.Screen name="share-card" options={{ presentation: 'fullScreenModal' }} />
               <Stack.Screen name="scanner" options={{ presentation: 'fullScreenModal' }} />
               <Stack.Screen name="edit-card" />

@@ -7,13 +7,15 @@ import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimpl
 import { GoogleLogoIcon } from "@phosphor-icons/react/dist/csr/GoogleLogo";
 import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
 import { XLogoIcon } from "@phosphor-icons/react/dist/csr/XLogo";
-import { appendVisitorIntentToCallback, type VisitorIntent } from "../../lib/auth/visitor-intent";
+import { appendVisitorIntentToCallback, VISITOR_DEFAULT_DESTINATION, type VisitorIntent, visitorOnboardingPath } from "../../lib/auth/visitor-intent";
 import { Button } from "../components/Button";
 import { TextField } from "../components/FormField";
 import { createClient } from "../../lib/supabase/client";
 
 type SocialProvider = "google" | "linkedin_oidc" | "x";
 type ProviderAvailability = Record<SocialProvider, boolean> | null;
+
+type ProvisionResult = { onboarding_status?: string };
 
 export function AuthForm({
   appUrl,
@@ -29,14 +31,16 @@ export function AuthForm({
   providerAvailability: ProviderAvailability;
 }) {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState("");
+  const [step, setStep] = useState<"email" | "code">("email");
   const [error, setError] = useState(initialError);
   const [providerError, setProviderError] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<SocialProvider | null>(null);
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
+  async function sendCode(event?: React.FormEvent) {
+    event?.preventDefault();
     const normalized = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       setError("Enter a valid email address.");
@@ -45,27 +49,74 @@ export function AuthForm({
     setLoading(true);
     setError("");
     setProviderError("");
-    const callback = new URL("/auth/callback", appUrl || window.location.origin);
-    callback.searchParams.set("next", next);
-    appendVisitorIntentToCallback(callback, visitorIntent);
     try {
       const { error: authError } = await createClient().auth.signInWithOtp({
         email: normalized,
-        options: { emailRedirectTo: callback.toString(), shouldCreateUser: true },
+        options: { shouldCreateUser: true },
       });
       if (authError) {
-        if (authError.code === "over_email_send_rate_limit") {
-          setError("Supabase’s starter email service has reached its 2-email hourly limit. Try again one hour after the first email, or configure custom SMTP.");
-        } else if (authError.status === 429 || authError.message.toLowerCase().includes("rate")) {
+        if (authError.code === "over_email_send_rate_limit" || authError.status === 429 || authError.message.toLowerCase().includes("rate")) {
           setError("Too many sign-in attempts. Please wait a few minutes before trying again.");
         } else {
-          setError("We couldn’t send the link. Please try again.");
+          setError("We couldn’t send the code. Please try again.");
         }
         return;
       }
       setSentTo(normalized);
+      setStep("code");
+      setCode("");
     } catch {
       setError("We couldn’t reach the sign-in service. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyCode(event: React.FormEvent) {
+    event.preventDefault();
+    const token = code.replace(/\D/g, "");
+    if (token.length !== 6) {
+      setError("Enter the 6-digit code from your email.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const supabase = createClient();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: sentTo,
+        token,
+        type: "email",
+      });
+      if (verifyError) {
+        setError(verifyError.message || "That code is invalid or expired. Request a new one.");
+        return;
+      }
+
+      const { data: provisioned, error: provisionError } = await supabase
+        .rpc("provision_personal_workspace")
+        .single<ProvisionResult>();
+
+      let onboardingStatus = provisioned?.onboarding_status;
+      if (provisionError || !onboardingStatus) {
+        const { data: context } = await supabase.rpc("get_my_app_context").single<ProvisionResult>();
+        onboardingStatus = context?.onboarding_status;
+      }
+
+      if (!onboardingStatus) {
+        await supabase.auth.signOut();
+        setError("We couldn’t create your workspace. Please try again.");
+        return;
+      }
+
+      if (onboardingStatus !== "completed") {
+        window.location.assign(visitorIntent ? visitorOnboardingPath(visitorIntent) : "/onboarding");
+        return;
+      }
+
+      window.location.assign(visitorIntent ? VISITOR_DEFAULT_DESTINATION : next);
+    } catch {
+      setError("We couldn’t verify that code. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -98,26 +149,47 @@ export function AuthForm({
     }
   }
 
-  if (sentTo) {
+  if (step === "code" && sentTo) {
     return (
       <div className="auth-success" aria-live="polite">
         <div><CheckCircleIcon size={35} weight="fill" /></div>
-        <span>Link sent</span>
+        <span>Code sent</span>
         <h1>Check your inbox.</h1>
-        <p>If an account can use <strong>{sentTo}</strong>, a secure sign-in link is on its way. It may take a minute.</p>
-        <Button fullWidth onClick={() => void submit({ preventDefault() {} } as React.FormEvent)}>Resend link</Button>
-        <Button fullWidth variant="ghost" onClick={() => { setSentTo(""); setError(""); }}>Use another email</Button>
+        <p>We sent a 6-digit sign-in code to <strong>{sentTo}</strong>. Enter it below to continue.</p>
+        <form onSubmit={verifyCode} noValidate>
+          <TextField
+            id="auth-code"
+            label="Sign-in code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="123456"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            error={error}
+            autoFocus
+          />
+          <Button fullWidth type="submit" loading={loading} disabled={code.replace(/\D/g, "").length < 6}>
+            {loading ? "Verifying…" : "Continue"}
+          </Button>
+        </form>
+        <Button fullWidth variant="ghost" onClick={() => void sendCode()} disabled={loading}>
+          Resend code
+        </Button>
+        <Button fullWidth variant="ghost" onClick={() => { setStep("email"); setSentTo(""); setCode(""); setError(""); }}>
+          Use another email
+        </Button>
       </div>
     );
   }
+
   return (
     <div className="auth-options">
-      <form onSubmit={submit} noValidate>
+      <form onSubmit={sendCode} noValidate>
         <TextField id="auth-email" label="Email address" type="email" autoComplete="email" inputMode="email"
           placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)}
           leadingIcon={<EnvelopeSimpleIcon size={21} weight="bold" />} error={error} autoFocus />
         <Button fullWidth type="submit" loading={loading} disabled={!email || Boolean(loadingProvider)}>
-          {loading ? "Sending secure link…" : "Continue"} {!loading && <ArrowRightIcon size={20} weight="bold" />}
+          {loading ? "Sending code…" : "Continue"} {!loading && <ArrowRightIcon size={20} weight="bold" />}
         </Button>
       </form>
       <div className="auth-divider"><span>or continue with</span></div>

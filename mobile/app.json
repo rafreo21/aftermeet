@@ -81,7 +81,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "publicCardBaseUrl": "http://localhost:3000"
+      "publicCardBaseUrl": "https://aftermeet-beta.vercel.app"
     }
   }
 }

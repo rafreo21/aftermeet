@@ -44,7 +44,7 @@ export default async function AuthPage({
   const environment = readPublicSupabaseConfig();
   const appUrl = resolveAppUrlFromHeaders(await headers());
   const errors: Record<string, string> = {
-    callback: "That sign-in link is invalid or has expired. Request a new one.",
+    callback: "That sign-in session is invalid or has expired. Request a new code.",
     provisioning: "We couldn’t create your private workspace. Your session was closed; please try again.",
   };
   const providerAvailability = environment.config
@@ -59,7 +59,7 @@ export default async function AuthPage({
           <h1>{visitorIntent ? "Remember who you meet." : <>Sign in or sign up<br />in seconds.</>}</h1>
           <p>{visitorIntent
             ? "Create a light AfterMeet account to keep cards and shared meeting records in one place."
-            : "Enter your email and we’ll send a secure, single-use sign-in link."}</p>
+            : "Enter your email and we’ll send a 6-digit sign-in code."}</p>
         </div>
         {!environment.config ? (
           <div className="auth-config" role="alert">
