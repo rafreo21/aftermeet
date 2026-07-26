@@ -169,7 +169,6 @@ export default function CardsPage() {
       active="cards"
       title="My cards"
       subtitle={`${cards.length} of ${MAX_CARDS} cards created`}
-      actions={<Button size="small" disabled={cards.length >= MAX_CARDS} onClick={createCard}><PlusIcon size={16} weight="bold" /> New card</Button>}
     >
       <div className="flow-page">
         {!cards.length ? (
@@ -183,9 +182,9 @@ export default function CardsPage() {
           </section>
         ) : !viewingCard ? (
           <>
-            <div className="flow-heading"><div><span className="step-pill">My cards</span><h1>Choose a card to open.</h1><p>Open a card to see its details, QR code, sharing tools, and phone widget options.</p></div></div>
+            <div className="flow-heading"><div><h1>Choose a card to open.</h1><p>Open a card to see its details, QR code, sharing tools, and phone widget options.</p></div></div>
             <section className="card-library-overview" aria-label="Your cards">
-              <header><div><h2>Your cards</h2><p>{cards.length} of {MAX_CARDS} created</p></div>{cards.length < MAX_CARDS && <Button size="small" onClick={createCard}><PlusIcon size={16} weight="bold" /> Create another</Button>}</header>
+              <header><div><h2>Your cards</h2><p>{cards.length} of {MAX_CARDS} created</p></div></header>
               <div className="card-overview-grid">
                 {cards.map((card, index) => (
                   <article key={card.id} className="card-overview-item">
