@@ -2,24 +2,52 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
+import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
+import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
+import { MagicWandIcon } from "@phosphor-icons/react/dist/csr/MagicWand";
+import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
+import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { ShareNetworkIcon } from "@phosphor-icons/react/dist/csr/ShareNetwork";
 import { AppShell } from "../../../components/AppShell";
+import { ActionDoButton } from "../../../components/ActionDoButton";
+import { OutboundDraftPanel } from "../../../components/OutboundDraftPanel";
 import { Button, LinkButton } from "../../../components/Button";
-import { TextAreaField, TextField } from "../../../components/FormField";
-import { formatDuration, readEncounters, updateEncounter, writeEncounter, type Encounter, type EncounterAction } from "../../../../lib/encounters";
+import { TextAreaField, SelectField, TextField } from "../../../components/FormField";
+import { buildActionLinkContext, channelLabel } from "../../../../lib/action-links";
+import { findContactById } from "../../../../lib/contacts";
+import { encounterFromApi, encounterToApiBody, formatDuration, readEncounters, updateEncounter, writeEncounter, type Encounter, type EncounterAction } from "../../../../lib/encounters";
+import { supportsOutboundDraft } from "../../../../lib/outbound-habit";
 import "../../product.css";
 import "../../flow.css";
 
 export default function EncounterReviewPage() {
   const [encounter, setEncounter] = useState<Encounter | null>(null);
   const [encounterId, setEncounterId] = useState("");
-  const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", dueAt: "", channel: "other" as EncounterAction["channel"] });
+  const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", dueAt: "", channel: "email" as EncounterAction["channel"] });
   const [message, setMessage] = useState("");
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+
+  const actionContext = encounter
+    ? buildActionLinkContext(
+      encounter,
+      encounter.contactId ? findContactById(encounter.contactId) : null,
+    )
+    : null;
+
+  const reviewSteps = [
+    { label: "Record", short: "Capture", Icon: MicrophoneIcon },
+    { label: "Context", short: "Context", Icon: MagicWandIcon },
+    { label: "Connect", short: "Connect", Icon: IdentificationCardIcon },
+    { label: "Follow-up", short: "Follow-up", Icon: PaperPlaneTiltIcon },
+    { label: "Review", short: "Review", Icon: EyeIcon },
+  ] as const;
 
   useEffect(() => {
     const id = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
@@ -35,11 +63,37 @@ export default function EncounterReviewPage() {
       } catch {}
     }
     setEncounterId(id);
-    setEncounter(readEncounters().find((item) => item.id === id) ?? null);
+    void fetch(`/api/encounters/${id}`)
+      .then(async (response) => {
+        if (response.ok) {
+          const payload = await response.json() as { encounter?: Encounter };
+          if (payload.encounter) {
+            writeEncounter(payload.encounter);
+            setEncounter(payload.encounter);
+            return;
+          }
+        }
+        setEncounter(readEncounters().find((item) => item.id === id) ?? null);
+      })
+      .catch(() => {
+        setEncounter(readEncounters().find((item) => item.id === id) ?? null);
+      });
   }, []);
+
+  async function syncEncounter(next: Encounter) {
+    writeEncounter(next);
+    try {
+      await fetch("/api/encounters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(encounterToApiBody(next)),
+      });
+    } catch {}
+  }
 
   function patch(updater: (current: Encounter) => Encounter) {
     const updated = updateEncounter(encounterId, updater);
+    if (updated) void syncEncounter(updated);
     setEncounter(updated);
   }
 
@@ -49,7 +103,7 @@ export default function EncounterReviewPage() {
       ...current,
       actions: [...current.actions, { id: crypto.randomUUID(), title: newAction.title.trim(), owner: newAction.owner, dueAt: newAction.dueAt, channel: newAction.channel, status: "open" }],
     }));
-    setNewAction({ title: "", owner: "me", dueAt: "", channel: "other" });
+    setNewAction({ title: "", owner: "me", dueAt: "", channel: "email" });
   }
 
   async function copyGuestLink() {
@@ -77,14 +131,42 @@ export default function EncounterReviewPage() {
     >
       <div className="review-layout">
         <main className="review-main">
+          <nav className="review-journey" aria-label="Encounter capture progress">
+            <div className="creator-steps encounter-steps">
+              {reviewSteps.map(({ label, short, Icon }, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  aria-current={index === 3 ? "step" : undefined}
+                  className={[index === 3 ? "active" : "complete"].join(" ")}
+                  tabIndex={-1}
+                >
+                  <span><CheckCircleIcon weight="fill" /></span>
+                  <small>{short}</small>
+                  <strong>{label}</strong>
+                </button>
+              ))}
+            </div>
+          </nav>
+
           <header className="review-heading">
-            <div><span className="step-pill">{encounter.status === "shared" ? "Shared" : "Needs review"}</span><h1>{encounter.title}</h1><p>{encounter.personName || "Unlinked person"} · {formatDuration(encounter.durationSeconds)} · consent recorded by {encounter.consent.method}</p></div>
+            <div><span className="step-pill">Step 5 of 5 · Review</span><h1>{encounter.personName || encounter.title}</h1><p>{encounter.personName && encounter.title ? encounter.title : encounter.personName || "Unlinked person"} · {formatDuration(encounter.durationSeconds)} · consent recorded by {encounter.consent.method}</p></div>
             {encounter.status === "shared" && <CheckCircleIcon size={42} weight="fill" />}
           </header>
 
           <section className="review-section private-section">
             <header><span><LockKeyIcon size={20} weight="bold" /></span><div><h2>Your private context</h2><p>This content is never visible in the guest view.</p></div></header>
-            <TextAreaField label="Full transcript" hint="Private" rows={8} value={encounter.transcript} onChange={(event) => patch((current) => ({ ...current, transcript: event.target.value }))} />
+            {encounter.transcript.trim() ? (
+              <>
+                <button type="button" className="review-transcript-toggle" onClick={() => setTranscriptOpen((value) => !value)} aria-expanded={transcriptOpen}>
+                  <div><strong>Full transcript</strong><small>{transcriptOpen ? "Hide the raw transcript while you focus on what to share." : "Expand to edit the full transcript — collapsed by default on review."}</small></div>
+                  {transcriptOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
+                </button>
+                {transcriptOpen && <TextAreaField label="Full transcript" hint="Private" rows={8} value={encounter.transcript} onChange={(event) => patch((current) => ({ ...current, transcript: event.target.value }))} />}
+              </>
+            ) : (
+              <p className="muted-copy">No transcript saved for this encounter.</p>
+            )}
             <TextAreaField label="Private notes" hint="Only you" rows={4} value={encounter.privateNotes} onChange={(event) => patch((current) => ({ ...current, privateNotes: event.target.value }))} />
           </section>
 
@@ -103,15 +185,38 @@ export default function EncounterReviewPage() {
                     onClick={() => patch((current) => ({ ...current, actions: current.actions.map((item) => item.id === action.id ? { ...item, status: item.status === "completed" ? "open" : "completed" } : item) }))}
                     aria-label={action.status === "completed" ? "Mark open" : "Mark complete"}
                   ><CheckCircleIcon size={22} weight={action.status === "completed" ? "fill" : "regular"} /></button>
-                  <div><strong>{action.title}</strong><small>{action.owner === "me" ? "You" : encounter.personName || "Guest"}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {action.channel}</small></div>
+                  <div><strong>{action.title}</strong><small>{action.owner === "me" ? "You" : encounter.personName || "Guest"}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {channelLabel(action.channel)}</small></div>
+                  {actionContext && <ActionDoButton action={action} context={actionContext} showSecondary />}
+                  {actionContext && action.owner === "me" && supportsOutboundDraft(action.channel) ? (
+                    <OutboundDraftPanel
+                      compact
+                      encounter={encounter}
+                      action={action}
+                      context={actionContext}
+                      contact={encounter.contactId ? findContactById(encounter.contactId) : null}
+                      onActionChange={(next) => patch((current) => ({
+                        ...current,
+                        actions: current.actions.map((item) => item.id === next.id ? next : item),
+                      }))}
+                    />
+                  ) : null}
                 </article>
               ))}
               {!encounter.actions.length && <p className="muted-copy">No actions yet. Add the first commitment below.</p>}
             </div>
             <div className="new-action">
               <TextField label="Action" value={newAction.title} onChange={(event) => setNewAction((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Send the introduction" />
-              <label className="compact-field"><span>Owner</span><select value={newAction.owner} onChange={(event) => setNewAction((current) => ({ ...current, owner: event.target.value as "me" | "guest" }))}><option value="me">Me</option><option value="guest">{encounter.personName || "Guest"}</option></select></label>
-              <label className="compact-field"><span>Channel</span><select value={newAction.channel} onChange={(event) => setNewAction((current) => ({ ...current, channel: event.target.value as EncounterAction["channel"] }))}><option value="other">General</option><option value="email">Email</option><option value="linkedin">LinkedIn</option><option value="call">Call</option><option value="meeting">Meeting</option><option value="send">Send something</option></select></label>
+              <SelectField label="Owner" value={newAction.owner} onChange={(event) => setNewAction((current) => ({ ...current, owner: event.target.value as "me" | "guest" }))}>
+                <option value="me">Me</option>
+                <option value="guest">{encounter.personName || "Guest"}</option>
+              </SelectField>
+              <SelectField label="Channel" value={newAction.channel} onChange={(event) => setNewAction((current) => ({ ...current, channel: event.target.value as EncounterAction["channel"] }))}>
+                <option value="email">Email</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="call">Call</option>
+                <option value="meeting">Meeting</option>
+                <option value="send">Send something</option>
+              </SelectField>
               <TextField label="Due" type="date" value={newAction.dueAt} onChange={(event) => setNewAction((current) => ({ ...current, dueAt: event.target.value }))} />
               <Button size="small" onClick={addAction}><PlusIcon size={15} weight="bold" />Add</Button>
             </div>

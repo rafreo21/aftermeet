@@ -1,5 +1,6 @@
 import { readPublicSupabaseConfig } from "../../lib/supabase/env";
 import { sanitizeIntendedDestination } from "../../lib/auth/redirect";
+import { parseVisitorIntent, VISITOR_DEFAULT_DESTINATION } from "../../lib/auth/visitor-intent";
 import { AuthForm } from "./AuthForm";
 import { BrandMark } from "../components/BrandMark";
 import Link from "next/link";
@@ -32,9 +33,12 @@ async function readProviderAvailability(url: string, anonKey: string): Promise<P
 export default async function AuthPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; intent?: string; slug?: string; exchangeId?: string; shareToken?: string }>;
 }) {
   const params = await searchParams;
+  const visitorIntent = parseVisitorIntent(new URLSearchParams(params as Record<string, string>));
+  const next = sanitizeIntendedDestination(params.next)
+    || (visitorIntent ? VISITOR_DEFAULT_DESTINATION : "/app");
   const environment = readPublicSupabaseConfig();
   const errors: Record<string, string> = {
     callback: "That sign-in link is invalid or has expired. Request a new one.",
@@ -49,8 +53,10 @@ export default async function AuthPage({
       <section className="auth-panel">
         <div className="auth-intro">
           <span><b className="auth-emoji" aria-hidden="true">👋</b> Welcome</span>
-          <h1>Sign in or sign up<br />in seconds.</h1>
-          <p>Enter your email and we’ll send a secure, single-use sign-in link.</p>
+          <h1>{visitorIntent ? "Remember who you meet." : <>Sign in or sign up<br />in seconds.</>}</h1>
+          <p>{visitorIntent
+            ? "Create a light AfterMeet account to keep cards and shared meeting records in one place."
+            : "Enter your email and we’ll send a secure, single-use sign-in link."}</p>
         </div>
         {!environment.config ? (
           <div className="auth-config" role="alert">
@@ -60,7 +66,8 @@ export default async function AuthPage({
         ) : (
           <AuthForm
             appUrl={environment.config.appUrl}
-            next={sanitizeIntendedDestination(params.next)}
+            next={next}
+            visitorIntent={visitorIntent}
             initialError={params.error ? errors[params.error] ?? "" : ""}
             providerAvailability={providerAvailability}
           />

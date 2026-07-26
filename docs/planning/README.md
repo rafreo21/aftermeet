@@ -28,6 +28,7 @@ The best starting segment is probably **independent consultants and small agenci
 - [PRODUCT-STUDY.md](./PRODUCT-STUDY.md) — Blinq teardown and market observations
 - [BUILD-OPTIONS.md](./BUILD-OPTIONS.md) — three viable product directions
 - [MVP.md](./MVP.md) — recommended scope and user journey
+- [ROADMAP.md](./ROADMAP.md) — four loops, what’s next, and current backlog
 - [TECHNICAL-PLAN.md](./TECHNICAL-PLAN.md) — suggested architecture and delivery phases
 
 ## Working product concept

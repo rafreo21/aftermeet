@@ -5,7 +5,7 @@ import { readPublicSupabaseConfig } from "./lib/supabase/env";
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApp = pathname === "/app" || pathname.startsWith("/app/");
-  const isOnboarding = pathname === "/onboarding";
+  const isOnboarding = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
   if (!isApp && !isOnboarding) return NextResponse.next();
   if (process.env.NODE_ENV === "development" && process.env.AFTERMEET_DEV_PREVIEW === "true") {
     return isOnboarding
@@ -35,8 +35,10 @@ export async function proxy(request: NextRequest) {
   const { data: context } = await supabase.rpc("get_my_app_context").single();
   const status = (context as { onboarding_status?: string } | null)?.onboarding_status;
   if (isApp && status !== "completed") return NextResponse.redirect(new URL("/onboarding", request.url));
-  if (isOnboarding && status === "completed") return NextResponse.redirect(new URL("/app", request.url));
+  if (isOnboarding && status === "completed") {
+    return NextResponse.redirect(new URL(pathname.startsWith("/onboarding/visitor") ? "/app/people" : "/app", request.url));
+  }
   return response;
 }
 
-export const config = { matcher: ["/app/:path*", "/onboarding"] };
+export const config = { matcher: ["/app/:path*", "/onboarding", "/onboarding/:path*"] };

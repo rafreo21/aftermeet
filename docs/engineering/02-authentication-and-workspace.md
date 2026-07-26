@@ -37,20 +37,12 @@ Repository tests verify pure redirect/config logic and statically verify the mig
 
 ## Social login (OAuth) setup
 
-Google, LinkedIn, and X are **not enabled yet** in the Supabase project. Email magic-link sign-in works today. To turn on a provider:
+Google, LinkedIn, and X are **not enabled yet** in the Supabase project. Email magic-link sign-in works today.
 
-1. Open [Supabase → Authentication → Providers](https://supabase.com/dashboard/project/tgpzxgrvdmmwnodxrooh/auth/providers).
-2. Enable the provider and paste the OAuth client ID and secret from the vendor console.
-3. Register this **callback URL** in each vendor app:
+Follow the step-by-step runbook in [`03-oauth-provider-setup.md`](./03-oauth-provider-setup.md), or run `node scripts/configure-oauth-providers.mjs` after exporting provider credentials and a Supabase personal access token.
 
-   `https://tgpzxgrvdmmwnodxrooh.supabase.co/auth/v1/callback`
+Provider callback URL for every vendor app:
 
-4. Save the provider in Supabase. The auth page picks up availability automatically — no deploy required.
-
-Official Supabase guides:
-
-- [Google](https://supabase.com/docs/guides/auth/social-login/auth-google)
-- [LinkedIn](https://supabase.com/docs/guides/auth/social-login/auth-linkedin)
-- [X (Twitter)](https://supabase.com/docs/guides/auth/social-login/auth-twitter)
+`https://tgpzxgrvdmmwnodxrooh.supabase.co/auth/v1/callback`
 
 After enabling a provider, confirm `/auth` shows the button as active (label changes from **Soon** to **Account** or **Profile**) and complete a test sign-in through `/auth/callback`.

@@ -1,19 +1,24 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
+import { ChartLineUpIcon } from "@phosphor-icons/react/dist/csr/ChartLineUp";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
 import { IconButton } from "./Button";
 import { useAppUser } from "./AppUserContext";
 import { BrandMark } from "./BrandMark";
+import { hydrateContactsFromServer } from "../../lib/contacts-sync";
+import { hydrateEncountersFromServer } from "../../lib/encounters-sync";
+import { hydrateCardLibraryFromServer } from "../../lib/card-library-sync";
 
 type AppShellProps = {
-  active: "home" | "cards" | "contacts" | "followups";
+  active: "home" | "people" | "cards" | "contacts" | "followups" | "activate";
   title: string;
   subtitle?: string;
   actions?: ReactNode;
@@ -23,13 +28,20 @@ type AppShellProps = {
 export function AppShell({ active, title, subtitle, actions, children }: AppShellProps) {
   const user = useAppUser();
   const [mobileNav, setMobileNav] = useState(false);
+  useEffect(() => {
+    void hydrateContactsFromServer();
+    void hydrateEncountersFromServer();
+    void hydrateCardLibraryFromServer();
+  }, []);
   const label = user.displayName || user.email.split("@")[0] || "AfterMeet user";
   const initials = label.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
   const nav = [
     ["home", "/app", HouseIcon, "Home"],
+    ["people", "/app/people", UsersThreeIcon, "People you've met"],
     ["cards", "/app/cards", IdentificationCardIcon, "My card"],
-    ["contacts", "/app/contacts", UsersThreeIcon, "People"],
+    ["contacts", "/app/contacts", UsersThreeIcon, "My contacts"],
     ["followups", "/app/followups", PaperPlaneTiltIcon, "Inbox"],
+    ["activate", "/app/activate", ChartLineUpIcon, "Activate"],
   ] as const;
 
   return (
@@ -44,6 +56,9 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
           ))}
           <a className="capture-nav" href="/app/encounters/new">
             <MicrophoneIcon size={20} weight="fill" /> Capture
+          </a>
+          <a href="/app/scan">
+            <QrCodeIcon size={20} weight="bold" /> Scan badge
           </a>
         </nav>
         <div className="sidebar-bottom">

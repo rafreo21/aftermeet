@@ -5,36 +5,45 @@ import { DotsThreeIcon } from "@phosphor-icons/react/dist/ssr/DotsThree";
 import { Button, IconLinkButton, LinkButton } from "./components/Button";
 import { BrandMark } from "./components/BrandMark";
 
-const opportunities = [
+const capabilities = [
+  ["Share identity", "QR, NFC, Wallet and signatures"],
+  ["Capture people", "Cards, badges, LinkedIn and forms"],
+  ["Remember context", "AI notes connected to every contact"],
+  ["Activate data", "CRM sync, campaigns and attribution"],
+] as const;
+
+const buildStatus = [
   {
     number: "01",
-    emoji: "🎯",
-    title: "Vertical identity",
-    text: "Digital profiles and follow-up workflows designed around one profession—realtors, recruiters, or consultants.",
-    verdict: "Strong with existing distribution",
+    title: "Share identity",
+    detail: "QR, public link, vCard, and email signature are in the app. Wallet and NFC come next.",
+    status: "In the app",
   },
   {
     number: "02",
-    emoji: "⚡",
-    title: "Meeting → follow-up",
-    text: "Capture a person, remember the context, suggest the next action, and keep the relationship warm.",
-    verdict: "Recommended",
-    featured: true,
+    title: "Capture people",
+    detail: "Visitors can now share their details back from your public card. Imports and manual add already work.",
+    status: "Shipping now",
   },
   {
     number: "03",
-    emoji: "🎟️",
-    title: "Event lead capture",
-    text: "Scan, qualify, enrich, and route event leads into a CRM while measuring pipeline and event ROI.",
-    verdict: "Best as a second product",
+    title: "Remember context",
+    detail: "Record meeting, private notes, shared summary, and follow-up actions—the flow you liked—is live.",
+    status: "In progress",
+  },
+  {
+    number: "04",
+    title: "Activate data",
+    detail: "CRM sync, campaigns, and attribution stay out until the first three loops feel obvious.",
+    status: "Later",
   },
 ];
 
 const phases = [
-  ["Phase 0", "Validate", "Interview 10–15 consultants, prototype the journey, and run a concierge pilot.", "1–2 weeks"],
-  ["Phase 1", "Card + capture", "Profile editor, public card, QR, vCard, reciprocal details, and contact list.", "2–3 weeks"],
-  ["Phase 2", "Context + action", "Meeting notes, voice capture, AI extraction, follow-up drafts, and reminders.", "2–3 weeks"],
-  ["Phase 3", "Pilot hardening", "Analytics, imports, deduplication, privacy controls, accessibility, and reliability.", "2 weeks"],
+  ["Phase 1", "Share identity", "Finish card, QR, vCard, signature, and wallet-ready sharing surfaces.", "Now"],
+  ["Phase 2", "Capture people", "Reciprocal exchange, imports, and a unified contact record from every source.", "Now"],
+  ["Phase 3", "Context + action", "Polish meeting capture, guest records, and the follow-up inbox.", "Next"],
+  ["Phase 4", "Activate data", "CRM sync, reminders, outbound drafts, and analytics.", "Later"],
 ];
 
 export default function Home() {
@@ -43,7 +52,7 @@ export default function Home() {
       <nav className="nav">
         <a className="brand" href="#top" aria-label="AfterMeet home">
           <BrandMark className="brand-mark" size={38} />
-          <span>AfterMeet <small>product lab</small></span>
+          <span>AfterMeet</span>
         </a>
         <div className="nav-links">
           <LinkButton size="small" variant="ghost" href="/auth">Login</LinkButton>
@@ -52,20 +61,20 @@ export default function Home() {
       </nav>
 
       <section className="hero" id="top">
-        <div className="eyebrow"><span /> Product opportunity · July 2026</div>
-        <h1>Don’t build another<br /><em>digital business card.</em></h1>
+        <div className="eyebrow"><span /> Relationship workspace · July 2026</div>
+        <h1>Remember every person.<br /><em>Make the next move.</em></h1>
         <div className="hero-bottom">
-          <p>Build the product that makes sure something meaningful happens <strong>after the meeting.</strong></p>
-          <IconLinkButton className="circle-link" size="normal" variant="secondary" href="#direction" aria-label="Explore the recommendation"><ArrowDownIcon size={21} weight="bold" /></IconLinkButton>
+          <p>AfterMeet connects four loops—<strong>share identity, capture people, remember context, activate data</strong>—without turning every meeting into CRM admin.</p>
+          <IconLinkButton className="circle-link" size="normal" variant="secondary" href="#product" aria-label="See the four loops"><ArrowDownIcon size={21} weight="bold" /></IconLinkButton>
         </div>
       </section>
 
-      <section className="study section" id="study">
-        <div className="section-label">01 / What we learned</div>
+      <section className="study section" id="product">
+        <div className="section-label">01 / The four loops</div>
         <div className="study-grid">
           <div>
-            <h2>Blinq is no longer<br />just a card.</h2>
-            <p className="lede">It is becoming a relationship-capture platform spanning identity, lead capture, memory, and workflow.</p>
+            <h2>Four loops.<br />One product.</h2>
+            <p className="lede">We ship them in order. Identity first, capture second, context third, activation last.</p>
           </div>
           <div className="system-list">
             <div className="system-head">
@@ -73,60 +82,52 @@ export default function Home() {
               <p>Each capability makes the next one more valuable.</p>
             </div>
             <div className="system-grid">
-            {[
-              ["Share identity", "QR, NFC, Wallet and signatures"],
-              ["Capture people", "Cards, badges, LinkedIn and forms"],
-              ["Remember context", "AI notes connected to every contact"],
-              ["Activate data", "CRM sync, campaigns and attribution"],
-            ].map(([title, detail], index) => (
-              <div className="system-row" key={title}>
-                <div className="system-number">0{index + 1}</div>
-                <div className="system-copy">
-                  <h3>{title}</h3>
-                  <p>{detail}</p>
+              {capabilities.map(([title, detail], index) => (
+                <div className="system-row" key={title}>
+                  <div className="system-row-top">
+                    <div className="system-number">0{index + 1}</div>
+                  </div>
+                  <div className="system-copy">
+                    <h3>{title}</h3>
+                    <p>{detail}</p>
+                  </div>
+                  <ArrowRightIcon className="system-arrow" size={18} weight="bold" aria-hidden="true" />
                 </div>
-                <ArrowRightIcon className="system-arrow" size={18} weight="bold" aria-hidden="true" />
-              </div>
-            ))}
+              ))}
             </div>
           </div>
         </div>
-        <div className="proof-strip">
-          <div><strong>4M+</strong><span>users claimed worldwide</span></div>
-          <div><strong>500K</strong><span>companies represented</span></div>
-          <div><strong>$0</strong><span>entry point creates reach</span></div>
-          <div><strong>4 loops</strong><span>share · capture · remember · act</span></div>
-        </div>
       </section>
 
-      <section className="direction section" id="direction">
-        <div className="section-label light">02 / Where we can win</div>
+      <section className="direction section" id="status">
+        <div className="section-label light">02 / What we&apos;re shipping</div>
         <div className="direction-head">
-          <h2>Three credible<br />ways in.</h2>
-          <p>Matching Blinq feature-for-feature would be expensive and strategically weak. A sharper job or audience gives us a reason to exist.</p>
+          <h2>Build the missing<br />pieces first.</h2>
+          <p>These are the same four loops—not a competitor story. The app is catching up to the product: identity and capture now, context polish next, activation later.</p>
         </div>
-        <div className="opportunity-grid">
-          {opportunities.map((item) => (
-            <article className={`opportunity ${item.featured ? "featured" : ""}`} key={item.number}>
-              <span className="op-number">{item.number}</span>
-              <span className="op-emoji" aria-hidden="true">{item.emoji}</span>
-              {item.featured && <span className="recommended">Our pick</span>}
+        <div className="opportunity-grid opportunity-grid--four">
+          {buildStatus.map((item) => (
+            <article className="opportunity" key={item.number}>
+              <div className="opportunity-top">
+                <span className="op-number">{item.number}</span>
+              </div>
+              <span className="op-status">{item.status}</span>
               <h3>{item.title}</h3>
-              <p>{item.text}</p>
-              <div className="verdict">{item.verdict}<ArrowRightIcon size={17} weight="bold" /></div>
+              <p>{item.detail}</p>
+              <div className="verdict">Product loop<ArrowRightIcon size={17} weight="bold" /></div>
             </article>
           ))}
         </div>
       </section>
 
       <section className="mvp section" id="mvp">
-        <div className="section-label">03 / Recommended concept</div>
+        <div className="section-label">03 / The core loop</div>
         <div className="concept-intro">
           <div>
             <span className="concept-name">AfterMeet</span>
-            <h2>Remember every person.<br /><em>Make the next move.</em></h2>
+            <h2>Share. Capture.<br /><em>Remember. Act.</em></h2>
           </div>
-          <p>A personal relationship workspace for consultants and small agencies who win business through conversations—but do not consistently maintain a CRM.</p>
+          <p>For consultants and small teams who win work through conversations—but need something lighter than a CRM and sharper than a static business card.</p>
         </div>
 
         <div className="loop" aria-label="Product loop">
@@ -151,7 +152,7 @@ export default function Home() {
             <div className="contact-label">New encounter</div>
             <h3>Maya Chen</h3>
             <p>Founder at Fieldnote Studio</p>
-            <div className="note">“Discussed her September launch. Send the research deck on Monday and introduce her to Alex.”</div>
+            <div className="note">&ldquo;Discussed her September launch. Send the research deck on Monday and introduce her to Alex.&rdquo;</div>
             <div className="extracted">
               <span>Next move</span>
               <strong>Send research deck</strong>
@@ -160,18 +161,18 @@ export default function Home() {
             <Button fullWidth>Review follow-up <ArrowRightIcon size={17} weight="bold" /></Button>
           </div>
           <div className="feature-copy">
-            <div className="feature"><span>01</span><div><h3>A card that starts a workflow</h3><p>Share a profile by link or QR. The recipient can save details or share theirs without creating an account.</p></div></div>
-            <div className="feature"><span>02</span><div><h3>Context in under 30 seconds</h3><p>Type or dictate a post-meeting note. AI extracts topics, promises, next actions, and dates for your review.</p></div></div>
-            <div className="feature"><span>03</span><div><h3>Follow-up without the admin</h3><p>Get an editable, personal message draft and a daily queue of the relationships that need attention.</p></div></div>
+            <div className="feature"><span>01</span><div><h3>Share identity</h3><p>Card, QR, vCard, and email signature copy are in the app today. Wallet and NFC are still on the roadmap.</p></div></div>
+            <div className="feature"><span>02</span><div><h3>Capture people</h3><p>Public cards now include a share-back form so visitors can send their details without creating an account.</p></div></div>
+            <div className="feature"><span>03</span><div><h3>Remember context</h3><p>The record-meeting flow—consent, notes, shared summary, follow-up actions—is the path we are polishing before CRM sync.</p></div></div>
           </div>
         </div>
       </section>
 
-      <section className="roadmap section" id="roadmap">
-        <div className="section-label">04 / A practical route to pilot</div>
+      <section className="roadmap section" id="plan">
+        <div className="section-label">04 / Practical route</div>
         <div className="roadmap-head">
-          <h2>Useful in<br /><em>7–10 weeks.</em></h2>
-          <p>Start with a responsive web app. Prove the habit before adding native apps, NFC manufacturing, ambient recording, or enterprise integrations.</p>
+          <h2>Prove the habit<br /><em>before scale.</em></h2>
+          <p>Web app first. Native apps, NFC, ambient recording, and enterprise integrations come after the share → capture → context loop feels obvious.</p>
         </div>
         <div className="phases">
           {phases.map(([phase, title, text, time]) => (
@@ -197,8 +198,8 @@ export default function Home() {
 
       <footer>
         <div><BrandMark className="brand-mark" size={38} /><strong>AfterMeet</strong></div>
-        <p>Working concept—not affiliated with Blinq.<br />Built from public product research.</p>
-        <a href="#top">Back to top <ArrowUpIcon size={15} weight="bold" /></a>
+        <p>Share identity. Capture people. Remember context. Activate later.</p>
+        <LinkButton variant="ghost" href="/auth?next=/onboarding">Open the app <ArrowUpIcon size={15} weight="bold" /></LinkButton>
       </footer>
     </main>
   );

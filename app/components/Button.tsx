@@ -73,10 +73,20 @@ export function LinkButton({
   fullWidth = false,
   loading: _loading = false,
   className = "",
+  disabled,
+  href,
   ...props
-}: LinkButtonProps) {
+}: LinkButtonProps & { disabled?: boolean }) {
+  const classes = buttonClasses(variant, size, fullWidth, className);
+  if (disabled) {
+    return (
+      <span className={classes} aria-disabled="true">
+        {children}
+      </span>
+    );
+  }
   return (
-    <a {...props} className={buttonClasses(variant, size, fullWidth, className)}>
+    <a {...props} href={href} className={classes}>
       {children}
     </a>
   );

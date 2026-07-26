@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
-import { readEncounters, type Encounter } from "../../../lib/encounters";
+import { encounterFromSharedPayload, readEncounters, type Encounter } from "../../../lib/encounters";
+import { buildAuthHref } from "../../../lib/auth/visitor-intent";
 import { LinkButton } from "../../components/Button";
 import { BrandMark } from "../../components/BrandMark";
 import "../../app/product.css";
@@ -15,7 +16,24 @@ export default function GuestEncounterPage() {
 
   useEffect(() => {
     const token = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
-    setEncounter(readEncounters().find((item) => item.shareToken === token && item.status === "shared") ?? null);
+    void fetch(`/api/encounters/share/${encodeURIComponent(token)}`)
+      .then(async (response) => {
+        if (response.ok) {
+          const payload = await response.json() as { encounter?: Record<string, unknown> };
+          if (payload.encounter) {
+            setEncounter(encounterFromSharedPayload(payload.encounter) ?? null);
+            return;
+          }
+        }
+        setEncounter(
+          readEncounters().find((item) => item.shareToken === token && item.status === "shared") ?? null,
+        );
+      })
+      .catch(() => {
+        setEncounter(
+          readEncounters().find((item) => item.shareToken === token && item.status === "shared") ?? null,
+        );
+      });
   }, []);
 
   if (encounter === undefined) return null;
@@ -36,7 +54,7 @@ export default function GuestEncounterPage() {
         </section>
         <div className="guest-claim">
           <div><strong>Keep this relationship moving</strong><p>Create your private AfterMeet workspace to claim these actions, receive reminders, and add your own notes.</p></div>
-          <LinkButton href={`/auth?next=${encodeURIComponent(`/e/${encounter.shareToken}`)}`}>Create account <ArrowRightIcon size={16} weight="bold" /></LinkButton>
+          <LinkButton href={buildAuthHref({ intent: "visitor", shareToken: encounter.shareToken })}>Create account <ArrowRightIcon size={16} weight="bold" /></LinkButton>
         </div>
         <small className="guest-privacy"><LockKeyIcon size={14} weight="bold" />The raw recording, transcript, and private notes were not shared with you.</small>
       </section>

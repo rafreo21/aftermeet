@@ -1,11 +1,31 @@
-import type { FieldsetHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import { forwardRef } from "react";
+import type { FieldsetHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 
 type SharedProps = {
   label: string;
   hint?: string;
   error?: string;
   leadingIcon?: ReactNode;
+  hideLabel?: boolean;
+  compact?: boolean;
 };
+
+const fieldLabelClass = "text-sm font-semibold text-[#454745]";
+const fieldControlClass = [
+  "block min-h-12 w-full rounded-md border bg-white px-3.5 py-2.5 text-base text-[#0e0f0c]",
+  "outline-none transition",
+  "focus:border-[#163300] focus:ring-4 focus:ring-[#aeb8aa]/45",
+  "disabled:cursor-not-allowed disabled:bg-[#f2f5f0] disabled:text-[#858b82]",
+  "border-[#aeb8aa]",
+].join(" ");
+const compactControlClass = [
+  "block h-[42px] min-h-[42px] w-full rounded-[7px] border bg-white px-3 text-[13px] font-extrabold text-[#0e0f0c]",
+  "outline-none transition",
+  "focus:border-[#163300] focus:ring-4 focus:ring-[#aeb8aa]/45",
+  "disabled:cursor-not-allowed disabled:bg-[#f2f5f0] disabled:text-[#858b82]",
+  "border-[#aeb8aa]",
+].join(" ");
 
 type FormSectionProps = FieldsetHTMLAttributes<HTMLFieldSetElement> & {
   title: string;
@@ -42,22 +62,25 @@ export function FormSection({
   );
 }
 
-export function TextField({
-  label,
-  hint,
-  error,
-  leadingIcon,
-  id,
-  className = "",
-  ...props
-}: SharedProps & InputHTMLAttributes<HTMLInputElement>) {
+export const TextField = forwardRef<HTMLInputElement, SharedProps & InputHTMLAttributes<HTMLInputElement>>(function TextField(
+  {
+    label,
+    hint,
+    error,
+    leadingIcon,
+    id,
+    className = "",
+    ...props
+  },
+  ref,
+) {
   const fieldId = id ?? `field-${props.name ?? label.toLowerCase().replace(/\s+/g, "-")}`;
   const descriptionId = hint || error ? `${fieldId}-description` : undefined;
 
   return (
     <div className={`grid gap-2 ${className}`}>
       <div className="flex items-center justify-between gap-4">
-        <label htmlFor={fieldId} className="text-sm font-semibold text-[#163300]">{label}</label>
+        <label htmlFor={fieldId} className={fieldLabelClass}>{label}</label>
         {hint && !error && <span className="text-xs text-[#6b7168]">{hint}</span>}
       </div>
       <div className="relative">
@@ -68,23 +91,73 @@ export function TextField({
         )}
         <input
           {...props}
+          ref={ref}
           id={fieldId}
           aria-invalid={Boolean(error)}
           aria-describedby={descriptionId}
           className={[
-            "block min-h-12 w-full rounded-md border bg-white px-3.5 py-2.5 text-base text-[#163300]",
-            "placeholder:text-[#858b82] outline-none transition",
-            "focus:border-[#163300] focus:ring-4 focus:ring-[#9fe870]/35",
-            "disabled:cursor-not-allowed disabled:bg-[#f2f5f0] disabled:text-[#858b82]",
+            fieldControlClass,
+            "placeholder:text-[#858b82]",
             leadingIcon ? "pl-11" : "",
-            error ? "border-[#b42318] focus:border-[#b42318] focus:ring-[#fecdca]/50" : "border-[#aeb8aa]",
+            error ? "border-[#b42318] focus:border-[#b42318] focus:ring-[#fecdca]/50" : "",
           ].join(" ")}
         />
       </div>
       {error && <p id={descriptionId} className="text-sm font-medium text-[#b42318]">{error}</p>}
     </div>
   );
-}
+});
+
+export const SelectField = forwardRef<HTMLSelectElement, SharedProps & SelectHTMLAttributes<HTMLSelectElement>>(function SelectField(
+  {
+    label,
+    hint,
+    error,
+    hideLabel = false,
+    compact = false,
+    id,
+    className = "",
+    children,
+    ...props
+  },
+  ref,
+) {
+  const fieldId = id ?? `field-${props.name ?? label.toLowerCase().replace(/\s+/g, "-")}`;
+  const descriptionId = hint || error ? `${fieldId}-description` : undefined;
+
+  return (
+    <div className={`grid ${compact && hideLabel ? "gap-0" : "gap-2"} ${className}`}>
+      <div className={hideLabel ? "sr-only" : "flex items-center justify-between gap-4"}>
+        <label htmlFor={fieldId} className={fieldLabelClass}>{label}</label>
+        {hint && !error && !hideLabel && <span className="text-xs text-[#6b7168]">{hint}</span>}
+      </div>
+      <div className="relative">
+        <select
+          {...props}
+          ref={ref}
+          id={fieldId}
+          aria-invalid={Boolean(error)}
+          aria-describedby={descriptionId}
+          className={[
+            compact ? compactControlClass : fieldControlClass,
+            "appearance-none",
+            compact ? "pr-9" : "pr-11",
+            error ? "border-[#b42318] focus:border-[#b42318] focus:ring-[#fecdca]/50" : "",
+          ].join(" ")}
+        >
+          {children}
+        </select>
+        <CaretDownIcon
+          size={compact ? 14 : 16}
+          weight="bold"
+          aria-hidden="true"
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-[#52604b] ${compact ? "right-3" : "right-3.5"}`}
+        />
+      </div>
+      {error && <p id={descriptionId} className="text-sm font-medium text-[#b42318]">{error}</p>}
+    </div>
+  );
+});
 
 export function TextAreaField({
   label,
@@ -100,7 +173,7 @@ export function TextAreaField({
   return (
     <div className={`grid gap-2 ${className}`}>
       <div className="flex items-center justify-between gap-4">
-        <label htmlFor={fieldId} className="text-sm font-semibold text-[#163300]">{label}</label>
+        <label htmlFor={fieldId} className={fieldLabelClass}>{label}</label>
         {hint && !error && <span id={descriptionId} className="text-xs text-[#6b7168]">{hint}</span>}
       </div>
       <textarea
@@ -109,11 +182,10 @@ export function TextAreaField({
         aria-invalid={Boolean(error)}
         aria-describedby={descriptionId}
         className={[
-          "block w-full resize-y rounded-md border bg-white px-3.5 py-3 text-base text-[#163300]",
-          "placeholder:text-[#858b82] outline-none transition",
-          "focus:border-[#163300] focus:ring-4 focus:ring-[#9fe870]/35",
-          "disabled:cursor-not-allowed disabled:bg-[#f2f5f0] disabled:text-[#858b82]",
-          error ? "border-[#b42318] focus:border-[#b42318] focus:ring-[#fecdca]/50" : "border-[#aeb8aa]",
+          fieldControlClass,
+          "resize-y py-3",
+          "placeholder:text-[#858b82]",
+          error ? "border-[#b42318] focus:border-[#b42318] focus:ring-[#fecdca]/50" : "",
         ].join(" ")}
       />
       {error && <p id={descriptionId} className="text-sm font-medium text-[#b42318]">{error}</p>}

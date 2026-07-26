@@ -48,6 +48,7 @@ import {
   setActiveCardId,
   upsertLibraryCard,
 } from "../../../../lib/card-library";
+import { hydrateCardLibraryFromServer, queueCardSync } from "../../../../lib/card-library-sync";
 import "../../product.css";
 
 type MethodType =
@@ -211,10 +212,15 @@ export default function CardEditor() {
   const coverInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setDraft(loadDraft());
-    const storedStep = Number(localStorage.getItem("aftermeet-card-step-v2"));
-    if (Number.isInteger(storedStep) && storedStep >= 0 && storedStep <= 2) setStep(storedStep);
-    setHydrated(true);
+    void hydrateCardLibraryFromServer().then(() => {
+      setDraft(loadDraft());
+      const storedStep = Number(localStorage.getItem("aftermeet-card-step-v2"));
+      if (Number.isInteger(storedStep) && storedStep >= 0 && storedStep <= 2) setStep(storedStep);
+      setHydrated(true);
+    }).catch(() => {
+      setDraft(loadDraft());
+      setHydrated(true);
+    });
   }, []);
 
   const initials = draft.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -238,6 +244,7 @@ export default function CardEditor() {
     }));
     if (next.photo) localStorage.setItem("aftermeet-profile-photo-v1", next.photo);
     else localStorage.removeItem("aftermeet-profile-photo-v1");
+    queueCardSync(next);
   }
 
   const update = <K extends keyof CardDraft>(key: K, value: CardDraft[K]) => {

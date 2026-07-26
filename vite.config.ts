@@ -70,6 +70,10 @@ export default defineConfig(async () => {
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
+    optimizeDeps: {
+      // Deep CSR icon imports churn often during development and can stale the dep cache.
+      exclude: ["@phosphor-icons/react"],
+    },
     plugins: [
       vinext(),
       sites(),

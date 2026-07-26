@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
@@ -12,21 +13,27 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { DeviceMobileIcon } from "@phosphor-icons/react/dist/csr/DeviceMobile";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ShareCardModal } from "../../components/ShareCardModal";
+import { UploadSimpleIcon } from "@phosphor-icons/react/dist/csr/UploadSimple";
 import { AppShell } from "../../components/AppShell";
+import { useAppUser } from "../../components/AppUserContext";
 import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contact-methods";
+import { buildHtmlSignature, buildPlainSignature } from "../../../lib/email-signature";
+import { WalletSharePanel } from "../../components/WalletSharePanel";
 import {
   createLibraryCard,
   getActiveCardId,
   type LibraryCard,
   MAX_CARDS,
-  readCardLibrary,
   removeLibraryCard,
   setActiveCardId,
   upsertLibraryCard,
 } from "../../../lib/card-library";
+import { hydrateCardLibraryFromServer, queueCardSync } from "../../../lib/card-library-sync";
+import { applyCardTemplate } from "../../../lib/card-templates";
+import type { CardTemplate } from "../../../lib/workspace/types";
 import "../product.css";
 import "../flow.css";
 
@@ -45,24 +52,40 @@ const fallback: Profile = {
 };
 
 export default function CardsPage() {
+  const user = useAppUser();
   const [profile, setProfile] = useState(fallback);
   const [cards, setCards] = useState<LibraryCard[]>([]);
+  const [templates, setTemplates] = useState<CardTemplate[]>([]);
+  const [isTeamWorkspace, setIsTeamWorkspace] = useState(false);
   const [activeId, setActiveId] = useState(fallback.id);
   const [photo, setPhoto] = useState("");
   const [qr, setQr] = useState("");
   const [qrSvg, setQrSvg] = useState("");
   const [copied, setCopied] = useState(false);
   const [svgCopied, setSvgCopied] = useState(false);
+  const [signatureCopied, setSignatureCopied] = useState<"" | "plain" | "html">("");
   const [showWidgetHelp, setShowWidgetHelp] = useState(false);
   const [viewingCard, setViewingCard] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [qrError, setQrError] = useState("");
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   useEffect(() => {
-    let nextProfile = fallback;
-    try {
-      let library = readCardLibrary(localStorage);
+    void fetch("/api/workspace")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = await response.json() as {
+          active?: { type?: string };
+          templates?: CardTemplate[];
+        };
+        setIsTeamWorkspace(payload.active?.type === "team");
+        setTemplates(payload.templates ?? []);
+      })
+      .catch(() => undefined);
+
+    void hydrateCardLibraryFromServer().then((library) => {
+      let nextProfile = fallback;
       if (!library.length) {
         setCards([]);
         setViewingCard(false);
@@ -80,9 +103,12 @@ export default function CardsPage() {
       setProfile(nextProfile);
       setPhoto(selected.photo || "");
       setViewingCard(Boolean(requestedId && library.some((card) => card.id === requestedId)));
-    } catch { setQrError("We couldn’t load your saved cards. Refresh the page to try again."); }
-    setShareUrl(`${window.location.origin}/c/${nextProfile.slug}`);
-    setHydrated(true);
+      setShareUrl(`${window.location.origin}/c/${nextProfile.slug}`);
+      setHydrated(true);
+    }).catch(() => {
+      setQrError("We couldn’t load your saved cards. Refresh the page to try again.");
+      setHydrated(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -134,13 +160,27 @@ export default function CardsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function createCard() {
+  function createCard(seed: Partial<LibraryCard> = {}) {
     if (cards.length >= MAX_CARDS) return;
     const card = createLibraryCard({
       label: `Card ${cards.length + 1}`,
       theme: ["#9fe870", "#2495e8", "#ff9f43", "#a83df0", "#14b8a6"][cards.length],
+      ...seed,
     });
     upsertLibraryCard(localStorage, card);
+    queueCardSync(card);
+    window.location.href = `/app/card/edit?id=${card.id}`;
+  }
+
+  function createCardFromTemplate(template: CardTemplate) {
+    if (cards.length >= MAX_CARDS) return;
+    const card = applyCardTemplate(template, {
+      memberName: user.displayName || "",
+      memberEmail: user.email,
+      label: template.name,
+    });
+    upsertLibraryCard(localStorage, card);
+    queueCardSync(card);
     window.location.href = `/app/card/edit?id=${card.id}`;
   }
 
@@ -163,6 +203,15 @@ export default function CardsPage() {
     await navigator.clipboard.writeText(qrSvg);
     setSvgCopied(true);
     window.setTimeout(() => setSvgCopied(false), 1400);
+  }
+
+  async function copySignature(format: "plain" | "html") {
+    const payload = format === "plain"
+      ? buildPlainSignature({ name: profile.name, role: profile.role, company: profile.company, cardUrl: shareUrl })
+      : buildHtmlSignature({ name: profile.name, role: profile.role, company: profile.company, cardUrl: shareUrl });
+    await navigator.clipboard.writeText(payload);
+    setSignatureCopied(format);
+    window.setTimeout(() => setSignatureCopied(""), 1400);
   }
 
   function openInApp() {
@@ -191,7 +240,19 @@ export default function CardsPage() {
             <span className="step-pill">Your first card</span>
             <h1>Create a card people can remember.</h1>
             <p>Add your identity and the ways people can reach you. AfterMeet creates the QR code when you save the card.</p>
-            <Button onClick={createCard}><PlusIcon size={18} weight="bold" /> Create your first card</Button>
+            <Button onClick={() => createCard()}><PlusIcon size={18} weight="bold" /> Create your first card</Button>
+            {isTeamWorkspace && templates.length ? (
+              <div className="team-template-picker">
+                <p>Or start from an org template:</p>
+                <div className="team-template-picker-actions">
+                  {templates.map((template) => (
+                    <Button key={template.id} variant="secondary" onClick={() => createCardFromTemplate(template)}>
+                      {template.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <small>You can create up to five cards for different roles, businesses, or occasions.</small>
           </section>
         ) : !viewingCard ? (
@@ -208,8 +269,20 @@ export default function CardsPage() {
                     </button>
                   </article>
                 ))}
-                {cards.length < MAX_CARDS && <button className="card-overview-add" onClick={createCard} type="button"><span><PlusIcon size={24} weight="bold" /></span><strong>Create another card</strong><small>{MAX_CARDS - cards.length} remaining</small></button>}
+                {cards.length < MAX_CARDS && <button className="card-overview-add" onClick={() => createCard()} type="button"><span><PlusIcon size={24} weight="bold" /></span><strong>Create another card</strong><small>{MAX_CARDS - cards.length} remaining</small></button>}
               </div>
+              {isTeamWorkspace && templates.length ? (
+                <div className="team-template-picker">
+                  <p>Create a member card from an org template:</p>
+                  <div className="team-template-picker-actions">
+                    {templates.map((template) => (
+                      <Button key={template.id} variant="secondary" onClick={() => createCardFromTemplate(template)}>
+                        {template.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </section>
           </>
         ) : (
@@ -217,7 +290,7 @@ export default function CardsPage() {
             <div className="card-detail-topbar">
               <Button size="small" variant="ghost" onClick={showCardLibrary}><ArrowLeftIcon size={16} weight="bold" /> All cards</Button>
               <div><span>Viewing</span><strong>{profile.label}</strong></div>
-              <div><LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit card</LinkButton><Button size="small" variant="ghost" onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button></div>
+              <div><LinkButton size="small" variant="secondary" href={`/app/card/edit?id=${activeId}`}><PencilSimpleIcon size={16} weight="bold" /> Edit card</LinkButton><Button size="small" variant="secondary" onClick={() => setShareModalOpen(true)}><UploadSimpleIcon size={16} weight="bold" /> Share card</Button><Button size="small" variant="ghost" onClick={deleteActiveCard}><TrashIcon size={16} /> Delete</Button></div>
             </div>
             <div className="card-share-layout" id="share">
           <article className="share-card-preview">
@@ -254,6 +327,16 @@ export default function CardsPage() {
               {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
             </div>
             <Button fullWidth size="small" variant="ghost" disabled={!qrSvg} onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : qrSvg ? "Copy QR as SVG" : "Generating QR…"}</Button>
+            <section className="signature-panel">
+              <div className="inline-qr-head"><span><EnvelopeSimpleIcon size={22} weight="bold" /></span><div><h2>Email signature</h2><p>Paste this into Gmail, Outlook, or Apple Mail so every email links back to your card.</p></div></div>
+              <pre className="signature-preview">{buildPlainSignature({ name: profile.name, role: profile.role, company: profile.company, cardUrl: shareUrl })}</pre>
+              <div className="inline-qr-actions">
+                <Button variant="secondary" onClick={() => void copySignature("plain")}><CopyIcon size={18} weight="bold" />{signatureCopied === "plain" ? "Plain copied" : "Copy plain text"}</Button>
+                <Button variant="secondary" onClick={() => void copySignature("html")}><CopyIcon size={18} weight="bold" />{signatureCopied === "html" ? "HTML copied" : "Copy HTML"}</Button>
+              </div>
+              <small className="signature-note">Use plain text for most clients. HTML keeps the card link clickable in Gmail and Outlook.</small>
+            </section>
+            <WalletSharePanel slug={profile.slug} shareUrl={shareUrl} />
             <section className="phone-widget-panel">
               <div className="phone-widget-head"><span><DeviceMobileIcon size={22} weight="bold" /></span><div><h3>Use this card from your phone</h3><p>Open it instantly from the AfterMeet app or your Home Screen widget.</p></div></div>
               <div className="phone-widget-actions">
@@ -268,6 +351,15 @@ export default function CardsPage() {
             </section>
           </section>
             </div>
+            <ShareCardModal
+              open={shareModalOpen}
+              onClose={() => setShareModalOpen(false)}
+              cardName={profile.name}
+              shareUrl={shareUrl}
+              qrDataUrl={qr}
+              copied={copied}
+              onCopyLink={copyLink}
+            />
           </>
         )}
       </div>

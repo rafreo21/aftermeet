@@ -7,6 +7,7 @@ import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimpl
 import { GoogleLogoIcon } from "@phosphor-icons/react/dist/csr/GoogleLogo";
 import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
 import { XLogoIcon } from "@phosphor-icons/react/dist/csr/XLogo";
+import { appendVisitorIntentToCallback, type VisitorIntent } from "../../lib/auth/visitor-intent";
 import { Button } from "../components/Button";
 import { TextField } from "../components/FormField";
 import { createClient } from "../../lib/supabase/client";
@@ -17,11 +18,13 @@ type ProviderAvailability = Record<SocialProvider, boolean> | null;
 export function AuthForm({
   appUrl,
   next,
+  visitorIntent,
   initialError,
   providerAvailability,
 }: {
   appUrl: string;
   next: string;
+  visitorIntent: VisitorIntent | null;
   initialError: string;
   providerAvailability: ProviderAvailability;
 }) {
@@ -44,6 +47,7 @@ export function AuthForm({
     setProviderError("");
     const callback = new URL("/auth/callback", appUrl || window.location.origin);
     callback.searchParams.set("next", next);
+    appendVisitorIntentToCallback(callback, visitorIntent);
     try {
       const { error: authError } = await createClient().auth.signInWithOtp({
         email: normalized,
@@ -78,6 +82,7 @@ export function AuthForm({
     setProviderError("");
     const callback = new URL("/auth/callback", appUrl || window.location.origin);
     callback.searchParams.set("next", next);
+    appendVisitorIntentToCallback(callback, visitorIntent);
     try {
       const { error: authError } = await createClient().auth.signInWithOAuth({
         provider,

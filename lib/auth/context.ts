@@ -10,6 +10,9 @@ export type AppUser = {
   avatarUrl: string | null;
   onboardingStatus: string;
   workspaceId: string;
+  workspaceName: string;
+  workspaceType: "personal" | "team";
+  workspaceRole: "owner" | "admin" | "member";
 };
 
 function isLocalDevelopmentPreview() {
@@ -25,6 +28,9 @@ export async function getAppUser(): Promise<AppUser | null> {
       avatarUrl: null,
       onboardingStatus: "completed",
       workspaceId: "local-development-workspace",
+      workspaceName: "My workspace",
+      workspaceType: "personal",
+      workspaceRole: "owner",
     };
   }
   if (!readPublicSupabaseConfig().config) return null;
@@ -41,6 +47,9 @@ export async function getAppUser(): Promise<AppUser | null> {
     avatarUrl: row.avatar_url,
     onboardingStatus: row.onboarding_status!,
     workspaceId: row.workspace_id!,
+    workspaceName: row.workspace_name ?? "My workspace",
+    workspaceType: (row.workspace_type as AppUser["workspaceType"]) ?? "personal",
+    workspaceRole: (row.workspace_role as AppUser["workspaceRole"]) ?? "owner",
   };
 }
 

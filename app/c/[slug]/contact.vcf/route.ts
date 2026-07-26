@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { contactMethodHref } from "@/lib/contact-methods";
+import { buildWhenWeMetNote } from "@/lib/card-share-links";
 
 type Params = Promise<{ slug: string }>;
 
@@ -12,7 +13,7 @@ function escapeVcard(value: string) {
     .replace(/;/g, "\\;");
 }
 
-export async function GET(_: Request, { params }: { params: Params }) {
+export async function GET(request: Request, { params }: { params: Params }) {
   const { slug } = await params;
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ??
@@ -33,6 +34,9 @@ export async function GET(_: Request, { params }: { params: Params }) {
 
   if (!card) return new Response("Contact card not found.", { status: 404 });
 
+  const cardUrl = new URL(`/c/${slug}`, request.url).toString();
+  const whenWeMetNote = buildWhenWeMetNote(cardUrl);
+
   const methods = [...(card.card_methods || [])].sort(
     (a, b) => a.sort_order - b.sort_order,
   );
@@ -42,7 +46,8 @@ export async function GET(_: Request, { params }: { params: Params }) {
     `FN:${escapeVcard(card.full_name)}`,
     card.job_title ? `TITLE:${escapeVcard(card.job_title)}` : "",
     card.company ? `ORG:${escapeVcard(card.company)}` : "",
-    card.bio ? `NOTE:${escapeVcard(card.bio)}` : "",
+    `NOTE:${escapeVcard(card.bio ? `${card.bio}\n\n${whenWeMetNote}` : whenWeMetNote)}`,
+    `URL:${escapeVcard(cardUrl)}`,
     ...methods.flatMap((method) => {
       const value = escapeVcard(method.value);
       if (method.method_type === "email") return [`EMAIL;TYPE=INTERNET:${value}`];

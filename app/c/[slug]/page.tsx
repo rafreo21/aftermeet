@@ -11,6 +11,8 @@ import {
 import type { CSSProperties } from "react";
 
 import { contactMethodHref } from "@/lib/contact-methods";
+import { PublicExchangeForm } from "./PublicExchangeForm";
+import { SaveContactPrompt } from "./SaveContactPrompt";
 import "./public-card.css";
 
 type Params = Promise<{ slug: string }>;
@@ -112,12 +114,8 @@ export default async function PublicCardPage({ params }: { params: Params }) {
               );
             })}
           </div>
-          <a
-            className="public-card-return"
-            href={`/c/${encodeURIComponent(slug)}/contact.vcf`}
-          >
-            Save contact
-          </a>
+          <SaveContactPrompt slug={slug} ownerName={card.full_name} />
+          <PublicExchangeForm slug={slug} ownerName={card.full_name} />
           <p className="public-card-private">
             Save this card now. AfterMeet never exposes private meeting notes here.
           </p>

@@ -1,29 +1,90 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { FloppyDiskIcon } from "@phosphor-icons/react/dist/csr/FloppyDisk";
 import { AppShell } from "../../../components/AppShell";
+import { ActiveCampaignField, defaultCampaignId } from "../../../components/ActiveCampaignField";
 import { Button, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
+import { findContactById, type Contact } from "../../../../lib/contacts";
+import { resolveAndSaveContact } from "../../../../lib/person-links";
+import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
 import "../../product.css";
 import "../../flow.css";
 
 export default function NewContactPage() {
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", company: "", role: "", context: "", nextAction: "" });
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    linkedinUrl: "",
+    company: "",
+    role: "",
+    context: "",
+    nextAction: "",
+  });
+  const [campaignId, setCampaignId] = useState("");
   const [error, setError] = useState("");
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linkedin = params.get("linkedin") ?? params.get("url") ?? "";
+    const contactId = params.get("contact") ?? "";
+    if (linkedin) {
+      const profile = parseLinkedInProfileInput(linkedin);
+      if (profile) {
+        setForm((current) => ({
+          ...current,
+          firstName: current.firstName || profile.firstName,
+          lastName: current.lastName || profile.lastName,
+          linkedinUrl: normalizeLinkedInUrl(profile.url),
+        }));
+      }
+    }
+    if (contactId) {
+      const contact = findContactById(contactId);
+      if (contact) {
+        setForm({
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          phone: contact.phone ?? "",
+          linkedinUrl: contact.linkedinUrl ?? "",
+          company: contact.company,
+          role: contact.role,
+          context: contact.context,
+          nextAction: "",
+        });
+      }
+    }
+    setCampaignId(defaultCampaignId());
+  }, []);
 
   function save(event: React.FormEvent) {
     event.preventDefault();
     if (!form.firstName.trim()) { setError("Add at least a first name."); return; }
-    const contact = { ...form, id: crypto.randomUUID(), createdAt: Date.now() };
+    const profile = form.linkedinUrl ? parseLinkedInProfileInput(form.linkedinUrl) : null;
+    const contact: Contact = {
+      id: profile ? `linkedin-${profile.handle}` : crypto.randomUUID(),
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || undefined,
+      linkedinUrl: form.linkedinUrl.trim() ? normalizeLinkedInUrl(form.linkedinUrl.trim()) : undefined,
+      company: form.company.trim(),
+      role: form.role.trim(),
+      context: form.context.trim(),
+      source: form.linkedinUrl.trim() ? "linkedin" : "manual",
+      campaignId: campaignId || undefined,
+    };
+    resolveAndSaveContact(contact);
     try {
-      const contacts = JSON.parse(localStorage.getItem("aftermeet-contacts-v1") || "[]");
-      localStorage.setItem("aftermeet-contacts-v1", JSON.stringify([contact, ...contacts]));
       localStorage.setItem("aftermeet-last-contact-v1", JSON.stringify(contact));
     } catch {}
-    window.location.href = "/app/followups";
+    window.location.href = `/app/contacts/${contact.id}`;
   }
 
   return (
@@ -32,11 +93,13 @@ export default function NewContactPage() {
         <header><span className="step-pill">Meeting capture</span><h1>Who did you meet?</h1><p>Keep it lightweight. Context and the next action are more valuable than completing every field.</p></header>
         <div className="field-row two"><TextField label="First name" value={form.firstName} onChange={(e) => update("firstName", e.target.value)} error={error} /><TextField label="Last name" value={form.lastName} onChange={(e) => update("lastName", e.target.value)} /></div>
         <div className="field-row two"><TextField label="Email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} /><TextField label="Phone" type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} /></div>
+        <TextField label="LinkedIn profile" value={form.linkedinUrl} onChange={(e) => update("linkedinUrl", e.target.value)} placeholder="https://www.linkedin.com/in/username" />
+        <ActiveCampaignField value={campaignId} onChange={setCampaignId} />
         <div className="field-row two"><TextField label="Role" value={form.role} onChange={(e) => update("role", e.target.value)} /><TextField label="Company" value={form.company} onChange={(e) => update("company", e.target.value)} /></div>
         <div className="context-box"><h3>Remember the meeting</h3><p>These private details never appear on your public card.</p></div>
         <TextAreaField label="What mattered?" hint="Private" value={form.context} onChange={(e) => update("context", e.target.value)} rows={4} placeholder="What did you discuss? What should you remember?" />
         <TextField label="Next action" value={form.nextAction} onChange={(e) => update("nextAction", e.target.value)} placeholder="e.g. Send the research deck on Monday" />
-        <div className="form-actions"><LinkButton variant="ghost" href="/app/contacts">Cancel</LinkButton><Button type="submit"><FloppyDiskIcon size={18} weight="bold" />Save and draft follow-up</Button></div>
+        <div className="form-actions"><LinkButton variant="ghost" href="/app/contacts">Cancel</LinkButton><Button type="submit"><FloppyDiskIcon size={18} weight="bold" />Save contact</Button></div>
       </form>
     </AppShell>
   );
