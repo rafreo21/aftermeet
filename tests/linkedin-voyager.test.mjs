@@ -4,12 +4,15 @@ import assert from "node:assert/strict";
 import {
   CONTACT_INFO_FIXTURE,
   DASH_TOP_CARD_FIXTURE,
+  EXPERIENCE_DETAILS_HTML_FIXTURE,
   EXPERIENCE_GRAPHQL_FIXTURE,
   mergeVoyagerIntoProfile,
   parseContactInfoResponse,
   parseDashTopCardResponse,
+  parseEmbeddedFromHtml,
   parseEmbeddedLinkedInSnapshot,
   parseExperienceGraphqlResponse,
+  parseExperienceSectionTextFromHtml,
   parseLinkedInPublicId,
   parseProfileViewResponse,
   PROFILE_VIEW_FIXTURE,
@@ -64,6 +67,25 @@ test("parseEmbeddedLinkedInSnapshot reads headline and contact info", () => {
 
 test("parseExperienceGraphqlResponse reads current job from dash GraphQL", () => {
   assert.deepEqual(parseExperienceGraphqlResponse(EXPERIENCE_GRAPHQL_FIXTURE), {
+    role: "Product Designer",
+    company: "Nexleaf Analytics",
+  });
+});
+
+test("parseEmbeddedFromHtml reads experience from details page payload", () => {
+  assert.deepEqual(parseEmbeddedFromHtml(EXPERIENCE_DETAILS_HTML_FIXTURE), {
+    firstName: "",
+    lastName: "",
+    role: "Product Designer",
+    company: "Nexleaf Analytics",
+    email: "",
+    phone: "",
+    urnId: "",
+  });
+});
+
+test("parseExperienceSectionTextFromHtml reads visible experience text", () => {
+  assert.deepEqual(parseExperienceSectionTextFromHtml(EXPERIENCE_DETAILS_HTML_FIXTURE), {
     role: "Product Designer",
     company: "Nexleaf Analytics",
   });

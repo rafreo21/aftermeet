@@ -83,7 +83,7 @@ async function enrichProfile(baseUrl, profile, pageText) {
 }
 
 captureButton.addEventListener("click", async () => {
-  status.textContent = "Reading LinkedIn profile via Voyager…";
+  status.textContent = "Fetching experience from LinkedIn…";
   await saveSettings();
   const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, "") || "http://localhost:3000";
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

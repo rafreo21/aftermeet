@@ -78,12 +78,73 @@
       || anchor.parentElement;
   }
 
-  async function ensureExperienceVisible() {
-    const target = document.getElementById("experience")
-      || document.querySelector('[data-view-name*="experience" i]');
-    if (!target) return;
-    target.scrollIntoView({ block: "center" });
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
+  function sleep(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  function scrollContainerFor(node) {
+    return node?.closest("main")
+      || document.querySelector("main.scaffold-layout__main, .scaffold-layout__main")
+      || document.documentElement;
+  }
+
+  function scrollNodeIntoView(node) {
+    if (!node) return;
+    node.scrollIntoView({ block: "center", behavior: "instant" });
+    const container = scrollContainerFor(node);
+    if (container && container !== document.documentElement && container !== document.body) {
+      const rect = node.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      container.scrollTop += rect.top - containerRect.top - container.clientHeight / 2;
+    }
+    window.dispatchEvent(new Event("scroll", { bubbles: true }));
+  }
+
+  function findExperienceAnchor() {
+    return document.getElementById("experience")
+      || document.querySelector('[data-view-name*="experience" i], [componentkey*="Experience"]');
+  }
+
+  function hasCompleteExperience(input) {
+    return isValidExperienceRole(input.role) && isValidExperienceCompany(input.company);
+  }
+
+  async function revealExperienceSection() {
+    let anchor = findExperienceAnchor();
+
+    for (let step = 0; !anchor && step < 10; step += 1) {
+      window.scrollBy({ top: Math.round(window.innerHeight * 0.75), behavior: "instant" });
+      const container = scrollContainerFor(document.body);
+      if (container && container.scrollBy) {
+        container.scrollBy({ top: Math.round(window.innerHeight * 0.75), behavior: "instant" });
+      }
+      await sleep(280);
+      anchor = findExperienceAnchor();
+    }
+
+    if (!anchor) {
+      return sanitizeExperience(parseExperienceSectionText(document.body?.innerText ?? ""));
+    }
+
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      scrollNodeIntoView(anchor);
+      const section = findExperienceSection();
+      const captured = captureExperienceFromSection(section);
+      if (hasCompleteExperience(captured)) return captured;
+
+      const showMore = section?.querySelector(
+        'a[href*="details/experience"], button[aria-label*="experience" i], .pvs-list__footer-wrapper a',
+      );
+      showMore?.click?.();
+
+      await sleep(320);
+    }
+
+    const section = findExperienceSection();
+    const captured = captureExperienceFromSection(section);
+    if (captured.role || captured.company) return captured;
+
+    return sanitizeExperience(parseExperienceSectionText(document.body?.innerText ?? ""));
   }
 
   function captureExperienceFromSection(section) {
@@ -123,19 +184,6 @@
     }
 
     return parseExperienceSectionText(section.innerText || "");
-  }
-
-  async function captureCurrentExperience() {
-    await ensureExperienceVisible();
-    const section = findExperienceSection();
-    const fromSection = captureExperienceFromSection(section);
-    if (fromSection.role && fromSection.company) return fromSection;
-
-    const pageText = document.body?.innerText ?? "";
-    return sanitizeExperience({
-      role: fromSection.role || parseExperienceSectionText(pageText).role,
-      company: fromSection.company || parseExperienceSectionText(pageText).company,
-    });
   }
 
   function parseContactInfoFromText(pageText) {
@@ -187,14 +235,13 @@
     return { email, phone };
   }
 
-  async function captureLinkedInProfileFromDom() {
+  function captureLinkedInProfileBase() {
     const pageText = document.body?.innerText ?? "";
     const linkedinUrl = normalizeUrl(window.location.href.split("?")[0]);
     const h1 = clean(document.querySelector("h1")?.textContent);
     const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
     const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || document.title.split(" - ")[0] || "";
     const { firstName, lastName } = splitName(fullName);
-    const { role, company } = await captureCurrentExperience();
 
     const links = extractLinks();
     const contact = parseContactInfoFromText(pageText);
@@ -206,47 +253,71 @@
       lastName,
       email,
       phone,
-      company,
-      role,
+      company: "",
+      role: "",
       companyWebsite: "",
       personalWebsite: "",
       linkedinUrl,
       sourceUrl: linkedinUrl,
       source: "extension",
-      context: buildLinkedInCaptureContext({ role, company, email, phone, linkedinUrl }),
+      context: "",
     };
   }
 
   async function captureLinkedInProfile() {
-    const domProfile = await captureLinkedInProfileFromDom();
     const publicId = window.aftermeetLinkedInPublicId?.(window.location.href) || "";
-    if (!publicId || typeof window.aftermeetFetchLinkedInVoyager !== "function") {
-      return domProfile;
+    const baseProfile = captureLinkedInProfileBase();
+
+    let voyager = null;
+    if (publicId && typeof window.aftermeetFetchLinkedInVoyager === "function") {
+      try {
+        voyager = await window.aftermeetFetchLinkedInVoyager(publicId);
+      } catch {
+        voyager = null;
+      }
     }
 
-    try {
-      const voyager = await window.aftermeetFetchLinkedInVoyager(publicId);
-      if (!voyager) return domProfile;
+    let { role, company } = voyager
+      ? sanitizeExperience({ role: voyager.role, company: voyager.company })
+      : { role: "", company: "" };
 
-      const merged = { ...domProfile };
+    if (!hasCompleteExperience({ role, company }) && publicId && typeof window.aftermeetFetchLinkedInExperience === "function") {
+      try {
+        const experience = await window.aftermeetFetchLinkedInExperience(publicId, voyager ?? {});
+        role = role || experience.role;
+        company = company || experience.company;
+      } catch {
+        /* keep voyager values if any */
+      }
+    }
+
+    if (!hasCompleteExperience({ role, company })) {
+      const domExperience = await revealExperienceSection();
+      role = role || domExperience.role;
+      company = company || domExperience.company;
+    }
+
+    const merged = {
+      ...baseProfile,
+      role,
+      company,
+    };
+
+    if (voyager) {
       ["firstName", "lastName", "email", "phone"].forEach((field) => {
         const value = clean(voyager[field]);
         if (value) merged[field] = value;
       });
-      if (isValidExperienceRole(voyager.role)) merged.role = clean(voyager.role);
-      if (isValidExperienceCompany(voyager.company)) merged.company = stripEmploymentSuffix(voyager.company);
-
-      merged.context = buildLinkedInCaptureContext({
-        role: merged.role,
-        company: merged.company,
-        email: merged.email,
-        phone: merged.phone,
-        linkedinUrl: merged.linkedinUrl,
-      });
-      return merged;
-    } catch {
-      return domProfile;
     }
+
+    merged.context = buildLinkedInCaptureContext({
+      role: merged.role,
+      company: merged.company,
+      email: merged.email,
+      phone: merged.phone,
+      linkedinUrl: merged.linkedinUrl,
+    });
+    return merged;
   }
 
   function captureGenericProfile() {

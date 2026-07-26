@@ -218,6 +218,77 @@ function walkEmbeddedSnapshot(value: unknown, out: EmbeddedSnapshot) {
   Object.values(value as Record<string, unknown>).forEach((item) => walkEmbeddedSnapshot(item, out));
 }
 
+export function parseEmbeddedFromHtml(html: string): Partial<LinkedInVoyagerProfile> {
+  const out: EmbeddedSnapshot = {
+    firstName: "",
+    lastName: "",
+    role: "",
+    company: "",
+    email: "",
+    phone: "",
+    urnId: "",
+  };
+
+  const codeBlocks = html.match(/<code[^>]*id="[^"]*bpr-guid[^"]*"[^>]*>[\s\S]*?<\/code>/gi) ?? [];
+  for (const block of codeBlocks) {
+    const text = block.replace(/^[\s\S]*?>/, "").replace(/<\/code>[\s\S]*$/, "").trim();
+    if (!text.startsWith("{")) continue;
+    try {
+      walkEmbeddedSnapshot(JSON.parse(text), out);
+    } catch {
+      /* ignore malformed chunks */
+    }
+  }
+
+  if (!out.email) {
+    const match = html.match(/"emailAddress"\s*:\s*"([^"]+)"/i);
+    if (match) out.email = match[1].toLowerCase();
+  }
+  if (!out.role) {
+    const match = html.match(/"title"\s*:\s*"([^"]+)"/i);
+    if (match) {
+      const parsed = parseHeadline(match[1]);
+      if (parsed.role) out.role = parsed.role;
+    }
+  }
+  if (!out.company) {
+    const match = html.match(/"companyName"\s*:\s*"([^"]+)"/i);
+    if (match) out.company = match[1];
+  }
+
+  return out;
+}
+
+export function parseExperienceSectionTextFromHtml(html: string) {
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, "\n")
+    .replace(/\n+/g, "\n");
+
+  const lines = text.split("\n").map((line) => clean(line)).filter(Boolean);
+  const experienceIndex = lines.findIndex((line) => /^experience$/i.test(line));
+  const startIndex = experienceIndex >= 0 ? experienceIndex + 1 : 0;
+  const role = lines.slice(startIndex).find((line) => line.length <= 80 && !/^show all$/i.test(line)) ?? "";
+  if (!role) return { role: "", company: "" };
+
+  const roleIndex = lines.indexOf(role, startIndex);
+  const companyLine = lines.slice(roleIndex + 1).find((line) => line.includes("·")) ?? "";
+  return {
+    role,
+    company: companyLine ? companyLine.split(" · ")[0]?.trim() ?? "" : "",
+  };
+}
+
+export const EXPERIENCE_DETAILS_HTML_FIXTURE = `
+<html><body>
+Experience
+Product Designer
+Nexleaf Analytics · Full-time
+<code id="datalet-bpr-guid-1">{"positionView":{"elements":[{"title":"Product Designer","companyName":"Nexleaf Analytics"}]}}</code>
+</body></html>
+`.trim();
+
 export function parseEmbeddedLinkedInSnapshot(text: string): Partial<LinkedInVoyagerProfile> {
   const out: EmbeddedSnapshot = {
     firstName: "",
