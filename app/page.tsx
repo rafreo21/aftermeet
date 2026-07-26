@@ -1,6 +1,5 @@
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/ssr/ArrowDown";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr/ArrowRight";
-import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr/ArrowSquareOut";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/ssr/ArrowUp";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/ssr/DotsThree";
 import { Button, IconLinkButton, LinkButton } from "./components/Button";
@@ -46,10 +45,8 @@ export default function Home() {
           <span>AfterMeet <small>product lab</small></span>
         </a>
         <div className="nav-links">
-          <a href="#study">Study</a>
-          <a href="#direction">Direction</a>
-          <a href="#mvp">MVP</a>
-          <LinkButton className="nav-cta" size="small" href="/hub">MVP hub <ArrowSquareOutIcon size={15} weight="bold" /></LinkButton>
+          <LinkButton size="small" variant="ghost" href="/auth">Login</LinkButton>
+          <LinkButton className="nav-cta" size="small" href="/auth?next=/onboarding">Start for free <ArrowRightIcon size={15} weight="bold" /></LinkButton>
         </div>
       </nav>
 

@@ -17,18 +17,23 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
     if (displayName.trim().length < 2) return setError("Enter the name you want AfterMeet to use.");
     setLoading(true);
     setError("");
-    const response = await fetch("/api/onboarding", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName: displayName.trim(), timeZone, locale }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      setError(body.error ?? "We couldn’t save your workspace. Please try again.");
+    try {
+      const response = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: displayName.trim(), timeZone, locale }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setError(body.error ?? "We couldn’t save your workspace. Please try again.");
+        return;
+      }
+      window.location.assign("/app");
+    } catch {
+      setError("We couldn’t reach AfterMeet. Check your connection and try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-    window.location.assign("/app");
   }
 
   return (
@@ -39,7 +44,7 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
         <TextField label="Time zone" name="timeZone" value={timeZone} onChange={(event) => setTimeZone(event.target.value)} />
         <TextField label="Locale" name="locale" value={locale} onChange={(event) => setLocale(event.target.value)} />
       </div>
-      <Button type="submit" disabled={loading}>{loading ? "Saving workspace…" : "Continue to AfterMeet"} {!loading && <ArrowRightIcon weight="bold" />}</Button>
+      <Button type="submit" loading={loading}>{loading ? "Saving workspace…" : "Continue to AfterMeet"} {!loading && <ArrowRightIcon weight="bold" />}</Button>
     </form>
   );
 }

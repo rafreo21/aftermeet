@@ -31,22 +31,27 @@ export function AuthForm({ appUrl, next, initialError }: { appUrl: string; next:
     setProviderError("");
     const callback = new URL("/auth/callback", appUrl || window.location.origin);
     callback.searchParams.set("next", next);
-    const { error: authError } = await createClient().auth.signInWithOtp({
-      email: normalized,
-      options: { emailRedirectTo: callback.toString(), shouldCreateUser: true },
-    });
-    setLoading(false);
-    if (authError) {
-      if (authError.code === "over_email_send_rate_limit") {
-        setError("Supabase’s starter email service has reached its 2-email hourly limit. Try again one hour after the first email, or configure custom SMTP.");
-      } else if (authError.status === 429 || authError.message.toLowerCase().includes("rate")) {
-        setError("Too many sign-in attempts. Please wait a few minutes before trying again.");
-      } else {
-        setError("We couldn’t send the link. Please try again.");
+    try {
+      const { error: authError } = await createClient().auth.signInWithOtp({
+        email: normalized,
+        options: { emailRedirectTo: callback.toString(), shouldCreateUser: true },
+      });
+      if (authError) {
+        if (authError.code === "over_email_send_rate_limit") {
+          setError("Supabase’s starter email service has reached its 2-email hourly limit. Try again one hour after the first email, or configure custom SMTP.");
+        } else if (authError.status === 429 || authError.message.toLowerCase().includes("rate")) {
+          setError("Too many sign-in attempts. Please wait a few minutes before trying again.");
+        } else {
+          setError("We couldn’t send the link. Please try again.");
+        }
+        return;
       }
-      return;
+      setSentTo(normalized);
+    } catch {
+      setError("We couldn’t reach the sign-in service. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setSentTo(normalized);
   }
 
   async function signInWithProvider(provider: "google" | "linkedin_oidc" | "x") {
@@ -84,7 +89,7 @@ export function AuthForm({ appUrl, next, initialError }: { appUrl: string; next:
         <TextField id="auth-email" label="Email address" type="email" autoComplete="email" inputMode="email"
           placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)}
           leadingIcon={<EnvelopeSimpleIcon size={21} weight="bold" />} error={error} autoFocus />
-        <Button fullWidth type="submit" disabled={loading || !email || Boolean(loadingProvider)}>
+        <Button fullWidth type="submit" loading={loading} disabled={!email || Boolean(loadingProvider)}>
           {loading ? "Sending secure link…" : "Continue"} {!loading && <ArrowRightIcon size={20} weight="bold" />}
         </Button>
       </form>
