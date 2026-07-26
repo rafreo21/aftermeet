@@ -136,6 +136,26 @@
     return readMeta("og:description");
   }
 
+  function headlineFromMetaTags() {
+    const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
+    const titleParts = ogTitle.split(/\s+[-–—]\s+/);
+    if (titleParts.length > 1) {
+      const headline = titleParts.slice(1).join(" - ");
+      if (!isJunkProfileLine(headline)) return headline;
+    }
+    const description = readMeta("og:description");
+    if (description && !isJunkProfileLine(description)) return description;
+    return "";
+  }
+
+  async function ensureExperienceVisible() {
+    const target = document.getElementById("experience")
+      || document.querySelector('[data-view-name*="experience" i]');
+    if (!target) return;
+    target.scrollIntoView({ block: "center" });
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+  }
+
   function headlineFromDom() {
     const selectors = [
       ".text-body-medium",
@@ -201,7 +221,8 @@
     return { email, phone, companyWebsite, personalWebsite };
   }
 
-  function captureLinkedInProfileFromDom() {
+  async function captureLinkedInProfileFromDom() {
+    await ensureExperienceVisible();
     const pageText = document.body?.innerText ?? "";
     const linkedinUrl = normalizeUrl(window.location.href.split("?")[0]);
     const titleName = document.title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
@@ -213,7 +234,8 @@
     const experience = parseExperienceFromText(pageText);
     const domExperience = captureExperienceFromDom();
     const headlineText =
-      headlineFromDom()
+      headlineFromMetaTags()
+      || headlineFromDom()
       || headlineFromOpenGraph()
       || headlineFromPageText(pageText, fullName)
       || headlineFromTitle(document.title);
@@ -247,7 +269,7 @@
   }
 
   async function captureLinkedInProfile() {
-    const domProfile = captureLinkedInProfileFromDom();
+    const domProfile = await captureLinkedInProfileFromDom();
     const publicId = window.aftermeetLinkedInPublicId?.(window.location.href) || "";
     if (!publicId || typeof window.aftermeetFetchLinkedInVoyager !== "function") {
       return domProfile;

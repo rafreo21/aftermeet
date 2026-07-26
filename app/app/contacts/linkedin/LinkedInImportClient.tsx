@@ -117,6 +117,10 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       }
     }
 
+    if (extensionImportRef.current) {
+      return;
+    }
+
     const requestId = lookupRequestRef.current + 1;
     lookupRequestRef.current = requestId;
     const timeout = window.setTimeout(() => {

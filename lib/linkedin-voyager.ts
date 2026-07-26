@@ -3,6 +3,8 @@
  * Inspired by open-linkedin-api: https://github.com/EseToni/open-linkedin-api
  */
 
+import { parseHeadline } from "./linkedin-page-capture.ts";
+
 export type LinkedInVoyagerProfile = {
   firstName: string;
   lastName: string;
@@ -154,6 +156,97 @@ export function parseExperienceGraphqlResponse(data: Record<string, unknown> | n
   return { role: current.role, company: current.company };
 }
 
+export function parseDashTopCardResponse(data: Record<string, unknown> | null | undefined) {
+  const included = (data?.included as Record<string, unknown>[] | undefined) ?? [];
+  for (const item of included) {
+    const headline = clean(item.headline)
+      || clean((item.multiLocaleHeadline as Record<string, string> | undefined)?.en_US);
+    if (!headline) continue;
+    const { role, company } = parseHeadline(headline);
+    return {
+      firstName: clean(item.firstName) || clean((item.multiLocaleFirstName as Record<string, string> | undefined)?.en_US),
+      lastName: clean(item.lastName) || clean((item.multiLocaleLastName as Record<string, string> | undefined)?.en_US),
+      urnId: urnIdFromEntityUrn(item.entityUrn),
+      role,
+      company,
+    };
+  }
+  return {};
+}
+
+type EmbeddedSnapshot = {
+  firstName: string;
+  lastName: string;
+  role: string;
+  company: string;
+  email: string;
+  phone: string;
+  urnId: string;
+};
+
+function walkEmbeddedSnapshot(value: unknown, out: EmbeddedSnapshot) {
+  if (!value || typeof value !== "object") return;
+
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    if (typeof record.emailAddress === "string" && !out.email) out.email = record.emailAddress.toLowerCase();
+    if (Array.isArray(record.phoneNumbers) && !out.phone) {
+      out.phone = clean((record.phoneNumbers[0] as { number?: string } | undefined)?.number);
+    }
+    if (typeof record.headline === "string" && !out.role) {
+      const parsed = parseHeadline(record.headline);
+      out.role = parsed.role;
+      out.company = parsed.company;
+    }
+    if (typeof record.firstName === "string" && !out.firstName) out.firstName = clean(record.firstName);
+    if (typeof record.lastName === "string" && !out.lastName) out.lastName = clean(record.lastName);
+    if (typeof record.entityUrn === "string" && !out.urnId) out.urnId = urnIdFromEntityUrn(record.entityUrn);
+
+    const positionView = record.positionView as { elements?: Record<string, unknown>[] } | undefined;
+    if (positionView?.elements?.length && !out.role) {
+      const current = positionView.elements.find((item) => isCurrentPosition(item)) ?? positionView.elements[0];
+      out.role = clean(current?.title);
+      out.company = companyFromPosition(current ?? {});
+    }
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => walkEmbeddedSnapshot(item, out));
+    return;
+  }
+
+  Object.values(value as Record<string, unknown>).forEach((item) => walkEmbeddedSnapshot(item, out));
+}
+
+export function parseEmbeddedLinkedInSnapshot(text: string): Partial<LinkedInVoyagerProfile> {
+  const out: EmbeddedSnapshot = {
+    firstName: "",
+    lastName: "",
+    role: "",
+    company: "",
+    email: "",
+    phone: "",
+    urnId: "",
+  };
+
+  try {
+    walkEmbeddedSnapshot(JSON.parse(text), out);
+  } catch {
+    const emailMatch = text.match(/"emailAddress"\s*:\s*"([^"]+)"/i);
+    if (emailMatch) out.email = emailMatch[1].toLowerCase();
+    const phoneMatch = text.match(/"phoneNumbers"\s*:\s*\[\s*\{[^}]*"number"\s*:\s*"([^"]+)"/i);
+    if (phoneMatch) out.phone = phoneMatch[1];
+    const headlineMatch = text.match(/"headline"\s*:\s*"([^"]+)"/i);
+    if (headlineMatch) {
+      const parsed = parseHeadline(headlineMatch[1]);
+      out.role = parsed.role;
+      out.company = parsed.company;
+    }
+  }
+
+  return out;
+}
+
 export function mergeVoyagerIntoProfile<T extends Record<string, string | undefined>>(
   base: T,
   voyager: Partial<LinkedInVoyagerProfile>,
@@ -204,6 +297,17 @@ export const CONTACT_INFO_FIXTURE = {
   emailAddress: "rafreo21@gmail.com",
   phoneNumbers: [{ number: "+447473177720", type: "MOBILE" }],
   websites: [],
+} as const;
+
+export const DASH_TOP_CARD_FIXTURE = {
+  included: [
+    {
+      firstName: "Raphael",
+      lastName: "Okojie",
+      headline: "Product Designer at Nexleaf Analytics",
+      entityUrn: "urn:li:fsd_profile:ACoAAB123",
+    },
+  ],
 } as const;
 
 export const EXPERIENCE_GRAPHQL_FIXTURE = {
