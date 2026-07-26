@@ -6,6 +6,7 @@ import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
 import { readEncounters, type Encounter } from "../../../lib/encounters";
 import { LinkButton } from "../../components/Button";
+import { BrandMark } from "../../components/BrandMark";
 import "../../app/product.css";
 import "../../app/flow.css";
 
@@ -24,7 +25,7 @@ export default function GuestEncounterPage() {
   return (
     <main className="guest-page">
       <section className="guest-panel">
-        <a className="guest-brand" href="/"><span>A</span>AfterMeet</a>
+        <a className="guest-brand" href="/"><BrandMark size={36} />AfterMeet</a>
         <span className="step-pill">Shared with you</span>
         <h1>{encounter.title}</h1>
         <p className="guest-meta">A reviewed meeting record from {encounter.personName ? `your conversation with ${encounter.personName}` : "a recent conversation"}.</p>

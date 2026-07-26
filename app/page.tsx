@@ -3,6 +3,7 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr/ArrowRight";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/ssr/ArrowUp";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/ssr/DotsThree";
 import { Button, IconLinkButton, LinkButton } from "./components/Button";
+import { BrandMark } from "./components/BrandMark";
 
 const opportunities = [
   {
@@ -41,7 +42,7 @@ export default function Home() {
     <main>
       <nav className="nav">
         <a className="brand" href="#top" aria-label="AfterMeet home">
-          <span className="brand-mark">A</span>
+          <BrandMark className="brand-mark" size={38} />
           <span>AfterMeet <small>product lab</small></span>
         </a>
         <div className="nav-links">
@@ -195,7 +196,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <div><span className="brand-mark">A</span><strong>AfterMeet</strong></div>
+        <div><BrandMark className="brand-mark" size={38} /><strong>AfterMeet</strong></div>
         <p>Working concept—not affiliated with Blinq.<br />Built from public product research.</p>
         <a href="#top">Back to top <ArrowUpIcon size={15} weight="bold" /></a>
       </footer>

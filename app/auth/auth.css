@@ -13,7 +13,7 @@
   padding: 36px 5vw 24px;
 }
 .auth-logo { width: fit-content; display: flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: -.03em; }
-.auth-logo span { width: 36px; height: 36px; border-radius: 50%; background: var(--a-green); display: grid; place-items: center; font-weight: 900; }
+.auth-logo img { width: 40px; height: 40px; display: block; }
 .auth-panel { width: min(100%, 520px); margin: auto; padding: 45px 0 70px; }
 .auth-panel:has(.auth-success) .auth-intro { display: none; }
 .auth-panel:has(.auth-success) { padding-top: 70px; }
@@ -31,6 +31,7 @@
 .provider-list .provider-button { display: grid; grid-template-columns: 28px 1fr auto; text-align: left; }
 .provider-list .provider-button span { color: #777c75; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .auth-provider-error { margin: 12px 0 0; color: #c83221; font-size: 12px; line-height: 1.45; text-align: center; }
+.auth-provider-notice { margin: -4px 0 14px; padding: 11px 13px; border-radius: 6px; background: var(--a-pale); color: var(--a-ink); font-size: 12px; line-height: 1.45; text-align: center; }
 .auth-terms { color: #6f746d; text-align: center; font-size: 11px; line-height: 1.45; margin: 25px 20px 0; }
 .auth-success { text-align: center; }
 .auth-success > div { width: 64px; height: 64px; margin: 0 auto 24px; display: grid; place-items: center; border-radius: 50%; background: var(--a-pale); color: var(--a-ink); }

@@ -1,8 +1,33 @@
 import { readPublicSupabaseConfig } from "../../lib/supabase/env";
 import { sanitizeIntendedDestination } from "../../lib/auth/redirect";
 import { AuthForm } from "./AuthForm";
+import { BrandMark } from "../components/BrandMark";
 import Link from "next/link";
 import "./auth.css";
+
+type ProviderAvailability = {
+  google: boolean;
+  linkedin_oidc: boolean;
+  x: boolean;
+};
+
+async function readProviderAvailability(url: string, anonKey: string): Promise<ProviderAvailability | null> {
+  try {
+    const response = await fetch(`${url}/auth/v1/settings`, {
+      headers: { apikey: anonKey },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const settings = (await response.json()) as { external?: Record<string, boolean> };
+    return {
+      google: Boolean(settings.external?.google),
+      linkedin_oidc: Boolean(settings.external?.linkedin_oidc),
+      x: Boolean(settings.external?.x ?? settings.external?.twitter),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default async function AuthPage({
   searchParams,
@@ -15,9 +40,12 @@ export default async function AuthPage({
     callback: "That sign-in link is invalid or has expired. Request a new one.",
     provisioning: "We couldn’t create your private workspace. Your session was closed; please try again.",
   };
+  const providerAvailability = environment.config
+    ? await readProviderAvailability(environment.config.url, environment.config.anonKey)
+    : null;
   return (
     <main className="auth-page">
-      <Link className="auth-logo" href="/"><span>A</span><strong>AfterMeet</strong></Link>
+      <Link className="auth-logo" href="/"><BrandMark size={40} /><strong>AfterMeet</strong></Link>
       <section className="auth-panel">
         <div className="auth-intro">
           <span><b className="auth-emoji" aria-hidden="true">👋</b> Welcome</span>
@@ -34,6 +62,7 @@ export default async function AuthPage({
             appUrl={environment.config.appUrl}
             next={sanitizeIntendedDestination(params.next)}
             initialError={params.error ? errors[params.error] ?? "" : ""}
+            providerAvailability={providerAvailability}
           />
         )}
       </section>

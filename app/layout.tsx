@@ -13,11 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AfterMeet — Product Opportunity",
-  description: "A focused product strategy for what comes after the business-card exchange.",
+  title: "AfterMeet",
+  description: "Remember what mattered and know what to do next.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: [{ url: "/aftermeet-logo.svg?v=2", type: "image/svg+xml" }],
+    shortcut: "/aftermeet-logo.svg?v=2",
+    apple: "/aftermeet-logo.svg?v=2",
   },
 };
 

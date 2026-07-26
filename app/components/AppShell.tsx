@@ -10,6 +10,7 @@ import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
 import { IconButton } from "./Button";
 import { useAppUser } from "./AppUserContext";
+import { BrandMark } from "./BrandMark";
 
 type AppShellProps = {
   active: "home" | "cards" | "contacts" | "followups";
@@ -34,7 +35,7 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
   return (
     <main className="product-shell">
       <aside className={`product-sidebar ${mobileNav ? "open" : ""}`}>
-        <a className="product-logo" href="/app"><span>A</span><strong>AfterMeet</strong></a>
+        <a className="product-logo" href="/app"><BrandMark size={38} /><strong>AfterMeet</strong></a>
         <nav aria-label="Product navigation">
           {nav.map(([key, href, Icon, label]) => (
             <a className={active === key ? "active" : ""} href={href} key={key}>
