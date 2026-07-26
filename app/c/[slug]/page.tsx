@@ -1,18 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import {
-  EnvelopeSimple,
-  Globe,
-  LinkSimple,
-  MapPin,
-  Phone,
-} from "@phosphor-icons/react/dist/ssr";
 import type { CSSProperties } from "react";
 
-import { contactMethodHref } from "@/lib/contact-methods";
-import { PublicExchangeForm } from "./PublicExchangeForm";
-import { SaveContactPrompt } from "./SaveContactPrompt";
+import { PublicCardFlow } from "./PublicCardFlow";
 import "./public-card.css";
 
 type Params = Promise<{ slug: string }>;
@@ -45,14 +36,6 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
         description: [card.job_title, card.company].filter(Boolean).join(" at "),
       }
     : { title: "Contact card · AfterMeet" };
-}
-
-function MethodIcon({ type }: { type: string }) {
-  if (type === "email") return <EnvelopeSimple aria-hidden size={21} />;
-  if (type === "phone" || type === "whatsapp") return <Phone aria-hidden size={21} />;
-  if (type === "address") return <MapPin aria-hidden size={21} />;
-  if (type === "website") return <Globe aria-hidden size={21} />;
-  return <LinkSimple aria-hidden size={21} />;
 }
 
 export default async function PublicCardPage({ params }: { params: Params }) {
@@ -90,35 +73,14 @@ export default async function PublicCardPage({ params }: { params: Params }) {
           <p className="public-card-role">
             {[card.job_title, card.company].filter(Boolean).join(" · ")}
           </p>
-          {card.bio ? <p className="public-card-bio">{card.bio}</p> : null}
-          <div className="public-card-methods">
-            {methods.map((method) => {
-              const href = contactMethodHref({
-                type: method.method_type,
-                value: method.value,
-              });
-              if (!href) return null;
-              return (
-                <a
-                  key={method.id}
-                  href={href}
-                  target={href.startsWith("http") ? "_blank" : undefined}
-                  rel="noreferrer"
-                >
-                  <MethodIcon type={method.method_type} />
-                  <span>
-                    <strong>{method.label || method.method_type}</strong>
-                    <small>{method.value}</small>
-                  </span>
-                </a>
-              );
-            })}
-          </div>
-          <SaveContactPrompt slug={slug} ownerName={card.full_name} />
-          <PublicExchangeForm slug={slug} ownerName={card.full_name} />
-          <p className="public-card-private">
-            Save this card now. AfterMeet never exposes private meeting notes here.
-          </p>
+          <PublicCardFlow
+            slug={slug}
+            ownerName={card.full_name}
+            jobTitle={card.job_title}
+            company={card.company}
+            bio={card.bio}
+            methods={methods}
+          />
         </div>
       </section>
     </main>

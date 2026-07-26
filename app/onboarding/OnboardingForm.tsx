@@ -5,10 +5,16 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Button } from "../components/Button";
 import { TextField } from "../components/FormField";
 
-export function OnboardingForm({ initialName }: { initialName: string }) {
+export function OnboardingForm({
+  initialName,
+  mode = "personal",
+  redirectTo = "/app",
+}: {
+  initialName: string;
+  mode?: "personal" | "team";
+  redirectTo?: string;
+}) {
   const [displayName, setDisplayName] = useState(initialName);
-  const [timeZone, setTimeZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London");
-  const [locale, setLocale] = useState(() => navigator.language || "en-GB");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,18 +23,25 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
     if (displayName.trim().length < 2) return setError("Enter the name you want AfterMeet to use.");
     setLoading(true);
     setError("");
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/London";
+    const locale = navigator.language || "en-GB";
     try {
-      const response = await fetch("/api/onboarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName: displayName.trim(), timeZone, locale }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        setError(body.error ?? "We couldn’t save your workspace. Please try again.");
+      if (mode === "team" || redirectTo === "/app") {
+        const response = await fetch("/api/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName: displayName.trim(), timeZone, locale }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          setError(body.error ?? "We couldn’t save your workspace. Please try again.");
+          return;
+        }
+        window.location.assign(redirectTo);
         return;
       }
-      window.location.assign("/app");
+
+      window.location.assign(`${redirectTo}?name=${encodeURIComponent(displayName.trim())}`);
     } catch {
       setError("We couldn’t reach AfterMeet. Check your connection and try again.");
     } finally {
@@ -38,13 +51,23 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
 
   return (
     <form className="onboarding-form" onSubmit={submit}>
-      <TextField label="Display name" name="displayName" autoComplete="name" value={displayName}
-        onChange={(event) => setDisplayName(event.target.value)} error={error} autoFocus />
-      <div className="onboarding-fields">
-        <TextField label="Time zone" name="timeZone" value={timeZone} onChange={(event) => setTimeZone(event.target.value)} />
-        <TextField label="Locale" name="locale" value={locale} onChange={(event) => setLocale(event.target.value)} />
-      </div>
-      <Button type="submit" loading={loading}>{loading ? "Saving workspace…" : "Continue to AfterMeet"} {!loading && <ArrowRightIcon weight="bold" />}</Button>
+      <TextField
+        label="Display name"
+        name="displayName"
+        autoComplete="name"
+        value={displayName}
+        onChange={(event) => setDisplayName(event.target.value)}
+        hint="How your name appears in AfterMeet."
+        error={error}
+        autoFocus
+      />
+      <p className="onboarding-footnote">
+        Time zone and language are detected automatically from your device — no need to configure locale codes here.
+      </p>
+      <Button fullWidth type="submit" loading={loading}>
+        {loading ? "Saving…" : mode === "team" ? "Continue to workspace" : "Continue to card setup"}
+        {!loading && <ArrowRightIcon weight="bold" />}
+      </Button>
     </form>
   );
 }

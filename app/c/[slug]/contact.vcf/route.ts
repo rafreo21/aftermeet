@@ -1,17 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { contactMethodHref } from "@/lib/contact-methods";
-import { buildWhenWeMetNote } from "@/lib/card-share-links";
+import { buildCardVcard } from "@/lib/vcard-export";
 
 type Params = Promise<{ slug: string }>;
-
-function escapeVcard(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/\r?\n/g, "\\n")
-    .replace(/,/g, "\\,")
-    .replace(/;/g, "\\;");
-}
 
 export async function GET(request: Request, { params }: { params: Params }) {
   const { slug } = await params;
@@ -35,37 +26,25 @@ export async function GET(request: Request, { params }: { params: Params }) {
   if (!card) return new Response("Contact card not found.", { status: 404 });
 
   const cardUrl = new URL(`/c/${slug}`, request.url).toString();
-  const whenWeMetNote = buildWhenWeMetNote(cardUrl);
-
   const methods = [...(card.card_methods || [])].sort(
     (a, b) => a.sort_order - b.sort_order,
   );
-  const lines = [
-    "BEGIN:VCARD",
-    "VERSION:3.0",
-    `FN:${escapeVcard(card.full_name)}`,
-    card.job_title ? `TITLE:${escapeVcard(card.job_title)}` : "",
-    card.company ? `ORG:${escapeVcard(card.company)}` : "",
-    `NOTE:${escapeVcard(card.bio ? `${card.bio}\n\n${whenWeMetNote}` : whenWeMetNote)}`,
-    `URL:${escapeVcard(cardUrl)}`,
-    ...methods.flatMap((method) => {
-      const value = escapeVcard(method.value);
-      if (method.method_type === "email") return [`EMAIL;TYPE=INTERNET:${value}`];
-      if (method.method_type === "phone") return [`TEL;TYPE=CELL:${value}`];
-      if (method.method_type === "address") return [`ADR;TYPE=WORK:;;${value};;;;`];
-      const href = contactMethodHref({ type: method.method_type, value: method.value });
-      return href?.startsWith("http")
-        ? [`URL;TYPE=${method.method_type.toUpperCase()}:${escapeVcard(href)}`]
-        : [];
-    }),
-    "END:VCARD",
-  ].filter(Boolean);
+  const { body, filename } = buildCardVcard({
+    fullName: card.full_name,
+    jobTitle: card.job_title,
+    company: card.company,
+    bio: card.bio,
+    cardUrl,
+    methods: methods.map((method) => ({
+      method_type: method.method_type,
+      value: method.value,
+    })),
+  });
 
-  const filename = card.full_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "aftermeet-contact";
-  return new Response(`${lines.join("\r\n")}\r\n`, {
+  return new Response(body, {
     headers: {
       "Content-Type": "text/vcard; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}.vcf"`,
+      "Content-Disposition": `inline; filename="${filename}.vcf"`,
       "Cache-Control": "public, max-age=300",
     },
   });

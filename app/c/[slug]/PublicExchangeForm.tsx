@@ -125,7 +125,7 @@ export function PublicExchangeForm({
         value={visitorPhone}
         onChange={(event) => setVisitorPhone(event.target.value)}
         autoComplete="tel"
-        placeholder="+44 7473 177720"
+        placeholder="+1 555 000 0000"
       />
 
       <div className="public-exchange-optional">

@@ -27,10 +27,14 @@ export default async function VisitorOnboardingPage({
   return (
     <main className="onboarding-shell">
       <section className="onboarding-panel onboarding-profile">
-        <Link className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</Link>
-        <span className="step-pill"><b aria-hidden="true">👋</b> Light account</span>
-        <h1>Remember who you meet.</h1>
-        <p>Confirm your name and AfterMeet will keep your card exchanges and shared meeting records in one directory.</p>
+        <header className="onboarding-header">
+          <Link className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</Link>
+          <span className="step-pill"><b aria-hidden="true">👋</b> Light account</span>
+        </header>
+        <div className="onboarding-intro">
+          <h1>Remember who you meet.</h1>
+          <p>Confirm your name and AfterMeet will keep your card exchanges and shared meeting records in one directory.</p>
+        </div>
         <VisitorOnboardingForm
           initialName={user.displayName ?? ""}
           slug={intent?.slug}

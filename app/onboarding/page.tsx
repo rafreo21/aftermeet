@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { getAppUser } from "../../lib/auth/context";
-import { OnboardingForm } from "./OnboardingForm";
 import Link from "next/link";
+import { getAppUser } from "../../lib/auth/context";
+import { OnboardingUseCase } from "./OnboardingUseCase";
 import { BrandMark } from "../components/BrandMark";
 import "../app/product.css";
 import "../app/flow.css";
@@ -12,12 +12,16 @@ export default async function OnboardingPage() {
   if (user.onboardingStatus === "completed") redirect("/app");
   return (
     <main className="onboarding-shell">
-      <section className="onboarding-panel onboarding-profile">
-        <Link className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</Link>
-        <span className="step-pill"><b aria-hidden="true">👋</b> Set up your workspace</span>
-        <h1>Make AfterMeet yours.</h1>
-        <p>These details personalise your private workspace. You can change them later in Settings.</p>
-        <OnboardingForm initialName={user.displayName ?? ""} />
+      <section className="onboarding-panel onboarding-start">
+        <header className="onboarding-header">
+          <Link className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</Link>
+          <span className="step-pill"><b aria-hidden="true">👋</b> Welcome</span>
+        </header>
+        <div className="onboarding-intro">
+          <h1>How will you use AfterMeet?</h1>
+          <p>This helps us tailor the right first step — a personal card for solo networking, or a shared workspace for your team.</p>
+        </div>
+        <OnboardingUseCase />
       </section>
     </main>
   );
