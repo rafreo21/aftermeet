@@ -30,6 +30,7 @@
 .provider-list { display: grid; gap: 10px; }
 .provider-list .provider-button { display: grid; grid-template-columns: 28px 1fr auto; text-align: left; }
 .provider-list .provider-button span { color: #777c75; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.provider-list .provider-button:disabled span { color: #a4a9a2; }
 .auth-provider-error { margin: 12px 0 0; color: #c83221; font-size: 12px; line-height: 1.45; text-align: center; }
 .auth-provider-notice { margin: -4px 0 14px; padding: 11px 13px; border-radius: 6px; background: var(--a-pale); color: var(--a-ink); font-size: 12px; line-height: 1.45; text-align: center; }
 .auth-terms { color: #6f746d; text-align: center; font-size: 11px; line-height: 1.45; margin: 25px 20px 0; }

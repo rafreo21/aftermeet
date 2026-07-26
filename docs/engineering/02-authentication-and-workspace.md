@@ -16,7 +16,8 @@ Supabase Auth owns identity and cookie sessions. Public Postgres tables own appl
 
 ## Security decisions
 
-- No OAuth buttons are displayed because OAuth is not configured.
+- OAuth buttons are shown, but `/auth` reads live provider availability from Supabase (`GET /auth/v1/settings`) and disables providers that are not enabled in the project. Disabled buttons are labelled **Soon**; email OTP remains available.
+- Failed OAuth attempts clear the loading state and surface a recoverable inline error instead of leaving the UI stuck.
 - No service-role key is used in the browser or required by Slice 1.
 - RLS is enabled on every Slice 1 public table.
 - Browser roles cannot insert, update, or delete memberships or domain events.
@@ -33,3 +34,23 @@ Supabase Auth owns identity and cookie sessions. Public Postgres tables own appl
 ## Operational note
 
 Repository tests verify pure redirect/config logic and statically verify the migration contract. The SQL verification script checks catalog privileges and security-definer configuration. Production readiness additionally requires applying the migration and executing the real email-link path and negative RLS matrix against the target Supabase project.
+
+## Social login (OAuth) setup
+
+Google, LinkedIn, and X are **not enabled yet** in the Supabase project. Email magic-link sign-in works today. To turn on a provider:
+
+1. Open [Supabase → Authentication → Providers](https://supabase.com/dashboard/project/tgpzxgrvdmmwnodxrooh/auth/providers).
+2. Enable the provider and paste the OAuth client ID and secret from the vendor console.
+3. Register this **callback URL** in each vendor app:
+
+   `https://tgpzxgrvdmmwnodxrooh.supabase.co/auth/v1/callback`
+
+4. Save the provider in Supabase. The auth page picks up availability automatically — no deploy required.
+
+Official Supabase guides:
+
+- [Google](https://supabase.com/docs/guides/auth/social-login/auth-google)
+- [LinkedIn](https://supabase.com/docs/guides/auth/social-login/auth-linkedin)
+- [X (Twitter)](https://supabase.com/docs/guides/auth/social-login/auth-twitter)
+
+After enabling a provider, confirm `/auth` shows the button as active (label changes from **Soon** to **Account** or **Profile**) and complete a test sign-in through `/auth/callback`.

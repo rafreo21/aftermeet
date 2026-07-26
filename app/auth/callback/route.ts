@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
     },
   });
   const code = request.nextUrl.searchParams.get("code");
-  if (!code) return NextResponse.redirect(new URL("/auth?error=callback", request.url));
+  const oauthError = request.nextUrl.searchParams.get("error");
+  if (oauthError || !code) return NextResponse.redirect(new URL("/auth?error=callback", request.url));
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) return NextResponse.redirect(new URL("/auth?error=callback", request.url));
   const { data, error: provisionError } = await supabase.rpc("provision_personal_workspace").single();
