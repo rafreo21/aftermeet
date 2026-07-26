@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   CONTACT_INFO_FIXTURE,
+  EXPERIENCE_GRAPHQL_FIXTURE,
   mergeVoyagerIntoProfile,
   parseContactInfoResponse,
+  parseExperienceGraphqlResponse,
   parseLinkedInPublicId,
   parseProfileViewResponse,
   PROFILE_VIEW_FIXTURE,
@@ -19,6 +21,7 @@ test("parseProfileViewResponse reads current job from positionView", () => {
     firstName: "Raphael",
     lastName: "Okojie",
     publicId: "rafreo",
+    urnId: "ACoAAB123",
     role: "Product Designer",
     company: "Nexleaf Analytics",
   });
@@ -30,6 +33,13 @@ test("parseContactInfoResponse reads email and phone", () => {
     phone: "+447473177720",
     companyWebsite: "",
     personalWebsite: "",
+  });
+});
+
+test("parseExperienceGraphqlResponse reads current job from dash GraphQL", () => {
+  assert.deepEqual(parseExperienceGraphqlResponse(EXPERIENCE_GRAPHQL_FIXTURE), {
+    role: "Product Designer",
+    company: "Nexleaf Analytics",
   });
 });
 

@@ -1,5 +1,6 @@
 (function initAfterMeetLinkedInVoyager() {
   const API_BASE = "https://www.linkedin.com/voyager/api";
+  const EXPERIENCE_QUERY_ID = "voyagerIdentityDashProfileComponents.7af5d6f176f11583b382e37e5639e69e";
 
   function clean(value) {
     return (value ?? "").replace(/\s+/g, " ").trim();
@@ -15,20 +16,29 @@
     return match ? match[1].replace(/"/g, "") : "";
   }
 
-  async function voyagerGet(path) {
+  async function voyagerGet(path, normalized = false) {
     const token = csrfToken();
     if (!token) return null;
+
+    const headers = {
+      accept: normalized ? "application/vnd.linkedin.normalized+json+2.1" : "application/json",
+      "csrf-token": token,
+      "x-restli-protocol-version": "2.0.0",
+      "x-li-lang": "en_US",
+    };
+
     const response = await fetch(`${API_BASE}${path}`, {
       credentials: "include",
-      headers: {
-        accept: "application/vnd.linkedin.normalized+json+2.1",
-        "csrf-token": token,
-        "x-restli-protocol-version": "2.0.0",
-        "x-li-lang": "en_US",
-      },
+      headers,
     });
     if (!response.ok) return null;
     return response.json();
+  }
+
+  function urnIdFromEntityUrn(urn) {
+    const value = clean(urn);
+    if (!value) return "";
+    return value.split(":").pop() || "";
   }
 
   function isCurrentPosition(item) {
@@ -55,6 +65,7 @@
       firstName: clean(profile.firstName) || clean(miniProfile.firstName),
       lastName: clean(profile.lastName) || clean(miniProfile.lastName),
       publicId: clean(miniProfile.publicIdentifier),
+      urnId: urnIdFromEntityUrn(profile.entityUrn || miniProfile.entityUrn),
       role: clean(current?.title),
       company: companyFromPosition(current),
     };
@@ -86,13 +97,50 @@
     };
   }
 
-  function mergeVoyager(base, voyager) {
-    const merged = { ...base };
-    ["firstName", "lastName", "role", "company", "email", "phone", "companyWebsite", "personalWebsite"].forEach((field) => {
-      const value = clean(voyager[field]);
-      if (value) merged[field] = value;
-    });
-    return merged;
+  function parseGraphqlExperienceItem(item, isGroupItem = false) {
+    const entity = item?.components?.entityComponent;
+    if (!entity?.titleV2?.text?.text) return null;
+    const title = clean(entity.titleV2.text.text);
+    const subtitle = clean(entity.subtitle?.text);
+    const company = subtitle ? subtitle.split(" · ")[0] : "";
+    const caption = clean(entity.caption?.text);
+    return {
+      role: title,
+      company: isGroupItem ? "" : company,
+      isCurrent: /present/i.test(caption) || !/\d{4}\s*-\s*\d{4}/i.test(caption),
+    };
+  }
+
+  function parseExperienceGraphql(data) {
+    const parsedItems = [];
+    for (const block of data?.included ?? []) {
+      for (const item of block?.components?.elements ?? []) {
+        const parsed = parseGraphqlExperienceItem(item);
+        if (parsed) parsedItems.push(parsed);
+      }
+    }
+    const current = parsedItems.find((item) => item.isCurrent) ?? parsedItems[0];
+    if (!current) return { role: "", company: "" };
+    return { role: current.role, company: current.company };
+  }
+
+  function findProfileUrnInPage() {
+    const html = document.documentElement?.innerHTML ?? "";
+    const match = html.match(/urn:li:fsd_profile:([A-Za-z0-9_-]+)/)
+      || html.match(/urn:li:fs_profile:([A-Za-z0-9_-]+)/);
+    return match?.[1] ?? "";
+  }
+
+  async function fetchExperienceGraphql(urnId) {
+    const id = clean(urnId);
+    if (!id) return { role: "", company: "" };
+    const profileUrn = encodeURIComponent(`urn:li:fsd_profile:${id}`);
+    const variables = encodeURIComponent(`(profileUrn:${profileUrn},sectionType:experience)`);
+    const data = await voyagerGet(
+      `/graphql?variables=${variables}&queryId=${EXPERIENCE_QUERY_ID}&includeWebMetadata=true`,
+      true,
+    );
+    return parseExperienceGraphql(data);
   }
 
   window.aftermeetFetchLinkedInVoyager = async function aftermeetFetchLinkedInVoyager(publicId) {
@@ -108,6 +156,13 @@
       ...parseProfileView(profileView),
       ...parseContactInfo(contactInfo),
     };
+
+    if (!parsed.role || !parsed.company) {
+      const urnId = parsed.urnId || findProfileUrnInPage();
+      const experience = await fetchExperienceGraphql(urnId);
+      if (experience.role) parsed.role = parsed.role || experience.role;
+      if (experience.company) parsed.company = parsed.company || experience.company;
+    }
 
     if (!parsed.firstName && !parsed.role && !parsed.email) return null;
     return parsed;

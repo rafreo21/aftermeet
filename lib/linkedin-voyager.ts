@@ -1,10 +1,6 @@
 /**
  * LinkedIn Voyager API response parsing.
  * Inspired by open-linkedin-api: https://github.com/EseToni/open-linkedin-api
- *
- * Endpoints (authenticated, same-origin):
- * - GET /voyager/api/identity/profiles/{publicId}/profileView
- * - GET /voyager/api/identity/profiles/{publicId}/profileContactInfo
  */
 
 export type LinkedInVoyagerProfile = {
@@ -17,6 +13,7 @@ export type LinkedInVoyagerProfile = {
   companyWebsite: string;
   personalWebsite: string;
   publicId: string;
+  urnId: string;
 };
 
 export function parseLinkedInPublicId(url: string) {
@@ -26,6 +23,12 @@ export function parseLinkedInPublicId(url: string) {
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function urnIdFromEntityUrn(urn: unknown) {
+  const value = clean(urn);
+  if (!value) return "";
+  return value.split(":").pop() ?? "";
 }
 
 function isCurrentPosition(item: Record<string, unknown>) {
@@ -53,6 +56,7 @@ export function parseProfileViewResponse(data: Record<string, unknown> | null | 
   const firstName = clean(profile.firstName) || clean(miniProfile?.firstName);
   const lastName = clean(profile.lastName) || clean(miniProfile?.lastName);
   const publicId = clean(miniProfile?.publicIdentifier);
+  const urnId = urnIdFromEntityUrn(profile.entityUrn || miniProfile?.entityUrn);
 
   const positionView = data.positionView as { elements?: Record<string, unknown>[] } | undefined;
   const current = (positionView?.elements ?? []).find((item) => isCurrentPosition(item))
@@ -62,6 +66,7 @@ export function parseProfileViewResponse(data: Record<string, unknown> | null | 
     firstName,
     lastName,
     publicId,
+    urnId,
     role: clean(current?.title),
     company: current ? companyFromPosition(current) : "",
   };
@@ -106,6 +111,49 @@ export function parseContactInfoResponse(data: Record<string, unknown> | null | 
   };
 }
 
+function parseGraphqlExperienceItem(item: Record<string, unknown>, isGroupItem = false) {
+  const component = item.components as { entityComponent?: Record<string, unknown> } | undefined;
+  const entity = component?.entityComponent;
+  if (!entity) return null;
+
+  const title = clean((entity.titleV2 as { text?: { text?: string } } | undefined)?.text?.text);
+  if (!title) return null;
+
+  const subtitle = clean((entity.subtitle as { text?: string } | undefined)?.text);
+  const company = subtitle ? subtitle.split(" · ")[0]?.trim() ?? "" : "";
+  const caption = clean((entity.caption as { text?: string } | undefined)?.text);
+  const employmentType = subtitle.includes(" · ") ? subtitle.split(" · ").slice(1).join(" · ").trim() : "";
+
+  return {
+    role: title,
+    company: isGroupItem ? "" : company,
+    employmentType: isGroupItem ? company : employmentType,
+    isCurrent: /present/i.test(caption) || !caption.includes("-"),
+  };
+}
+
+export function parseExperienceGraphqlResponse(data: Record<string, unknown> | null | undefined) {
+  const included = (data?.included as Record<string, unknown>[] | undefined) ?? [];
+  const parsedItems: Array<{ role: string; company: string; isCurrent: boolean }> = [];
+
+  for (const block of included) {
+    const elements = (block.components as { elements?: Record<string, unknown>[] } | undefined)?.elements ?? [];
+    for (const item of elements) {
+      const parsed = parseGraphqlExperienceItem(item);
+      if (!parsed) continue;
+      parsedItems.push({
+        role: parsed.role,
+        company: parsed.company || parsed.employmentType,
+        isCurrent: parsed.isCurrent,
+      });
+    }
+  }
+
+  const current = parsedItems.find((item) => item.isCurrent) ?? parsedItems[0];
+  if (!current) return { role: "", company: "" };
+  return { role: current.role, company: current.company };
+}
+
 export function mergeVoyagerIntoProfile<T extends Record<string, string | undefined>>(
   base: T,
   voyager: Partial<LinkedInVoyagerProfile>,
@@ -122,10 +170,12 @@ export const PROFILE_VIEW_FIXTURE = {
   profile: {
     firstName: "Raphael",
     lastName: "Okojie",
+    entityUrn: "urn:li:fs_profile:ACoAAB123",
     miniProfile: {
       firstName: "Raphael",
       lastName: "Okojie",
       publicIdentifier: "rafreo",
+      entityUrn: "urn:li:fs_miniProfile:ACoAAB123",
     },
   },
   positionView: {
@@ -154,4 +204,24 @@ export const CONTACT_INFO_FIXTURE = {
   emailAddress: "rafreo21@gmail.com",
   phoneNumbers: [{ number: "+447473177720", type: "MOBILE" }],
   websites: [],
+} as const;
+
+export const EXPERIENCE_GRAPHQL_FIXTURE = {
+  included: [
+    {
+      components: {
+        elements: [
+          {
+            components: {
+              entityComponent: {
+                titleV2: { text: { text: "Product Designer" } },
+                subtitle: { text: "Nexleaf Analytics · Full-time" },
+                caption: { text: "Jan 2025 - Present · 1 yr 7 mos" },
+              },
+            },
+          },
+        ],
+      },
+    },
+  ],
 } as const;

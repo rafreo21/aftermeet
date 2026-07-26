@@ -145,10 +145,42 @@
       ".top-card-layout__headline",
     ];
     for (const selector of selectors) {
-      const value = clean(document.querySelector(selector)?.textContent);
-      if (value && value.length <= 120) return value;
+      const nodes = selector === ".text-body-medium"
+        ? document.querySelectorAll(selector)
+        : [document.querySelector(selector)].filter(Boolean);
+      for (const node of nodes) {
+        const value = clean(node?.textContent);
+        if (!value || value.length > 120 || isJunkProfileLine(value)) continue;
+        if (/ at | · /.test(value) || parseHeadline(value).company) return value;
+      }
     }
     return "";
+  }
+
+  function captureExperienceFromDom() {
+    const section = document.getElementById("experience")?.closest("section")
+      || document.querySelector('[data-view-name="profile-card-experience"]')
+      || document.querySelector("section.artdeco-card.pvs-loader__profile-card");
+    if (!section) return { role: "", company: "" };
+
+    const firstEntry = section.querySelector(".artdeco-list__item, li.pvs-list__paged-list-item, ul.pvs-list > li");
+    if (!firstEntry) return { role: "", company: "" };
+
+    const role = clean(
+      firstEntry.querySelector(".t-bold span[aria-hidden=\"true\"]")?.textContent
+      || firstEntry.querySelector(".mr1.hoverable-link-text span")?.textContent
+      || firstEntry.querySelector(".t-bold")?.textContent,
+    );
+    const companyLine = clean(
+      firstEntry.querySelector(".t-14.t-normal span[aria-hidden=\"true\"]")?.textContent
+      || firstEntry.querySelector(".pv-entity__secondary-title")?.textContent
+      || firstEntry.querySelector(".t-14.t-normal")?.textContent,
+    );
+
+    return {
+      role,
+      company: stripEmploymentSuffix(companyLine),
+    };
   }
 
   function extractLinks() {
@@ -179,12 +211,19 @@
     const { firstName, lastName } = splitName(fullName);
 
     const experience = parseExperienceFromText(pageText);
+    const domExperience = captureExperienceFromDom();
     const headlineText =
       headlineFromDom()
       || headlineFromOpenGraph()
       || headlineFromPageText(pageText, fullName)
       || headlineFromTitle(document.title);
-    const { role, company } = mergeLinkedInRoleCompany(experience, parseHeadline(headlineText));
+    const { role, company } = mergeLinkedInRoleCompany(
+      {
+        role: domExperience.role || experience.role,
+        company: domExperience.company || experience.company,
+      },
+      parseHeadline(headlineText),
+    );
 
     const links = extractLinks();
     const contact = parseContactInfoFromText(pageText);

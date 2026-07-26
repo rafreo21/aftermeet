@@ -47,6 +47,10 @@ async function captureActiveTab(tabId) {
 }
 
 async function enrichProfile(baseUrl, profile, pageText) {
+  if (profile.role?.trim() && profile.company?.trim()) {
+    return { profile, message: "Captured role and company from LinkedIn." };
+  }
+
   try {
     const response = await fetch(`${baseUrl}/api/contacts/capture`, {
       method: "POST",
@@ -57,15 +61,20 @@ async function enrichProfile(baseUrl, profile, pageText) {
     if (!response.ok) return { profile, message: "" };
     const payload = await response.json();
     if (!payload?.profile) return { profile, message: "" };
+
+    const merged = { ...profile };
+    for (const field of ["firstName", "lastName", "email", "phone", "role", "company", "context"]) {
+      const next = payload.profile[field]?.trim?.() ?? "";
+      const prev = profile[field]?.trim?.() ?? "";
+      if (next) merged[field] = payload.profile[field];
+      else if (prev) merged[field] = profile[field];
+    }
+    merged.linkedinUrl = profile.linkedinUrl || payload.profile.linkedinUrl || "";
+    merged.sourceUrl = profile.sourceUrl || payload.profile.sourceUrl || "";
+    merged.source = "extension";
+
     return {
-      profile: {
-        ...profile,
-        ...payload.profile,
-        context: payload.profile.context || profile.context || "",
-        linkedinUrl: profile.linkedinUrl || payload.profile.linkedinUrl || "",
-        sourceUrl: profile.sourceUrl || payload.profile.sourceUrl || "",
-        source: "extension",
-      },
+      profile: merged,
       message: typeof payload.message === "string" ? payload.message : "Cleaned captured profile details.",
     };
   } catch {
