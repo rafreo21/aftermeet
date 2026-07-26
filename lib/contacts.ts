@@ -5,6 +5,8 @@ export type Contact = {
   firstName: string;
   lastName: string;
   email: string;
+  workEmail?: string;
+  personalEmail?: string;
   phone?: string;
   linkedinUrl?: string;
   company: string;

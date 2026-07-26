@@ -12,7 +12,14 @@ import {
   type EnrichmentStep,
 } from "../../lib/contact-enrichment";
 
-export type ProfileFieldKey = "fullName" | "email" | "phone" | "role" | "company" | "linkedinUrl";
+export type ProfileFieldKey =
+  | "fullName"
+  | "workEmail"
+  | "personalEmail"
+  | "phone"
+  | "role"
+  | "company"
+  | "linkedinUrl";
 
 export type ProfileFieldRow = {
   key: ProfileFieldKey;
@@ -82,7 +89,7 @@ export function ProfileCaptureTable({
                     onClick={() => void onEnrich(row.enrichable!)}
                   >
                     {row.enrichable === "email" ? (
-                      <><EnvelopeSimpleIcon size={15} weight="bold" />Find email</>
+                      <><EnvelopeSimpleIcon size={15} weight="bold" />Find work email</>
                     ) : (
                       <><PhoneIcon size={15} weight="bold" />Find phone</>
                     )}

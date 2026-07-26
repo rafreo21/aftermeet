@@ -7,6 +7,48 @@
     return textarea.value.replace(/\s+/g, " ").trim();
   }
 
+  const PERSONAL_EMAIL_DOMAINS = new Set([
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com", "outlook.com",
+    "live.com", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com", "aol.com",
+  ]);
+
+  function emailDomain(email) {
+    return clean(email).split("@")[1]?.toLowerCase() || "";
+  }
+
+  function guessCompanyDomain(company) {
+    const stripped = company.replace(/\([^)]*\)/g, " ").replace(/\b(?:inc|llc|ltd|corp|co|company)\.?\b/gi, " ").trim();
+    const slug = stripped.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 48);
+    return slug ? `${slug}.com` : "";
+  }
+
+  function isLikelyPersonalEmail(email) {
+    return PERSONAL_EMAIL_DOMAINS.has(emailDomain(email));
+  }
+
+  function isLikelyWorkEmail(email, company) {
+    const normalized = clean(email).toLowerCase();
+    if (!normalized.includes("@")) return false;
+    const domain = emailDomain(normalized);
+    const companyDomain = guessCompanyDomain(company);
+    if (companyDomain && (domain === companyDomain || domain.endsWith(`.${companyDomain}`))) return true;
+    return !isLikelyPersonalEmail(normalized);
+  }
+
+  function mergeCapturedEmail(target, email, company) {
+    const normalized = clean(email).toLowerCase();
+    if (!normalized) return target;
+    if (isLikelyWorkEmail(normalized, company)) {
+      if (!target.workEmail) target.workEmail = normalized;
+    } else if (!target.personalEmail) {
+      target.personalEmail = normalized;
+    } else if (!target.workEmail && isLikelyWorkEmail(normalized, company)) {
+      target.workEmail = normalized;
+    }
+    target.email = target.workEmail || target.personalEmail || normalized;
+    return target;
+  }
+
   function normalizeProfileName(value) {
     return clean(value)
       .replace(/\s*\|\s*LinkedIn\s*$/i, "")
@@ -212,7 +254,27 @@
     if (!digits) return "";
     if (digits.startsWith("+")) return digits;
     if (digits.startsWith("00")) return `+${digits.slice(2)}`;
-    return digits;
+    return isValidPhoneNumber(digits) ? digits : "";
+  }
+
+  function isValidPhoneNumber(value) {
+    const cleaned = clean(value);
+    if (!cleaned) return false;
+    if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(cleaned)) return false;
+    if (/^(19|20)\d{2}$/.test(cleaned)) return false;
+    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{9,}\d)/);
+    const raw = match ? match[1] : cleaned;
+    let digits = raw.replace(/[^\d+]/g, "");
+    if (digits.startsWith("00")) digits = digits.slice(2);
+    const count = digits.replace(/\D/g, "").length;
+    if (count < 10) return false;
+    if (/^(19|20)\d{2}$/.test(digits.replace(/\D/g, ""))) return false;
+    return true;
+  }
+
+  function sanitizePhoneNumber(value) {
+    const normalized = normalizePhone(value);
+    return normalized || "";
   }
 
   function isEmailLabel(line) {
@@ -251,7 +313,9 @@
     if (phoneIndex >= 0) {
       for (const line of lines.slice(phoneIndex + 1, phoneIndex + 6)) {
         if (isEmailLabel(line) || isPhoneLabel(line)) continue;
-        const normalized = normalizePhone(line);
+        if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(line)) continue;
+        if (/^(19|20)\d{2}$/.test(line)) continue;
+        const normalized = sanitizePhoneNumber(line);
         if (normalized) {
           phone = normalized;
           break;
@@ -261,7 +325,7 @@
 
     if (!phone) {
       const match = pageText.match(/(\+\d[\d\s().-]{7,}\d)/);
-      if (match) phone = normalizePhone(match[1]);
+      if (match) phone = sanitizePhoneNumber(match[1]);
     }
 
     return { email, phone };
@@ -293,10 +357,10 @@
     return parseContactInfoFromText(text);
   }
 
-  function mergeContactResult(target, source) {
+  function mergeContactResult(target, source, company = "") {
     const email = clean(source.email).toLowerCase();
-    const phone = normalizePhone(source.phone);
-    if (email) target.email = email;
+    const phone = sanitizePhoneNumber(source.phone);
+    if (email) mergeCapturedEmail(target, email, company || target.company || "");
     if (phone) target.phone = phone;
     return target;
   }
@@ -385,7 +449,8 @@
   }
 
   function contactRequirementsMet(result, requireEmail, requirePhone) {
-    if (requireEmail && !result.email) return false;
+    const hasEmail = Boolean(result.workEmail || result.personalEmail || result.email);
+    if (requireEmail && !hasEmail) return false;
     if (requirePhone && !result.phone) return false;
     return true;
   }
@@ -456,7 +521,12 @@
     const requireEmail = requirements.requireEmail !== false;
     const requirePhone = requirements.requirePhone !== false;
     const existing = scanForContactInfo();
-    if (contactRequirementsMet(existing, requireEmail, requirePhone)) return existing;
+    const emptyContact = { workEmail: "", personalEmail: "", email: "", phone: "", company: "" };
+    if (contactRequirementsMet({ ...emptyContact, ...existing, email: existing.email }, requireEmail, requirePhone)) {
+      const resolved = { ...emptyContact };
+      mergeContactResult(resolved, existing);
+      return resolved;
+    }
 
     const trigger = findContactInfoTrigger();
     const profileUrl = window.location.href;
@@ -464,15 +534,16 @@
     const tap = installContactNetworkTap();
 
     try {
-      let resolved = { email: existing.email || "", phone: existing.phone || "" };
+      let resolved = { workEmail: "", personalEmail: "", email: "", phone: "", company: "" };
+      mergeContactResult(resolved, existing);
 
       if (publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
-        mergeContactResult(resolved, await window.aftermeetFetchLinkedInContactInfo(publicId).catch(() => ({})));
+        mergeContactResult(resolved, await window.aftermeetFetchLinkedInContactInfo(publicId).catch(() => ({})), resolved.company);
       }
 
       if (trigger) {
         const href = trigger.getAttribute("href") || trigger.href || "";
-        mergeContactResult(resolved, await fetchContactInfoFromHref(href));
+        mergeContactResult(resolved, await fetchContactInfoFromHref(href), resolved.company);
       }
 
       if (contactRequirementsMet(resolved, requireEmail, requirePhone)) {
@@ -513,24 +584,32 @@
   }
 
   async function resolveContactDetails(publicId, seed = {}) {
-    let email = clean(seed.email).toLowerCase();
-    let phone = normalizePhone(seed.phone);
+    const resolved = {
+      workEmail: "",
+      personalEmail: "",
+      email: "",
+      phone: sanitizePhoneNumber(seed.phone),
+      company: "",
+    };
+    mergeContactResult(resolved, seed);
 
     const modal = await captureContactInfoFromModal({
-      requireEmail: !email,
-      requirePhone: !phone,
+      requireEmail: !(resolved.workEmail || resolved.personalEmail || resolved.email),
+      requirePhone: !resolved.phone,
     });
-    email = email || clean(modal.email).toLowerCase();
-    phone = phone || normalizePhone(modal.phone);
+    mergeContactResult(resolved, modal, modal.company);
 
-    return { email, phone };
+    resolved.email = resolved.workEmail || resolved.personalEmail;
+    return resolved;
   }
 
   function buildLinkedInCaptureContext(profile) {
     const parts = [];
     if (profile.role && profile.company) parts.push(`Current role: ${profile.role} at ${profile.company}.`);
     else if (profile.role) parts.push(`Current role: ${profile.role}.`);
-    if (profile.email) parts.push(`Email visible on LinkedIn: ${profile.email}.`);
+    if (profile.workEmail) parts.push(`Work email visible on LinkedIn: ${profile.workEmail}.`);
+    if (profile.personalEmail) parts.push(`Personal email visible on LinkedIn: ${profile.personalEmail}.`);
+    else if (profile.email) parts.push(`Email visible on LinkedIn: ${profile.email}.`);
     if (profile.phone) parts.push(`Phone visible on LinkedIn: ${profile.phone}.`);
     if (profile.linkedinUrl) parts.push(`Profile: ${profile.linkedinUrl}.`);
     return parts.join(" ");
@@ -588,9 +667,6 @@
       }
     }
 
-    let email = contact.email || clean(voyager?.email).toLowerCase();
-    let phone = contact.phone || normalizePhone(voyager?.phone);
-
     let { role, company } = voyager
       ? sanitizeExperience({ role: voyager.role, company: voyager.company })
       : { role: "", company: "" };
@@ -615,9 +691,14 @@
       ...baseProfile,
       role,
       company,
-      email,
-      phone,
+      workEmail: contact.workEmail,
+      personalEmail: contact.personalEmail,
+      email: contact.workEmail || contact.personalEmail || baseProfile.email,
+      phone: contact.phone,
     };
+    mergeCapturedEmail(merged, voyager?.email, company);
+    merged.email = merged.workEmail || merged.personalEmail;
+    merged.phone = sanitizePhoneNumber(merged.phone || voyager?.phone);
 
     if (voyager) {
       const voyagerName = normalizeProfileName(`${clean(voyager.firstName)} ${clean(voyager.lastName)}`.trim());
@@ -627,6 +708,8 @@
     merged.context = buildLinkedInCaptureContext({
       role: merged.role,
       company: merged.company,
+      workEmail: merged.workEmail,
+      personalEmail: merged.personalEmail,
       email: merged.email,
       phone: merged.phone,
       linkedinUrl: merged.linkedinUrl,

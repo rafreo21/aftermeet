@@ -54,6 +54,7 @@ test("buildLinkedInImportInitialState hydrates extension capture on the server",
 
   assert.equal(initial.input, "https://www.linkedin.com/in/rafreo");
   assert.equal(initial.form.fullName, "Raphael Okojie");
+  assert.equal(initial.form.personalEmail, "rafreo21@gmail.com");
   assert.equal(initial.form.role, "Product Designer");
   assert.equal(initial.form.company, "Nexleaf Analytics");
   assert.match(initial.form.context, /Current role: Product Designer at Nexleaf Analytics/);

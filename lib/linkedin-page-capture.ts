@@ -3,6 +3,7 @@ import {
   parseExperienceSectionText,
   sanitizeExperienceRoleCompany,
 } from "./linkedin-experience-capture.ts";
+import { sanitizePhoneNumber } from "./contact-fields.ts";
 
 function clean(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -59,9 +60,10 @@ export function parseContactInfoFromText(pageText: string) {
     }
   }
 
-  const emailIndex = lines.findIndex((line) => /^email$/i.test(line));
+  const emailIndex = lines.findIndex((line) => /^(email|e-mail|email address)$/i.test(line));
   if (emailIndex >= 0 && !email) {
-    for (const line of lines.slice(emailIndex + 1, emailIndex + 4)) {
+    for (const line of lines.slice(emailIndex + 1, emailIndex + 6)) {
+      if (/^(phone|mobile|cell|mobile phone)$/i.test(line)) break;
       const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
       if (match) {
         email = match[0].toLowerCase();
@@ -70,12 +72,15 @@ export function parseContactInfoFromText(pageText: string) {
     }
   }
 
-  const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
+  const phoneIndex = lines.findIndex((line) => /^(phone|mobile|cell|mobile phone)$/i.test(line));
   if (phoneIndex >= 0) {
-    for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
-      const match = line.match(/(\+\d[\d\s().-]{7,}\d)/);
-      if (match) {
-        phone = match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    for (const line of lines.slice(phoneIndex + 1, phoneIndex + 6)) {
+      if (/^(email|e-mail|email address)$/i.test(line)) continue;
+      if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(line)) continue;
+      if (/^(19|20)\d{2}$/.test(line)) continue;
+      const normalized = sanitizePhoneNumber(line);
+      if (normalized) {
+        phone = normalized;
         break;
       }
     }
@@ -83,7 +88,7 @@ export function parseContactInfoFromText(pageText: string) {
 
   if (!phone) {
     const match = pageText.match(/(\+\d[\d\s().-]{7,}\d)/);
-    if (match) phone = match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    if (match) phone = sanitizePhoneNumber(match[1]);
   }
 
   return { email, phone };
@@ -105,6 +110,8 @@ export function buildLinkedInCaptureContext(profile: {
   role?: string;
   company?: string;
   email?: string;
+  workEmail?: string;
+  personalEmail?: string;
   phone?: string;
   linkedinUrl?: string;
 }) {
@@ -114,7 +121,9 @@ export function buildLinkedInCaptureContext(profile: {
   } else if (profile.role) {
     parts.push(`Current role: ${profile.role}.`);
   }
-  if (profile.email) parts.push(`Email visible on LinkedIn: ${profile.email}.`);
+  if (profile.workEmail) parts.push(`Work email visible on LinkedIn: ${profile.workEmail}.`);
+  if (profile.personalEmail) parts.push(`Personal email visible on LinkedIn: ${profile.personalEmail}.`);
+  else if (profile.email) parts.push(`Email visible on LinkedIn: ${profile.email}.`);
   if (profile.phone) parts.push(`Phone visible on LinkedIn: ${profile.phone}.`);
   if (profile.linkedinUrl) parts.push(`Profile: ${profile.linkedinUrl}.`);
   return parts.join(" ");

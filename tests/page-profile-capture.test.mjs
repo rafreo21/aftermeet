@@ -24,7 +24,17 @@ test("parseExperienceFromText reads the current job from the Experience section"
   });
 });
 
-test("parseContactInfoFromText reads phone and email from Contact info", () => {
+test("parseContactInfoFromText ignores year-like phone values", () => {
+  const parsed = parseContactInfoFromText([
+    "Contact info",
+    "Email",
+    "tosin@gmail.com",
+    "Mobile",
+    "2026",
+  ].join("\n"));
+  assert.equal(parsed.email, "tosin@gmail.com");
+  assert.equal(parsed.phone, "");
+});
   assert.deepEqual(parseContactInfoFromText(LINKEDIN_PROFILE_FIXTURE), {
     email: "rafreo21@gmail.com",
     phone: "+447473177720",

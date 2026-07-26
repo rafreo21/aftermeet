@@ -15,7 +15,8 @@ function renderPreview(profile) {
   const lines = [
     profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Unknown name",
     [profile.role, profile.company].filter(Boolean).join(" · "),
-    profile.email,
+    profile.workEmail ? `Work: ${profile.workEmail}` : "",
+    profile.personalEmail ? `Personal: ${profile.personalEmail}` : profile.email || "",
     profile.phone,
     profile.linkedinUrl,
   ].filter(Boolean);
@@ -143,7 +144,7 @@ captureButton.addEventListener("click", async () => {
   };
 
   const parts = [];
-  if (enriched.profile.email) parts.push("email");
+  if (enriched.profile.workEmail || enriched.profile.personalEmail || enriched.profile.email) parts.push("email");
   if (enriched.profile.phone) parts.push("phone");
   const contactNote = parts.length
     ? `Captured ${parts.join(" and ")} from LinkedIn.`

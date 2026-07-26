@@ -13,6 +13,8 @@ export type CapturedProfile = {
   firstName?: string;
   lastName?: string;
   email: string;
+  workEmail?: string;
+  personalEmail?: string;
   phone: string;
   company: string;
   role: string;

@@ -1,4 +1,5 @@
 import { splitFullName } from "./contacts.ts";
+import { sanitizePhoneNumber } from "./contact-fields.ts";
 
 export type EnrichmentField = "email" | "phone";
 export type EnrichmentConfidence = "verified" | "likely" | "guess" | "none";
@@ -18,6 +19,8 @@ export type EnrichmentInput = {
   linkedinUrl?: string;
   field: EnrichmentField;
   seedEmail?: string;
+  seedWorkEmail?: string;
+  seedPersonalEmail?: string;
   seedPhone?: string;
 };
 
@@ -71,8 +74,16 @@ function normalizePhone(value: string) {
   return digits.startsWith("+") ? digits : digits.replace(/^00/, "+");
 }
 
-function linkedInStep(field: EnrichmentField, seedEmail: string, seedPhone: string): EnrichmentStep {
-  const value = field === "email" ? clean(seedEmail).toLowerCase() : normalizePhone(seedPhone);
+function linkedInStep(
+  field: EnrichmentField,
+  seedEmail: string,
+  seedWorkEmail: string,
+  seedPersonalEmail: string,
+  seedPhone: string,
+): EnrichmentStep {
+  const value = field === "email"
+    ? clean(seedWorkEmail).toLowerCase() || clean(seedPersonalEmail).toLowerCase() || clean(seedEmail).toLowerCase()
+    : sanitizePhoneNumber(seedPhone);
   return {
     id: "linkedin",
     label: "LinkedIn",
@@ -238,7 +249,13 @@ export async function enrichContactField(
   const seedPhone = clean(input.seedPhone ?? "");
 
   const steps: EnrichmentStep[] = [
-    linkedInStep(input.field, seedEmail, seedPhone),
+    linkedInStep(
+      input.field,
+      input.seedEmail ?? "",
+      input.seedWorkEmail ?? "",
+      input.seedPersonalEmail ?? "",
+      input.seedPhone ?? "",
+    ),
     patternStep(input.field, fullName, company),
     await hunterStep(input.field, fullName, company, options.hunterApiKey),
     ...placeholderProviders(input.field),

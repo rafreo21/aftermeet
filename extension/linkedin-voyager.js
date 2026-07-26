@@ -296,10 +296,23 @@
 
   function mergeContactFields(target, source) {
     const email = clean(source.email).toLowerCase();
-    const phone = normalizePhone(source.phone);
+    const phone = sanitizePhoneNumber(source.phone);
     if (email) target.email = email;
     if (phone) target.phone = phone;
     return target;
+  }
+
+  function sanitizePhoneNumber(value) {
+    const cleaned = clean(value);
+    if (!cleaned || /^(19|20)\d{2}$/.test(cleaned)) return "";
+    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{9,}\d)/);
+    const raw = match ? match[1] : cleaned;
+    let digits = raw.replace(/[^\d+]/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("00")) digits = `+${digits.slice(2)}`;
+    const count = digits.replace(/\D/g, "").length;
+    if (count < 10) return "";
+    return digits.startsWith("+") ? digits : digits;
   }
 
   function parseContactInfoFromText(pageText) {

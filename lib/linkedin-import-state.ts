@@ -1,5 +1,6 @@
 import type { Contact } from "./contacts.ts";
 import { capturedProfileFullName } from "./contacts.ts";
+import { splitCapturedEmails } from "./contact-fields.ts";
 import type { CapturedProfile } from "./page-profile-capture.ts";
 
 export type LinkedInImportInitialState = {
@@ -7,7 +8,8 @@ export type LinkedInImportInitialState = {
   importSource: Contact["source"];
   form: {
     fullName: string;
-    email: string;
+    workEmail: string;
+    personalEmail: string;
     phone: string;
     role: string;
     company: string;
@@ -20,7 +22,8 @@ export type LinkedInImportInitialState = {
 
 const emptyProfileFields = {
   fullName: "",
-  email: "",
+  workEmail: "",
+  personalEmail: "",
   phone: "",
   role: "",
   company: "",
@@ -47,12 +50,19 @@ export function buildLinkedInImportInitialState(input: {
 
   if (profile) {
     const isExtensionImport = source === "extension";
+    const emails = splitCapturedEmails({
+      email: profile.email,
+      workEmail: profile.workEmail,
+      personalEmail: profile.personalEmail,
+      company: profile.company,
+    });
     return {
       input: profile.linkedinUrl?.trim() || profile.sourceUrl?.trim() || initialUrl,
       importSource: isExtensionImport ? "extension" : "linkedin",
       form: {
         fullName: capturedProfileFullName(profile),
-        email: profile.email?.trim() || "",
+        workEmail: emails.workEmail,
+        personalEmail: emails.personalEmail,
         phone: profile.phone?.trim() || "",
         role: profile.role?.trim() || "",
         company: profile.company?.trim() || "",

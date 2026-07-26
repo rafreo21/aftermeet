@@ -17,6 +17,7 @@ import {
 } from "../../../components/ProfileCaptureTable";
 import { TextAreaField } from "../../../components/FormField";
 import { capturedProfileFullName, splitFullName, type Contact } from "../../../../lib/contacts";
+import { sanitizePhoneNumber } from "../../../../lib/contact-fields";
 import type { EnrichmentField, EnrichmentResult, EnrichmentStep } from "../../../../lib/contact-enrichment";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
@@ -43,11 +44,25 @@ type FieldSources = Record<ProfileFieldKey, string>;
 
 const emptyProfileFields = {
   fullName: "",
-  email: "",
+  workEmail: "",
+  personalEmail: "",
   phone: "",
   role: "",
   company: "",
 };
+
+function initialFieldSources(initial: LinkedInImportInitialState): FieldSources {
+  const linkedInSource = initial.isExtensionImport ? "Extension" : initial.form.fullName ? "LinkedIn" : "";
+  return {
+    fullName: initial.form.fullName ? linkedInSource || "LinkedIn" : "",
+    workEmail: initial.form.workEmail ? linkedInSource || "LinkedIn" : "",
+    personalEmail: initial.form.personalEmail ? linkedInSource || "LinkedIn" : "",
+    phone: initial.form.phone ? linkedInSource || "LinkedIn" : "",
+    role: initial.form.role ? linkedInSource || "LinkedIn" : "",
+    company: initial.form.company ? linkedInSource || "LinkedIn" : "",
+    linkedinUrl: initial.input ? "LinkedIn" : "",
+  };
+}
 
 function decodeHtmlEntities(value: string) {
   return value
@@ -56,18 +71,6 @@ function decodeHtmlEntities(value: string) {
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
-}
-
-function initialFieldSources(initial: LinkedInImportInitialState): FieldSources {
-  const linkedInSource = initial.isExtensionImport ? "Extension" : initial.form.fullName ? "LinkedIn" : "";
-  return {
-    fullName: initial.form.fullName ? linkedInSource || "LinkedIn" : "",
-    email: initial.form.email ? linkedInSource || "LinkedIn" : "",
-    phone: initial.form.phone ? linkedInSource || "LinkedIn" : "",
-    role: initial.form.role ? linkedInSource || "LinkedIn" : "",
-    company: initial.form.company ? linkedInSource || "LinkedIn" : "",
-    linkedinUrl: initial.input ? "LinkedIn" : "",
-  };
 }
 
 export function LinkedInImportClient({ initial }: { initial: LinkedInImportInitialState }) {
@@ -162,7 +165,8 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
         setFieldSources((current) => ({
           ...current,
           fullName: "",
-          email: "",
+          workEmail: "",
+          personalEmail: "",
           phone: "",
           role: "",
           company: "",
@@ -202,7 +206,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       return;
     }
 
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => ({ ...current, [key]: key === "phone" ? sanitizePhoneNumber(value) || value : value }));
     setFieldSources((current) => ({
       ...current,
       [key]: value.trim() ? "Manual" : "",
@@ -228,7 +232,9 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           company: form.company,
           linkedinUrl,
           field,
-          seedEmail: form.email,
+          seedEmail: form.workEmail || form.personalEmail,
+          seedWorkEmail: form.workEmail,
+          seedPersonalEmail: form.personalEmail,
           seedPhone: form.phone,
         }),
       });
@@ -241,16 +247,20 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       const result = await animateEnrichmentResult(payload, setEnrichmentSteps);
       if (result.value) {
         if (field === "email") {
-          setForm((current) => ({ ...current, email: result.value }));
+          setForm((current) => ({ ...current, workEmail: result.value }));
+          setFieldSources((current) => ({
+            ...current,
+            workEmail: sourceLabelFromEnrichment(result) || "Enriched",
+          }));
         } else {
-          setForm((current) => ({ ...current, phone: result.value }));
+          setForm((current) => ({ ...current, phone: sanitizePhoneNumber(result.value) || result.value }));
+          setFieldSources((current) => ({
+            ...current,
+            phone: sourceLabelFromEnrichment(result) || "Enriched",
+          }));
         }
-        setFieldSources((current) => ({
-          ...current,
-          [field]: sourceLabelFromEnrichment(result) || "Enriched",
-        }));
       } else {
-        setEnrichError(`No ${field} found across the sources we checked.`);
+        setEnrichError(`No ${field === "email" ? "work email" : "phone"} found across the sources we checked.`);
       }
     } catch {
       setEnrichError("Could not reach enrichment services.");
@@ -275,8 +285,10 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       id: `${importSource}-${parsed.handle}`,
       firstName,
       lastName,
-      email: form.email.trim(),
-      phone: form.phone.trim() || undefined,
+      email: form.workEmail.trim() || form.personalEmail.trim(),
+      workEmail: form.workEmail.trim() || undefined,
+      personalEmail: form.personalEmail.trim() || undefined,
+      phone: sanitizePhoneNumber(form.phone) || undefined,
       linkedinUrl,
       company: form.company.trim(),
       role: form.role.trim(),
@@ -296,12 +308,19 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       source: fieldSources.fullName,
     },
     {
-      key: "email" as const,
-      label: "Email",
-      value: form.email,
-      placeholder: "Work or personal email",
-      source: fieldSources.email,
+      key: "workEmail" as const,
+      label: "Work email",
+      value: form.workEmail,
+      placeholder: "Work address from enrichment",
+      source: fieldSources.workEmail,
       enrichable: "email" as const,
+    },
+    {
+      key: "personalEmail" as const,
+      label: "Personal email",
+      value: form.personalEmail,
+      placeholder: "From LinkedIn Contact info",
+      source: fieldSources.personalEmail,
     },
     {
       key: "phone" as const,
@@ -349,7 +368,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
         <header>
           <span className="step-pill">Capture people</span>
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
-          <p>Review each field in the table below. Use Find email or Find phone when LinkedIn does not show contact info.</p>
+          <p>Review each field in the table below. Personal email and phone usually come from LinkedIn Contact info. Use Find work email for company-domain guesses.</p>
         </header>
 
         <ProfileCaptureTable

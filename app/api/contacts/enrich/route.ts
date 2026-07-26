@@ -29,6 +29,8 @@ export async function POST(request: Request) {
       linkedinUrl: body.linkedinUrl,
       field: body.field,
       seedEmail: body.seedEmail,
+      seedWorkEmail: body.seedWorkEmail,
+      seedPersonalEmail: body.seedPersonalEmail,
       seedPhone: body.seedPhone,
     },
     { hunterApiKey: process.env.HUNTER_API_KEY?.trim() || undefined },
