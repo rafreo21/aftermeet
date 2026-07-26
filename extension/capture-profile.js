@@ -169,7 +169,7 @@
     return { email, phone, companyWebsite, personalWebsite };
   }
 
-  function captureLinkedInProfile() {
+  function captureLinkedInProfileFromDom() {
     const pageText = document.body?.innerText ?? "";
     const linkedinUrl = normalizeUrl(window.location.href.split("?")[0]);
     const titleName = document.title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
@@ -207,6 +207,35 @@
     };
   }
 
+  async function captureLinkedInProfile() {
+    const domProfile = captureLinkedInProfileFromDom();
+    const publicId = window.aftermeetLinkedInPublicId?.(window.location.href) || "";
+    if (!publicId || typeof window.aftermeetFetchLinkedInVoyager !== "function") {
+      return domProfile;
+    }
+
+    try {
+      const voyager = await window.aftermeetFetchLinkedInVoyager(publicId);
+      if (!voyager) return domProfile;
+
+      const merged = { ...domProfile };
+      ["firstName", "lastName", "role", "company", "email", "phone", "companyWebsite", "personalWebsite"].forEach((field) => {
+        const value = clean(voyager[field]);
+        if (value) merged[field] = value;
+      });
+      merged.context = buildLinkedInCaptureContext({
+        role: merged.role,
+        company: merged.company,
+        email: merged.email,
+        phone: merged.phone,
+        linkedinUrl: merged.linkedinUrl,
+      });
+      return merged;
+    } catch {
+      return domProfile;
+    }
+  }
+
   function captureGenericProfile() {
     const sourceUrl = normalizeUrl(window.location.href.split("?")[0]);
     const title = clean(document.title);
@@ -228,9 +257,9 @@
     };
   }
 
-  window.aftermeetCapturePage = function aftermeetCapturePage() {
+  window.aftermeetCapturePage = async function aftermeetCapturePage() {
     const profile = /linkedin\.com\/in\//i.test(window.location.href)
-      ? captureLinkedInProfile()
+      ? await captureLinkedInProfile()
       : captureGenericProfile();
     return {
       profile,

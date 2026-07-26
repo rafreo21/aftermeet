@@ -38,11 +38,11 @@ async function captureActiveTab(tabId) {
   } catch {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["capture-profile.js"],
+      files: ["linkedin-voyager.js", "capture-profile.js"],
     });
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => window.aftermeetCapturePage(),
+      func: async () => await window.aftermeetCapturePage(),
     });
     return result;
   }
@@ -76,7 +76,7 @@ async function enrichProfile(baseUrl, profile, pageText) {
 }
 
 captureButton.addEventListener("click", async () => {
-  status.textContent = "Capturing visible page details…";
+  status.textContent = "Reading LinkedIn profile via Voyager…";
   await saveSettings();
   const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, "") || "http://localhost:3000";
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

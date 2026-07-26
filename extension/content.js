@@ -1,4 +1,5 @@
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== "aftermeet-capture") return;
-  sendResponse(window.aftermeetCapturePage());
+  void window.aftermeetCapturePage().then(sendResponse);
+  return true;
 });
