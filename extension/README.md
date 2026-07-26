@@ -8,7 +8,15 @@ Capture people from LinkedIn (and other pages) into AfterMeet without server-sid
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select this `extension/` folder
-5. Reload the extension after pulling logo or manifest changes
+5. Click **Reload** on `chrome://extensions` after pulling changes
+
+If icons look like Chrome’s orange puzzle piece, rebuild them from the SVG:
+
+```bash
+node extension/scripts/build-icons.mjs
+```
+
+Then reload the extension again.
 
 ## Use
 
