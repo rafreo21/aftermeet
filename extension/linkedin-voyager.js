@@ -283,15 +283,7 @@
   }
 
   function normalizePhone(value) {
-    const cleaned = clean(value);
-    if (!cleaned) return "";
-    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{7,}\d)/);
-    const raw = match ? match[1] : cleaned;
-    const digits = raw.replace(/[^\d+]/g, "");
-    if (!digits) return "";
-    if (digits.startsWith("+")) return digits;
-    if (digits.startsWith("00")) return `+${digits.slice(2)}`;
-    return digits;
+    return window.aftermeetSanitizePhoneNumber?.(value, "") || "";
   }
 
   function mergeContactFields(target, source) {
@@ -303,16 +295,10 @@
   }
 
   function sanitizePhoneNumber(value) {
-    const cleaned = clean(value);
-    if (!cleaned || /^(19|20)\d{2}$/.test(cleaned)) return "";
-    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{9,}\d)/);
-    const raw = match ? match[1] : cleaned;
-    let digits = raw.replace(/[^\d+]/g, "");
-    if (!digits) return "";
-    if (digits.startsWith("00")) digits = `+${digits.slice(2)}`;
-    const count = digits.replace(/\D/g, "").length;
-    if (count < 10) return "";
-    return digits.startsWith("+") ? digits : digits;
+    return window.aftermeetSanitizePhoneNumber?.(
+      value,
+      window.aftermeetReadLinkedInProfileLocation?.() || "",
+    ) || "";
   }
 
   function parseContactInfoFromText(pageText) {

@@ -246,35 +246,14 @@
   }
 
   function normalizePhone(value) {
-    const cleaned = clean(value);
-    if (!cleaned) return "";
-    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{7,}\d)/);
-    const raw = match ? match[1] : cleaned;
-    const digits = raw.replace(/[^\d+]/g, "");
-    if (!digits) return "";
-    if (digits.startsWith("+")) return digits;
-    if (digits.startsWith("00")) return `+${digits.slice(2)}`;
-    return isValidPhoneNumber(digits) ? digits : "";
-  }
-
-  function isValidPhoneNumber(value) {
-    const cleaned = clean(value);
-    if (!cleaned) return false;
-    if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(cleaned)) return false;
-    if (/^(19|20)\d{2}$/.test(cleaned)) return false;
-    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{9,}\d)/);
-    const raw = match ? match[1] : cleaned;
-    let digits = raw.replace(/[^\d+]/g, "");
-    if (digits.startsWith("00")) digits = digits.slice(2);
-    const count = digits.replace(/\D/g, "").length;
-    if (count < 10) return false;
-    if (/^(19|20)\d{2}$/.test(digits.replace(/\D/g, ""))) return false;
-    return true;
+    return window.aftermeetSanitizePhoneNumber?.(
+      value,
+      window.aftermeetReadLinkedInProfileLocation?.() || "",
+    ) || "";
   }
 
   function sanitizePhoneNumber(value) {
-    const normalized = normalizePhone(value);
-    return normalized || "";
+    return normalizePhone(value);
   }
 
   function isEmailLabel(line) {

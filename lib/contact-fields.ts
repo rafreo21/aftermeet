@@ -18,6 +18,30 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
   "ymail.com",
 ]);
 
+const COUNTRY_DIAL_CODES: Array<[pattern: RegExp, code: string]> = [
+  [/\bunited states\b|\b(u\.?s\.?a?\.?)\b|\bamerica\b/i, "1"],
+  [/\bunited kingdom\b|\b(u\.?k\.?)\b|\bengland\b|\bscotland\b|\bwales\b/i, "44"],
+  [/\bnigeria\b|\blagos\b|\babuja\b/i, "234"],
+  [/\bkenya\b|\bnairobi\b/i, "254"],
+  [/\bghana\b|\baccr[a]?a\b/i, "233"],
+  [/\bsouth africa\b|\bjohannesburg\b|\bcape town\b/i, "27"],
+  [/\bcanada\b|\btoronto\b|\bvancouver\b/i, "1"],
+  [/\bindia\b|\bbengaluru\b|\bbangalore\b|\bmumbai\b|\bdelhi\b/i, "91"],
+  [/\bgermany\b|\bberlin\b|\bmunich\b/i, "49"],
+  [/\bfrance\b|\bparis\b/i, "33"],
+  [/\baustralia\b|\bsydney\b|\bmelbourne\b/i, "61"],
+  [/\bnetherlands\b|\bamsterdam\b/i, "31"],
+  [/\bspain\b|\bmadrid\b|\bbarcelona\b/i, "34"],
+  [/\bitaly\b|\bmilan\b|\brome\b/i, "39"],
+  [/\bbrazil\b|\bs[aã]o paulo\b/i, "55"],
+  [/\buae\b|\bdubai\b|\babu dhabi\b|\bunited arab emirates\b/i, "971"],
+  [/\bsingapore\b/i, "65"],
+  [/\bireland\b|\bdublin\b/i, "353"],
+  [/\bpakistan\b|\bkarachi\b|\blahore\b/i, "92"],
+  [/\bphilippines\b|\bmanila\b/i, "63"],
+  [/\bmexico\b|\bmx\b/i, "52"],
+];
+
 function clean(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -45,20 +69,70 @@ export function isLikelyWorkEmail(email: string, company = "") {
   return !isLikelyPersonalEmail(normalized);
 }
 
-export function normalizePhoneNumber(value: string) {
+export function isLikelyNonPhoneText(value: string) {
   const cleaned = clean(value);
-  if (!cleaned) return "";
+  if (!cleaned) return true;
+  if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(cleaned)) return true;
+  if (/^(19|20)\d{2}$/.test(cleaned)) return true;
+  if (/^(present|full-time|part-time|internship|contract)$/i.test(cleaned)) return true;
+  return false;
+}
 
-  const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{9,}\d)/);
-  const raw = match ? match[1] : cleaned;
-  let digits = raw.replace(/[^\d+]/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("00")) digits = `+${digits.slice(2)}`;
-  if (!digits.startsWith("+") && digits.length >= 10) {
+export function inferDialCodeFromLocation(location: string) {
+  const normalized = clean(location);
+  if (!normalized) return "";
+
+  for (const [pattern, code] of COUNTRY_DIAL_CODES) {
+    if (pattern.test(normalized)) return code;
+  }
+
+  return "";
+}
+
+export function applyCountryCodeIfNeeded(phone: string, dialCode: string) {
+  if (!phone || phone.startsWith("+") || !dialCode) return phone;
+
+  const digits = phone.replace(/\D/g, "");
+  if (!digits || digits.length < 7) return phone;
+
+  if (dialCode === "44" && digits.startsWith("0")) {
+    return `+44${digits.slice(1)}`;
+  }
+
+  if (dialCode === "1" && digits.length === 10) {
+    return `+1${digits}`;
+  }
+
+  const trimmed = digits.replace(/^0+/, "");
+  if (trimmed.length >= 7 && trimmed.length <= 12) {
+    return `+${dialCode}${trimmed}`;
+  }
+
+  return phone;
+}
+
+export function normalizePhoneNumber(value: string) {
+  if (isLikelyNonPhoneText(value)) return "";
+
+  const cleaned = clean(value);
+  const intlMatch = cleaned.match(/(\+\d[\d\s().-]{5,})/);
+  if (intlMatch) {
+    const body = intlMatch[1].replace(/[^\d+]/g, "").replace(/^\+/, "");
+    if (body.length >= 7 && body.length <= 15) return `+${body}`;
+  }
+
+  const compact = cleaned.replace(/\s/g, "");
+  if (compact.startsWith("00")) {
+    const body = compact.replace(/[^\d]/g, "").replace(/^00/, "");
+    if (body.length >= 7 && body.length <= 15) return `+${body}`;
+  }
+
+  const digits = cleaned.replace(/[^\d]/g, "");
+  if (digits.length >= 7 && digits.length <= 15 && !/^(19|20)\d{2}$/.test(digits)) {
     return digits;
   }
-  if (digits.startsWith("+")) return digits;
-  return digits;
+
+  return "";
 }
 
 export function isValidPhoneNumber(value: string) {
@@ -66,16 +140,24 @@ export function isValidPhoneNumber(value: string) {
   if (!normalized) return false;
 
   const digits = normalized.replace(/\D/g, "");
-  if (digits.length < 10) return false;
+  if (digits.length < 7 || digits.length > 15) return false;
   if (/^(19|20)\d{2}$/.test(digits)) return false;
-  if (/^20(1[0-9]|2[0-9]|3[0-5])$/.test(digits) && digits.length === 4) return false;
+  if (/^(\d)\1{6,}$/.test(digits)) return false;
 
   return true;
 }
 
-export function sanitizePhoneNumber(value: string) {
+export type PhoneSanitizeOptions = {
+  locationHint?: string;
+};
+
+export function sanitizePhoneNumber(value: string, options: PhoneSanitizeOptions = {}) {
   const normalized = normalizePhoneNumber(value);
-  return isValidPhoneNumber(normalized) ? normalized : "";
+  if (!normalized) return "";
+
+  const dialCode = inferDialCodeFromLocation(options.locationHint ?? "");
+  const withCountry = applyCountryCodeIfNeeded(normalized, dialCode);
+  return isValidPhoneNumber(withCountry) ? withCountry : "";
 }
 
 export function splitCapturedEmails(input: {

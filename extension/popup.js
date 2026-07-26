@@ -38,7 +38,7 @@ async function captureActiveTab(tabId) {
   } catch {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["linkedin-voyager.js", "capture-profile.js"],
+      files: ["phone-utils.js", "linkedin-voyager.js", "capture-profile.js"],
     });
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId },

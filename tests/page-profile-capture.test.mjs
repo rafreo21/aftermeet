@@ -35,6 +35,8 @@ test("parseContactInfoFromText ignores year-like phone values", () => {
   assert.equal(parsed.email, "tosin@gmail.com");
   assert.equal(parsed.phone, "");
 });
+
+test("parseContactInfoFromText reads phone and email from Contact info", () => {
   assert.deepEqual(parseContactInfoFromText(LINKEDIN_PROFILE_FIXTURE), {
     email: "rafreo21@gmail.com",
     phone: "+447473177720",
