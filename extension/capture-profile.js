@@ -206,9 +206,21 @@
   function normalizePhone(value) {
     const cleaned = clean(value);
     if (!cleaned) return "";
-    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d)/);
-    if (!match) return cleaned.replace(/[^\d+]/g, "").replace(/^\+/, "+");
-    return match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{7,}\d)/);
+    const raw = match ? match[1] : cleaned;
+    const digits = raw.replace(/[^\d+]/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("+")) return digits;
+    if (digits.startsWith("00")) return `+${digits.slice(2)}`;
+    return digits;
+  }
+
+  function isEmailLabel(line) {
+    return /^(email|e-mail|email address)$/i.test(line);
+  }
+
+  function isPhoneLabel(line) {
+    return /^(phone|mobile|cell|mobile phone)$/i.test(line);
   }
 
   function parseContactInfoFromText(pageText) {
@@ -223,9 +235,10 @@
       }
     }
 
-    const emailIndex = lines.findIndex((line) => /^email$/i.test(line));
+    const emailIndex = lines.findIndex((line) => isEmailLabel(line));
     if (emailIndex >= 0 && !email) {
-      for (const line of lines.slice(emailIndex + 1, emailIndex + 4)) {
+      for (const line of lines.slice(emailIndex + 1, emailIndex + 6)) {
+        if (isPhoneLabel(line) || isEmailLabel(line)) break;
         const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
         if (match) {
           email = match[0].toLowerCase();
@@ -234,9 +247,10 @@
       }
     }
 
-    const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
+    const phoneIndex = lines.findIndex((line) => isPhoneLabel(line));
     if (phoneIndex >= 0) {
-      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
+      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 6)) {
+        if (isEmailLabel(line) || isPhoneLabel(line)) continue;
         const normalized = normalizePhone(line);
         if (normalized) {
           phone = normalized;
@@ -264,27 +278,128 @@
     return { email, phone };
   }
 
+  function isContactPayloadText(text) {
+    return /emailAddress|phoneNumbers|"number"\s*:|mailto:|tel:/i.test(String(text));
+  }
+
+  function isContactRequestUrl(url) {
+    return /contact-info|ContactInfo|profileContactInfo|overlay\/contact-info|voyagerIdentityDashProfileContactInfo|identityDashProfileContactInfo|rsc-action.*ContactInfo|graphql.*ContactInfo/i.test(String(url));
+  }
+
+  function parseContactFromResponseText(text) {
+    if (typeof window.aftermeetParseContactFromStream === "function") {
+      return window.aftermeetParseContactFromStream(text);
+    }
+    return parseContactInfoFromText(text);
+  }
+
+  function mergeContactResult(target, source) {
+    const email = clean(source.email).toLowerCase();
+    const phone = normalizePhone(source.phone);
+    if (email) target.email = email;
+    if (phone) target.phone = phone;
+    return target;
+  }
+
+  function installContactNetworkTap() {
+    const captured = [];
+    const originalFetch = window.fetch;
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+    const xhrUrls = new WeakMap();
+
+    window.fetch = async function aftermeetContactFetch(input, init) {
+      const response = await originalFetch.call(this, input, init);
+      const url = typeof input === "string" ? input : input?.url || "";
+      try {
+        const text = await response.clone().text();
+        if (isContactRequestUrl(url) || ((/graphql|voyager|flagship-web|rsc-action/i.test(url)) && isContactPayloadText(text))) {
+          captured.push(text);
+        }
+      } catch {
+        /* ignore unreadable clone */
+      }
+      return response;
+    };
+
+    XMLHttpRequest.prototype.open = function aftermeetContactOpen(method, url, ...rest) {
+      xhrUrls.set(this, String(url));
+      return originalOpen.call(this, method, url, ...rest);
+    };
+
+    XMLHttpRequest.prototype.send = function aftermeetContactSend(...args) {
+      this.addEventListener("load", function aftermeetContactLoad() {
+        const url = xhrUrls.get(this) || "";
+        if ((isContactRequestUrl(url) || /graphql|voyager|flagship-web|rsc-action/i.test(url))
+          && typeof this.responseText === "string"
+          && isContactPayloadText(this.responseText)) {
+          captured.push(this.responseText);
+        }
+      });
+      return originalSend.apply(this, args);
+    };
+
+    return {
+      readCaptured() {
+        const result = { email: "", phone: "" };
+        for (const text of captured) {
+          mergeContactResult(result, parseContactFromResponseText(text));
+        }
+        return result;
+      },
+      restore() {
+        window.fetch = originalFetch;
+        XMLHttpRequest.prototype.open = originalOpen;
+        XMLHttpRequest.prototype.send = originalSend;
+      },
+    };
+  }
+
   function findContactInfoTrigger() {
     const selectors = [
       "#top-card-text-details-contact-info",
       "a[href*='/overlay/contact-info']",
-      "a[href*='contact-info']",
+      "a[href*='overlay/contact-info']",
+      "button[aria-label*='Contact info' i]",
+      "a[aria-label*='Contact info' i]",
       "[data-view-name*='contact-info' i]",
     ];
     for (const selector of selectors) {
       const node = document.querySelector(selector);
       if (node) return node;
     }
-    return [...document.querySelectorAll("a, button")].find((node) => /^contact info$/i.test(clean(node.textContent))) || null;
+    return [...document.querySelectorAll("a, button, span")].find((node) => /^contact info$/i.test(clean(node.textContent)))?.closest("a, button")
+      || [...document.querySelectorAll("a, button")].find((node) => /^contact info$/i.test(clean(node.textContent)))
+      || null;
   }
 
   function findContactInfoSurfaces(root = document) {
-    return [...root.querySelectorAll('[role="dialog"], .artdeco-modal, .artdeco-offcanvas, aside, section')]
+    return [...root.querySelectorAll(
+      '[role="dialog"], .artdeco-modal, .artdeco-offcanvas, aside, section, .pv-contact-info, [class*="contact-info"]',
+    )]
       .filter((node) => {
         const text = node.innerText || "";
         return /contact info/i.test(text)
           || Boolean(node.querySelector('a[href^="mailto:"], a[href^="tel:"]'));
       });
+  }
+
+  function contactRequirementsMet(result, requireEmail, requirePhone) {
+    if (requireEmail && !result.email) return false;
+    if (requirePhone && !result.phone) return false;
+    return true;
+  }
+
+  async function restoreProfileUrl(originalUrl) {
+    const target = originalUrl.split("?")[0].split("#")[0];
+    const current = window.location.href.split("?")[0].split("#")[0];
+    if (current === target) return;
+    window.history.back();
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await sleep(200);
+      const next = window.location.href.split("?")[0].split("#")[0];
+      if (next === target) return;
+    }
   }
 
   function scanForContactInfo(root = document) {
@@ -337,67 +452,76 @@
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }));
   }
 
-  async function captureContactInfoFromModal() {
+  async function captureContactInfoFromModal(requirements = {}) {
+    const requireEmail = requirements.requireEmail !== false;
+    const requirePhone = requirements.requirePhone !== false;
     const existing = scanForContactInfo();
-    if (existing.email || existing.phone) return existing;
+    if (contactRequirementsMet(existing, requireEmail, requirePhone)) return existing;
 
     const trigger = findContactInfoTrigger();
-    if (!trigger) return { email: "", phone: "" };
+    const profileUrl = window.location.href;
+    const publicId = window.aftermeetLinkedInPublicId?.(profileUrl) || "";
+    const tap = installContactNetworkTap();
 
-    const href = trigger.getAttribute("href") || "";
-    scrollNodeIntoView(trigger);
-    await sleep(120);
+    try {
+      let resolved = { email: existing.email || "", phone: existing.phone || "" };
 
-    let resolved = null;
-    const observer = new MutationObserver(() => {
-      const found = scanForContactInfo();
-      if (found.email || found.phone) resolved = found;
-    });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-    clickElement(trigger);
-
-    const hrefPromise = fetchContactInfoFromHref(href).catch(() => ({ email: "", phone: "" }));
-
-    for (let attempt = 0; attempt < 24 && !resolved; attempt += 1) {
-      await sleep(250);
-      const found = scanForContactInfo();
-      if (found.email || found.phone) {
-        resolved = found;
-        break;
+      if (publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
+        mergeContactResult(resolved, await window.aftermeetFetchLinkedInContactInfo(publicId).catch(() => ({})));
       }
+
+      if (trigger) {
+        const href = trigger.getAttribute("href") || trigger.href || "";
+        mergeContactResult(resolved, await fetchContactInfoFromHref(href));
+      }
+
+      if (contactRequirementsMet(resolved, requireEmail, requirePhone)) {
+        return resolved;
+      }
+
+      if (!trigger) return resolved;
+
+      scrollNodeIntoView(trigger);
+      await sleep(120);
+
+      let observerResolved = null;
+      const observer = new MutationObserver(() => {
+        const found = scanForContactInfo();
+        if (found.email || found.phone) observerResolved = found;
+      });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+      clickElement(trigger);
+
+      for (let attempt = 0; attempt < 36; attempt += 1) {
+        await sleep(250);
+        mergeContactResult(resolved, scanForContactInfo());
+        mergeContactResult(resolved, tap.readCaptured());
+        if (observerResolved) mergeContactResult(resolved, observerResolved);
+        if (contactRequirementsMet(resolved, requireEmail, requirePhone)) break;
+      }
+
+      observer.disconnect();
+      closeContactInfoModal();
+      await restoreProfileUrl(profileUrl);
+      return resolved;
+    } finally {
+      tap.restore();
+      closeContactInfoModal();
+      await restoreProfileUrl(profileUrl);
     }
-
-    observer.disconnect();
-    closeContactInfoModal();
-
-    if (resolved) return resolved;
-
-    const hrefResult = await hrefPromise;
-    if (hrefResult.email || hrefResult.phone) return hrefResult;
-
-    return { email: "", phone: "" };
   }
 
   async function resolveContactDetails(publicId, seed = {}) {
     let email = clean(seed.email).toLowerCase();
     let phone = normalizePhone(seed.phone);
 
-    if (!email || !phone) {
-      const modal = await captureContactInfoFromModal();
-      email = email || clean(modal.email).toLowerCase();
-      phone = phone || normalizePhone(modal.phone);
-    }
-
-    if ((!email || !phone) && publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
-      try {
-        const fetched = await window.aftermeetFetchLinkedInContactInfo(publicId);
-        email = email || clean(fetched.email).toLowerCase();
-        phone = phone || normalizePhone(fetched.phone);
-      } catch {
-        /* keep modal values if any */
-      }
-    }
+    const modal = await captureContactInfoFromModal({
+      requireEmail: !email,
+      requirePhone: !phone,
+    });
+    email = email || clean(modal.email).toLowerCase();
+    phone = phone || normalizePhone(modal.phone);
 
     return { email, phone };
   }
@@ -450,6 +574,11 @@
     const publicId = window.aftermeetLinkedInPublicId?.(window.location.href) || "";
     const baseProfile = captureLinkedInProfileBase();
 
+    const contact = await resolveContactDetails(publicId, {
+      email: baseProfile.email,
+      phone: baseProfile.phone,
+    });
+
     let voyager = null;
     if (publicId && typeof window.aftermeetFetchLinkedInVoyager === "function") {
       try {
@@ -458,6 +587,9 @@
         voyager = null;
       }
     }
+
+    let email = contact.email || clean(voyager?.email).toLowerCase();
+    let phone = contact.phone || normalizePhone(voyager?.phone);
 
     let { role, company } = voyager
       ? sanitizeExperience({ role: voyager.role, company: voyager.company })
@@ -483,19 +615,14 @@
       ...baseProfile,
       role,
       company,
+      email,
+      phone,
     };
 
     if (voyager) {
       const voyagerName = normalizeProfileName(`${clean(voyager.firstName)} ${clean(voyager.lastName)}`.trim());
       if (voyagerName) merged.fullName = voyagerName;
     }
-
-    const contact = await resolveContactDetails(publicId, {
-      email: merged.email || voyager?.email,
-      phone: merged.phone || voyager?.phone,
-    });
-    merged.email = contact.email;
-    merged.phone = contact.phone;
 
     merged.context = buildLinkedInCaptureContext({
       role: merged.role,

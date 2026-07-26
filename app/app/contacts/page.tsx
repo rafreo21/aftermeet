@@ -7,17 +7,18 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
+import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
+import { PhoneIcon } from "@phosphor-icons/react/dist/csr/Phone";
 import { AppShell } from "../../components/AppShell";
 import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { TextField } from "../../components/FormField";
-import { contactFromExchange, readContacts } from "../../../lib/contacts";
+import { contactDisplayName, contactFromExchange, readContacts, type Contact } from "../../../lib/contacts";
+import type { EnrichmentField } from "../../../lib/contact-enrichment";
 import { resolveAndSaveContact } from "../../../lib/person-links";
 import { hydrateContactsFromServer } from "../../../lib/contacts-sync";
 import "../product.css";
 import "../flow.css";
-
-type Contact = { id: string; firstName: string; lastName: string; email: string; company: string; role: string; context: string; source?: "csv" | "vcard" | "manual" | "exchange" | "badge" | "linkedin" | "scan" };
 
 function contactSourceLabel(source?: Contact["source"]) {
   switch (source) {
@@ -96,6 +97,7 @@ export default function ContactsPage() {
   const [hydrated, setHydrated] = useState(false);
   const [exchanges, setExchanges] = useState<CardExchange[]>([]);
   const [exchangeError, setExchangeError] = useState("");
+  const [enrichingKey, setEnrichingKey] = useState("");
   const importInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     void hydrateContactsFromServer()
@@ -115,7 +117,48 @@ export default function ContactsPage() {
       })
       .catch(() => setExchangeError("We couldn’t load people who shared back from your card."));
   }, []);
-  const visible = useMemo(() => contacts.filter((contact) => `${contact.firstName} ${contact.lastName} ${contact.company}`.toLowerCase().includes(query.toLowerCase())), [contacts, query]);
+  const visible = useMemo(() => contacts.filter((contact) => `${contact.firstName} ${contact.lastName} ${contact.company} ${contact.email}`.toLowerCase().includes(query.toLowerCase())), [contacts, query]);
+
+  async function enrichContactField(contact: Contact, field: EnrichmentField) {
+    const key = `${contact.id}:${field}`;
+    setEnrichingKey(key);
+    setImportMessage("");
+    setImportError("");
+    try {
+      const response = await fetch("/api/contacts/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: contactDisplayName(contact),
+          company: contact.company,
+          linkedinUrl: contact.linkedinUrl,
+          field,
+          seedEmail: contact.email,
+          seedPhone: contact.phone,
+        }),
+      });
+      const payload = await response.json() as { value?: string; error?: string };
+      if (!response.ok) {
+        setImportError(payload.error || `Could not find a ${field}.`);
+        return;
+      }
+      if (!payload.value) {
+        setImportMessage(`No ${field} found for ${contactDisplayName(contact)}.`);
+        return;
+      }
+      resolveAndSaveContact({
+        ...contact,
+        email: field === "email" ? payload.value : contact.email,
+        phone: field === "phone" ? payload.value : contact.phone,
+      });
+      setContacts(readContacts());
+      setImportMessage(`${field === "email" ? "Email" : "Phone"} updated for ${contactDisplayName(contact)}.`);
+    } catch {
+      setImportError(`Could not search for a ${field}.`);
+    } finally {
+      setEnrichingKey("");
+    }
+  }
 
   async function importExchange(exchange: CardExchange) {
     resolveAndSaveContact(contactFromExchange(exchange, cardLabel(exchange)));
@@ -204,7 +247,84 @@ export default function ContactsPage() {
             </div>
           </section>
         ) : null}
-        {!hydrated ? <PageSkeleton rows={3} /> : contacts.length ? <><div className="contact-toolbar"><div className="contact-search"><TextField label="Search contacts" value={query} onChange={(e) => setQuery(e.target.value)} leadingIcon={<MagnifyingGlassIcon size={18} />} /></div><div className="contact-toolbar-actions">{captureButtons}{importButton}<LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton></div></div>{visible.length ? <div className="contact-list">{visible.map((contact) => <article className="contact-row" key={contact.id}><span className="contact-avatar">{contact.firstName[0]}{contact.lastName[0]}</span><div><h3>{contact.firstName} {contact.lastName}</h3><p>{contact.role}{contact.company ? ` · ${contact.company}` : ""}</p>{contact.source && <small className="contact-source">{contactSourceLabel(contact.source)}</small>}</div><div className="contact-row-actions"><LinkButton size="small" variant="secondary" href={`/app/contacts/${contact.id}`}>Open</LinkButton><LinkButton size="small" variant="ghost" href="/app/followups">Follow-up</LinkButton></div></article>)}</div> : <div className="empty-state"><div><h2>No matching people</h2><p>Try a different name or company.</p><Button variant="secondary" onClick={() => setQuery("")}>Clear search</Button></div></div>}</> : <div className="empty-state"><div><span className="empty-icon"><UsersThreeIcon size={32} weight="bold" /></span><h2>No contacts yet</h2><p>Add someone you’ve met, scan a badge, import a file, or publish a card so people can share their details back.</p><div className="empty-state-actions"><LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton><LinkButton href="/app/scan"><QrCodeIcon size={17} weight="bold" />Scan badge</LinkButton><LinkButton href="/app/contacts/linkedin"><LinkedinLogoIcon size={17} weight="bold" />LinkedIn</LinkButton>{importButton}</div></div></div>}
+        {!hydrated ? <PageSkeleton rows={3} /> : contacts.length ? <>
+          <div className="contact-toolbar">
+            <div className="contact-search">
+              <TextField label="Search contacts" value={query} onChange={(e) => setQuery(e.target.value)} leadingIcon={<MagnifyingGlassIcon size={18} />} />
+            </div>
+            <div className="contact-toolbar-actions">{captureButtons}{importButton}<LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton></div>
+          </div>
+          {visible.length ? (
+            <div className="contacts-table-wrap">
+              <table className="contacts-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Profile</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Mobile</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((contact) => (
+                    <tr key={contact.id}>
+                      <td>
+                        <div className="contacts-table-profile">
+                          <span className="contact-avatar">{contact.firstName[0]}{contact.lastName[0]}</span>
+                          <div>
+                            <strong>{contact.firstName} {contact.lastName}</strong>
+                            <small>{contact.role || contactSourceLabel(contact.source) || "Contact"}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="contacts-table-company">
+                        <strong>{contact.company || "—"}</strong>
+                        {contact.source ? <small>{contactSourceLabel(contact.source)}</small> : null}
+                      </td>
+                      <td>
+                        {contact.email ? (
+                          <span>{contact.email}</span>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            loading={enrichingKey === `${contact.id}:email`}
+                            onClick={() => void enrichContactField(contact, "email")}
+                          >
+                            <EnvelopeSimpleIcon size={15} weight="bold" />Find email
+                          </Button>
+                        )}
+                      </td>
+                      <td>
+                        {contact.phone ? (
+                          <span>{contact.phone}</span>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="secondary"
+                            loading={enrichingKey === `${contact.id}:phone`}
+                            onClick={() => void enrichContactField(contact, "phone")}
+                          >
+                            <PhoneIcon size={15} weight="bold" />Find mobile
+                          </Button>
+                        )}
+                      </td>
+                      <td>
+                        <div className="contacts-table-actions">
+                          <LinkButton size="small" variant="secondary" href={`/app/contacts/${contact.id}`}>Open</LinkButton>
+                          <LinkButton size="small" variant="ghost" href="/app/followups">Follow-up</LinkButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty-state"><div><h2>No matching people</h2><p>Try a different name or company.</p><Button variant="secondary" onClick={() => setQuery("")}>Clear search</Button></div></div>
+          )}
+        </> : <div className="empty-state"><div><span className="empty-icon"><UsersThreeIcon size={32} weight="bold" /></span><h2>No contacts yet</h2><p>Add someone you’ve met, scan a badge, import a file, or publish a card so people can share their details back.</p><div className="empty-state-actions"><LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton><LinkButton href="/app/scan"><QrCodeIcon size={17} weight="bold" />Scan badge</LinkButton><LinkButton href="/app/contacts/linkedin"><LinkedinLogoIcon size={17} weight="bold" />LinkedIn</LinkButton>{importButton}</div></div></div>}
       </div>
     </AppShell>
   );

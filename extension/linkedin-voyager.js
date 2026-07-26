@@ -198,8 +198,18 @@
       if (match) result.email = match[1].toLowerCase();
     }
     if (!result.phone) {
-      const match = text.match(/"phoneNumbers"\s*:\s*\[\s*\{[^}]*"number"\s*:\s*"([^"]+)"/i);
-      if (match) result.phone = normalizePhone(match[1]);
+      const patterns = [
+        /"phoneNumbers"\s*:\s*\[\s*\{[^}]*"number"\s*:\s*"([^"]+)"/i,
+        /"phoneNumber"\s*:\s*"([^"]+)"/i,
+        /"number"\s*:\s*"(\+\d[^"]+)"/i,
+      ];
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match?.[1]) {
+          result.phone = normalizePhone(match[1]);
+          break;
+        }
+      }
     }
 
     return result;
@@ -275,9 +285,13 @@
   function normalizePhone(value) {
     const cleaned = clean(value);
     if (!cleaned) return "";
-    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d)/);
-    if (!match) return cleaned.replace(/[^\d+]/g, "").replace(/^\+/, "+");
-    return match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d|\d[\d\s().-]{7,}\d)/);
+    const raw = match ? match[1] : cleaned;
+    const digits = raw.replace(/[^\d+]/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("+")) return digits;
+    if (digits.startsWith("00")) return `+${digits.slice(2)}`;
+    return digits;
   }
 
   function mergeContactFields(target, source) {
@@ -300,9 +314,10 @@
       }
     }
 
-    const emailIndex = lines.findIndex((line) => /^email$/i.test(line));
+    const emailIndex = lines.findIndex((line) => /^(email|e-mail|email address)$/i.test(line));
     if (emailIndex >= 0 && !email) {
-      for (const line of lines.slice(emailIndex + 1, emailIndex + 4)) {
+      for (const line of lines.slice(emailIndex + 1, emailIndex + 6)) {
+        if (/^(phone|mobile|cell|mobile phone)$/i.test(line)) break;
         const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
         if (match) {
           email = match[0].toLowerCase();
@@ -311,9 +326,10 @@
       }
     }
 
-    const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
+    const phoneIndex = lines.findIndex((line) => /^(phone|mobile|cell|mobile phone)$/i.test(line));
     if (phoneIndex >= 0) {
-      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
+      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 6)) {
+        if (/^(email|e-mail|email address)$/i.test(line)) continue;
         const normalized = normalizePhone(line);
         if (normalized) {
           phone = normalized;
@@ -729,6 +745,8 @@
   window.aftermeetFetchLinkedInExperience = fetchLinkedInExperience;
 
   window.aftermeetFetchLinkedInContactInfo = fetchLinkedInContactInfo;
+
+  window.aftermeetParseContactFromStream = parseContactFromStream;
 
   window.aftermeetPrefetchLinkedInExperience = function aftermeetPrefetchLinkedInExperience(publicId) {
     const id = clean(publicId);

@@ -9,8 +9,15 @@ import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { AppShell } from "../../../components/AppShell";
 import { StatusMessage } from "../../../components/AsyncState";
 import { Button, LinkButton } from "../../../components/Button";
-import { TextAreaField, TextField } from "../../../components/FormField";
+import {
+  animateEnrichmentResult,
+  ProfileCaptureTable,
+  sourceLabelFromEnrichment,
+  type ProfileFieldKey,
+} from "../../../components/ProfileCaptureTable";
+import { TextAreaField } from "../../../components/FormField";
 import { capturedProfileFullName, splitFullName, type Contact } from "../../../../lib/contacts";
+import type { EnrichmentField, EnrichmentResult, EnrichmentStep } from "../../../../lib/contact-enrichment";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
 import type { LinkedInImportInitialState } from "../../../../lib/linkedin-import-state";
@@ -32,6 +39,8 @@ type LinkedInProfileResponse = {
   error?: string;
 };
 
+type FieldSources = Record<ProfileFieldKey, string>;
+
 const emptyProfileFields = {
   fullName: "",
   email: "",
@@ -40,14 +49,44 @@ const emptyProfileFields = {
   company: "",
 };
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function initialFieldSources(initial: LinkedInImportInitialState): FieldSources {
+  const linkedInSource = initial.isExtensionImport ? "Extension" : initial.form.fullName ? "LinkedIn" : "";
+  return {
+    fullName: initial.form.fullName ? linkedInSource || "LinkedIn" : "",
+    email: initial.form.email ? linkedInSource || "LinkedIn" : "",
+    phone: initial.form.phone ? linkedInSource || "LinkedIn" : "",
+    role: initial.form.role ? linkedInSource || "LinkedIn" : "",
+    company: initial.form.company ? linkedInSource || "LinkedIn" : "",
+    linkedinUrl: initial.input ? "LinkedIn" : "",
+  };
+}
+
 export function LinkedInImportClient({ initial }: { initial: LinkedInImportInitialState }) {
   const [input, setInput] = useState(initial.input);
   const [importSource, setImportSource] = useState<Contact["source"]>(initial.importSource);
-  const [form, setForm] = useState(initial.form);
+  const [form, setForm] = useState({
+    ...initial.form,
+    fullName: decodeHtmlEntities(initial.form.fullName),
+    role: decodeHtmlEntities(initial.form.role),
+    company: decodeHtmlEntities(initial.form.company),
+  });
+  const [fieldSources, setFieldSources] = useState<FieldSources>(() => initialFieldSources(initial));
   const [error, setError] = useState("");
   const [savedId, setSavedId] = useState("");
   const [lookupStatus, setLookupStatus] = useState(initial.lookupStatus);
   const [lookupMessage, setLookupMessage] = useState(initial.lookupMessage);
+  const [enrichingField, setEnrichingField] = useState<EnrichmentField | null>(null);
+  const [enrichmentSteps, setEnrichmentSteps] = useState<EnrichmentStep[]>([]);
+  const [enrichError, setEnrichError] = useState("");
   const lookupRequestRef = useRef(0);
   const activeHandleRef = useRef("");
   const extensionImportRef = useRef(initial.isExtensionImport);
@@ -63,6 +102,12 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       fullName: fullName || current.fullName,
       role: payload.profile?.role?.trim() || current.role,
       company: payload.profile?.company?.trim() || current.company,
+    }));
+    setFieldSources((current) => ({
+      ...current,
+      fullName: fullName ? "LinkedIn" : current.fullName,
+      role: payload.profile?.role?.trim() ? "LinkedIn" : current.role,
+      company: payload.profile?.company?.trim() ? "LinkedIn" : current.company,
     }));
   }
 
@@ -114,6 +159,15 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           ...emptyProfileFields,
           context: current.context,
         }));
+        setFieldSources((current) => ({
+          ...current,
+          fullName: "",
+          email: "",
+          phone: "",
+          role: "",
+          company: "",
+          linkedinUrl: "LinkedIn",
+        }));
       }
     }
 
@@ -139,6 +193,70 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
     const requestId = lookupRequestRef.current + 1;
     lookupRequestRef.current = requestId;
     void loadProfileDetails(parsed.url, parsed.handle, requestId);
+  }
+
+  function updateField(key: ProfileFieldKey, value: string) {
+    if (key === "linkedinUrl") {
+      setInput(value);
+      setFieldSources((current) => ({ ...current, linkedinUrl: value.trim() ? "Manual" : "" }));
+      return;
+    }
+
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldSources((current) => ({
+      ...current,
+      [key]: value.trim() ? "Manual" : "",
+    }));
+  }
+
+  async function enrichField(field: EnrichmentField) {
+    if (!form.fullName.trim()) {
+      setEnrichError("Add a full name before searching for contact details.");
+      return;
+    }
+
+    setEnrichingField(field);
+    setEnrichError("");
+    setEnrichmentSteps([]);
+
+    try {
+      const response = await fetch("/api/contacts/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: form.fullName,
+          company: form.company,
+          linkedinUrl,
+          field,
+          seedEmail: form.email,
+          seedPhone: form.phone,
+        }),
+      });
+      const payload = await response.json() as EnrichmentResult & { error?: string };
+      if (!response.ok) {
+        setEnrichError(payload.error || "Could not search contact sources.");
+        return;
+      }
+
+      const result = await animateEnrichmentResult(payload, setEnrichmentSteps);
+      if (result.value) {
+        if (field === "email") {
+          setForm((current) => ({ ...current, email: result.value }));
+        } else {
+          setForm((current) => ({ ...current, phone: result.value }));
+        }
+        setFieldSources((current) => ({
+          ...current,
+          [field]: sourceLabelFromEnrichment(result) || "Enriched",
+        }));
+      } else {
+        setEnrichError(`No ${field} found across the sources we checked.`);
+      }
+    } catch {
+      setEnrichError("Could not reach enrichment services.");
+    } finally {
+      setEnrichingField(null);
+    }
   }
 
   function save(event: React.FormEvent) {
@@ -169,6 +287,53 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
     setSavedId(contact.id);
   }
 
+  const tableRows = [
+    {
+      key: "fullName" as const,
+      label: "Full name",
+      value: form.fullName,
+      placeholder: "From the profile or conversation",
+      source: fieldSources.fullName,
+    },
+    {
+      key: "email" as const,
+      label: "Email",
+      value: form.email,
+      placeholder: "Work or personal email",
+      source: fieldSources.email,
+      enrichable: "email" as const,
+    },
+    {
+      key: "phone" as const,
+      label: "Phone",
+      value: form.phone,
+      placeholder: "Mobile or work number",
+      source: fieldSources.phone,
+      enrichable: "phone" as const,
+    },
+    {
+      key: "role" as const,
+      label: "Role",
+      value: form.role,
+      placeholder: "e.g. Product designer",
+      source: fieldSources.role,
+    },
+    {
+      key: "company" as const,
+      label: "Company",
+      value: form.company,
+      placeholder: "e.g. Northstar",
+      source: fieldSources.company,
+    },
+    {
+      key: "linkedinUrl" as const,
+      label: "LinkedIn profile link",
+      value: input,
+      placeholder: "https://www.linkedin.com/in/username",
+      source: fieldSources.linkedinUrl,
+    },
+  ];
+
   return (
     <AppShell
       active="contacts"
@@ -180,28 +345,22 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
         </LinkButton>
       }
     >
-      <form className="contact-form-card" onSubmit={save}>
+      <form className="contact-form-card contact-form-wide" onSubmit={save}>
         <header>
           <span className="step-pill">Capture people</span>
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
-          <p>Use the AfterMeet browser extension on a profile page, or paste a URL here. Review every field before saving.</p>
+          <p>Review each field in the table below. Use Find email or Find phone when LinkedIn does not show contact info.</p>
         </header>
-        <TextField label="Full name" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="From the profile or conversation" />
-        <div className="field-row two">
-          <TextField label="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Only if visible on the page" />
-          <TextField label="Phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Only if visible on the page" />
-        </div>
-        <div className="field-row two">
-          <TextField label="Role" value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder="e.g. Product designer" />
-          <TextField label="Company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} placeholder="e.g. Northstar" />
-        </div>
-        <TextField
-          label="LinkedIn profile link"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="https://www.linkedin.com/in/username"
-          error={error}
+
+        <ProfileCaptureTable
+          rows={tableRows}
+          onChange={updateField}
+          onEnrich={enrichField}
+          enrichingField={enrichingField}
+          enrichmentSteps={enrichmentSteps}
+          error={enrichError}
         />
+
         {parsed ? (
           <StatusMessage tone={lookupStatus === "ready" ? "success" : "info"}>
             {lookupStatus === "loading"
@@ -211,11 +370,14 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
         ) : input.trim() ? (
           <StatusMessage tone="error">That doesn&apos;t look like a LinkedIn profile URL.</StatusMessage>
         ) : null}
+        {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
+
         <div className="form-actions align-start">
           <Button type="button" variant="secondary" loading={lookupStatus === "loading"} onClick={refreshProfile}>
             <ArrowsClockwiseIcon size={16} weight="bold" />Check LinkedIn again
           </Button>
         </div>
+
         <TextAreaField
           label="What mattered?"
           hint="Private"

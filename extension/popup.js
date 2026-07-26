@@ -2,6 +2,7 @@ const baseUrlInput = document.getElementById("base-url");
 const preview = document.getElementById("preview");
 const status = document.getElementById("status");
 const captureButton = document.getElementById("capture");
+const openAfterMeetButton = document.getElementById("open-aftermeet");
 
 function encodePayload(profile) {
   return btoa(unescape(encodeURIComponent(JSON.stringify(profile))))
@@ -23,11 +24,11 @@ function renderPreview(profile) {
 
 async function loadSettings() {
   const stored = await chrome.storage.sync.get(["aftermeetBaseUrl"]);
-  baseUrlInput.value = stored.aftermeetBaseUrl || "http://localhost:3000";
+  baseUrlInput.value = stored.aftermeetBaseUrl || "https://aftermeet-beta.vercel.app";
 }
 
 async function saveSettings() {
-  await chrome.storage.sync.set({ aftermeetBaseUrl: baseUrlInput.value.trim() || "http://localhost:3000" });
+  await chrome.storage.sync.set({ aftermeetBaseUrl: baseUrlInput.value.trim() || "https://aftermeet-beta.vercel.app" });
 }
 
 async function captureActiveTab(tabId) {
@@ -47,8 +48,9 @@ async function captureActiveTab(tabId) {
 }
 
 async function enrichProfile(baseUrl, profile, pageText) {
-  if (profile.role?.trim() && profile.company?.trim()) {
-    return { profile, message: "Captured role and company from LinkedIn." };
+  const missingContact = !profile.email?.trim() && !profile.phone?.trim();
+  if (profile.role?.trim() && profile.company?.trim() && !missingContact) {
+    return { profile, message: "Captured profile details from LinkedIn." };
   }
 
   try {
@@ -85,10 +87,21 @@ async function enrichProfile(baseUrl, profile, pageText) {
   }
 }
 
+function buildImportUrl(baseUrl, profile) {
+  const target = new URL("/app/contacts/linkedin", baseUrl);
+  if (profile.linkedinUrl || profile.sourceUrl) {
+    target.searchParams.set("url", profile.linkedinUrl || profile.sourceUrl);
+  }
+  target.searchParams.set("capture", encodePayload(profile));
+  target.searchParams.set("source", "extension");
+  return target.toString();
+}
+
 captureButton.addEventListener("click", async () => {
-  status.textContent = "Opening Contact info and fetching details…";
+  openAfterMeetButton.classList.add("hidden");
+  status.textContent = "Reading Contact info on this profile…";
   await saveSettings();
-  const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, "") || "http://localhost:3000";
+  const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, "") || "https://aftermeet-beta.vercel.app";
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
     status.textContent = "No active tab found.";
@@ -110,19 +123,32 @@ captureButton.addEventListener("click", async () => {
   }
 
   renderPreview(profile);
-  status.textContent = "Cleaning captured details…";
+  status.textContent = "Finishing capture…";
 
   const enriched = await enrichProfile(baseUrl, profile, payload.pageText ?? "");
   renderPreview(enriched.profile);
 
-  const target = new URL("/app/contacts/linkedin", baseUrl);
-  if (enriched.profile.linkedinUrl || enriched.profile.sourceUrl) {
-    target.searchParams.set("url", enriched.profile.linkedinUrl || enriched.profile.sourceUrl);
-  }
-  target.searchParams.set("capture", encodePayload(enriched.profile));
-  target.searchParams.set("source", "extension");
-  chrome.tabs.create({ url: target.toString() });
-  status.textContent = enriched.message || "Opened AfterMeet for review.";
+  const importUrl = buildImportUrl(baseUrl, enriched.profile);
+  await chrome.storage.local.set({
+    aftermeetLastCapture: {
+      importUrl,
+      profile: enriched.profile,
+      capturedAt: Date.now(),
+    },
+  });
+
+  openAfterMeetButton.classList.remove("hidden");
+  openAfterMeetButton.onclick = () => {
+    void chrome.tabs.create({ url: importUrl, active: true });
+  };
+
+  const parts = [];
+  if (enriched.profile.email) parts.push("email");
+  if (enriched.profile.phone) parts.push("phone");
+  const contactNote = parts.length
+    ? `Captured ${parts.join(" and ")} from LinkedIn.`
+    : "No email or phone visible in Contact info for you on LinkedIn.";
+  status.textContent = `${contactNote} You stayed on LinkedIn — open AfterMeet only when you're ready.`;
 });
 
 baseUrlInput.addEventListener("change", saveSettings);
