@@ -18,16 +18,101 @@
   function parseHeadline(headline) {
     const cleaned = clean(headline);
     if (!cleaned) return { role: "", company: "" };
-
     const atMatch = cleaned.match(/^(.+?)\s+at\s+(.+)$/i);
     if (atMatch) return { role: clean(atMatch[1]), company: clean(atMatch[2]) };
-
     const dotParts = cleaned.split(/\s*[·|@]\s*/).map(clean).filter(Boolean);
-    if (dotParts.length >= 2) {
-      return { role: dotParts[0], company: dotParts.slice(1).join(" · ") };
-    }
-
+    if (dotParts.length >= 2) return { role: dotParts[0], company: dotParts.slice(1).join(" · ") };
     return { role: cleaned, company: "" };
+  }
+
+  function stripEmploymentSuffix(value) {
+    return clean(value.split(" · ")[0]?.split(" | ")[0]);
+  }
+
+  function isJunkProfileLine(line) {
+    const value = clean(line);
+    if (!value || value.length > 120) return true;
+    if (/^\d+\+?\s*connections?$/i.test(value)) return true;
+    if (/^(message|connect|follow|more|contact info|about|activity|posts|comments|videos|images|documents)$/i.test(value)) return true;
+    if (/^(open to work|hiring|verified|premium|top voice|uk global talent)$/i.test(value)) return true;
+    if (/^[A-Z][a-z]+(?:,\s*[A-Z][a-z]+){0,3},\s*[A-Z][a-z]+(?: Area)?(?:,\s*[A-Z][a-z]+)?$/.test(value)) return true;
+    if (/^•/.test(value)) return true;
+    if (/^(full-time|part-time|contract|self-employed|internship|freelance)$/i.test(value)) return true;
+    if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(value)) return true;
+    return false;
+  }
+
+  function parseExperienceFromText(pageText) {
+    const lines = pageText.split("\n").map(clean).filter(Boolean);
+    const experienceIndex = lines.findIndex((line) => /^experience$/i.test(line));
+    if (experienceIndex < 0) return { role: "", company: "" };
+    const role = lines.slice(experienceIndex + 1).find((line) => !isJunkProfileLine(line) && line.length <= 80) || "";
+    if (!role) return { role: "", company: "" };
+    const roleIndex = lines.indexOf(role, experienceIndex + 1);
+    const companyLine = lines.slice(roleIndex + 1).find((line) => {
+      if (isJunkProfileLine(line) || line.length > 100) return false;
+      return line.includes("·") || /full-time|part-time|contract|self-employed|internship|freelance/i.test(line);
+    }) || "";
+    if (companyLine) return { role, company: stripEmploymentSuffix(companyLine) };
+    return parseHeadline(role);
+  }
+
+  function parseContactInfoFromText(pageText) {
+    const lines = pageText.split("\n").map(clean).filter(Boolean);
+    let email = "";
+    let phone = "";
+    for (const line of lines) {
+      if (!email) {
+        const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+        if (match) email = match[0].toLowerCase();
+      }
+    }
+    const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
+    if (phoneIndex >= 0) {
+      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
+        const match = line.match(/(\+\d[\d\s().-]{7,}\d)/);
+        if (match) {
+          phone = match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+          break;
+        }
+      }
+    }
+    if (!phone) {
+      const match = pageText.match(/(\+\d[\d\s().-]{7,}\d)/);
+      if (match) phone = match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    }
+    return { email, phone };
+  }
+
+  function headlineFromPageText(pageText, fullName) {
+    const lines = pageText.split("\n").map(clean).filter(Boolean);
+    const nameIndex = lines.findIndex((line) => line === fullName || line.startsWith(fullName));
+    if (nameIndex < 0) return "";
+    for (let index = nameIndex + 1; index < Math.min(nameIndex + 6, lines.length); index += 1) {
+      const candidate = lines[index];
+      if (isJunkProfileLine(candidate)) continue;
+      if (/ at | · /.test(candidate)) return candidate;
+    }
+    return "";
+  }
+
+  function mergeLinkedInRoleCompany(experience, headline) {
+    const role = experience.role || headline.role;
+    let company = experience.company || headline.company;
+    if (company.length > 80 || /[•]|manage, lead|responsible for/i.test(company)) {
+      company = experience.company || (headline.company.length <= 80 ? headline.company : "");
+    }
+    return { role, company };
+  }
+
+  function buildLinkedInCaptureContext(profile) {
+    const parts = [];
+    if (profile.role && profile.company) parts.push(`Current role: ${profile.role} at ${profile.company}.`);
+    else if (profile.role) parts.push(`Current role: ${profile.role}.`);
+    if (profile.email) parts.push(`Email visible on LinkedIn: ${profile.email}.`);
+    if (profile.phone) parts.push(`Phone visible on LinkedIn: ${profile.phone}.`);
+    if (profile.linkedinUrl) parts.push(`Profile: ${profile.linkedinUrl}.`);
+    return parts.join(" ");
   }
 
   function readMeta(key) {
@@ -61,21 +146,7 @@
     ];
     for (const selector of selectors) {
       const value = clean(document.querySelector(selector)?.textContent);
-      if (value && value.length <= 160) return value;
-    }
-    return "";
-  }
-
-  function headlineFromPageText(fullName) {
-    const lines = (document.body?.innerText || "").split("\n").map(clean).filter(Boolean);
-    const nameIndex = lines.findIndex((line) => line === fullName || line.startsWith(fullName));
-    if (nameIndex < 0) return "";
-    for (let index = nameIndex + 1; index < Math.min(nameIndex + 4, lines.length); index += 1) {
-      const candidate = lines[index];
-      if (candidate.length > 160) continue;
-      if (/^(message|connect|follow|more|contact info|www\.)/i.test(candidate)) continue;
-      if (/^\d/.test(candidate)) continue;
-      return candidate;
+      if (value && value.length <= 120) return value;
     }
     return "";
   }
@@ -85,7 +156,6 @@
     let phone = "";
     let companyWebsite = "";
     let personalWebsite = "";
-
     document.querySelectorAll("a[href^='mailto:'], a[href^='tel:'], a[href^='http']").forEach((node) => {
       const href = node.getAttribute("href") || "";
       if (!email && href.startsWith("mailto:")) email = clean(href.replace(/^mailto:/i, "").split("?")[0]);
@@ -96,30 +166,36 @@
       if (!personalWebsite && /portfolio|website|blog|site|personal/i.test(label)) personalWebsite = url;
       if (!companyWebsite && /company|employer|organization/i.test(label)) companyWebsite = url;
     });
-
     return { email, phone, companyWebsite, personalWebsite };
   }
 
   function captureLinkedInProfile() {
+    const pageText = document.body?.innerText ?? "";
     const linkedinUrl = normalizeUrl(window.location.href.split("?")[0]);
     const titleName = document.title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
     const h1 = clean(document.querySelector("h1")?.textContent);
     const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
     const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || titleName.split(" - ")[0] || "";
     const { firstName, lastName } = splitName(fullName);
-    const headline =
+
+    const experience = parseExperienceFromText(pageText);
+    const headlineText =
       headlineFromDom()
       || headlineFromOpenGraph()
-      || headlineFromPageText(fullName)
+      || headlineFromPageText(pageText, fullName)
       || headlineFromTitle(document.title);
-    const { role, company } = parseHeadline(headline);
+    const { role, company } = mergeLinkedInRoleCompany(experience, parseHeadline(headlineText));
+
     const links = extractLinks();
+    const contact = parseContactInfoFromText(pageText);
+    const email = links.email || contact.email;
+    const phone = links.phone || contact.phone;
 
     return {
       firstName,
       lastName,
-      email: links.email,
-      phone: links.phone,
+      email,
+      phone,
       company,
       role,
       companyWebsite: links.companyWebsite,
@@ -127,6 +203,7 @@
       linkedinUrl,
       sourceUrl: linkedinUrl,
       source: "extension",
+      context: buildLinkedInCaptureContext({ role, company, email, phone, linkedinUrl }),
     };
   }
 
@@ -147,18 +224,17 @@
       linkedinUrl: /linkedin\.com\/in\//i.test(sourceUrl) ? sourceUrl : "",
       sourceUrl,
       source: "extension",
+      context: "",
     };
   }
 
-  function captureCurrentPage() {
-    if (/linkedin\.com\/in\//i.test(window.location.href)) return captureLinkedInProfile();
-    return captureGenericProfile();
-  }
-
   window.aftermeetCapturePage = function aftermeetCapturePage() {
+    const profile = /linkedin\.com\/in\//i.test(window.location.href)
+      ? captureLinkedInProfile()
+      : captureGenericProfile();
     return {
-      profile: captureCurrentPage(),
-      pageText: document.body?.innerText?.slice(0, 6000) ?? "",
+      profile,
+      pageText: document.body?.innerText?.slice(0, 8000) ?? "",
     };
   };
 })();

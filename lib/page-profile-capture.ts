@@ -1,4 +1,12 @@
 import { splitFullName } from "./contacts.ts";
+import {
+  buildLinkedInCaptureContext,
+  headlineFromPageText,
+  mergeLinkedInRoleCompany,
+  parseContactInfoFromText,
+  parseExperienceFromText,
+  parseHeadline,
+} from "./linkedin-page-capture.ts";
 
 export type CapturedProfile = {
   firstName: string;
@@ -12,6 +20,7 @@ export type CapturedProfile = {
   linkedinUrl: string;
   sourceUrl: string;
   source: "linkedin" | "website" | "extension";
+  context?: string;
 };
 
 function clean(value: string | null | undefined) {
@@ -25,22 +34,7 @@ function normalizeUrl(value: string) {
   return `https://${trimmed.replace(/^\/\//, "")}`;
 }
 
-export function parseHeadline(headline: string) {
-  const cleaned = clean(headline);
-  if (!cleaned) return { role: "", company: "" };
-
-  const atMatch = cleaned.match(/^(.+?)\s+at\s+(.+)$/i);
-  if (atMatch) {
-    return { role: clean(atMatch[1]), company: clean(atMatch[2]) };
-  }
-
-  const dotParts = cleaned.split(/\s*[·|@]\s*/).map(clean).filter(Boolean);
-  if (dotParts.length >= 2) {
-    return { role: dotParts[0], company: dotParts.slice(1).join(" · ") };
-  }
-
-  return { role: cleaned, company: "" };
-}
+export { parseHeadline } from "./linkedin-page-capture.ts";
 
 function readMetaContent(
   documentLike: { querySelector: (selector: string) => { getAttribute?: (name: string) => string | null } | null },
@@ -80,21 +74,7 @@ function headlineFromDom(documentLike: {
   ];
   for (const selector of selectors) {
     const value = clean(documentLike.querySelector(selector)?.textContent);
-    if (value && value.length <= 160) return value;
-  }
-  return "";
-}
-
-function headlineFromPageText(documentLike: { body?: { innerText?: string | null } }, fullName: string) {
-  const lines = (documentLike.body?.innerText ?? "").split("\n").map(clean).filter(Boolean);
-  const nameIndex = lines.findIndex((line) => line === fullName || line.startsWith(fullName));
-  if (nameIndex < 0) return "";
-  for (let index = nameIndex + 1; index < Math.min(nameIndex + 4, lines.length); index += 1) {
-    const candidate = lines[index];
-    if (candidate.length > 160) continue;
-    if (/^(message|connect|follow|more|contact info|www\.)/i.test(candidate)) continue;
-    if (/^\d/.test(candidate)) continue;
-    return candidate;
+    if (value && value.length <= 120) return value;
   }
   return "";
 }
@@ -128,6 +108,7 @@ export function captureFromLinkedInDocument(documentLike: {
   querySelector: (selector: string) => { textContent: string | null; getAttribute?: (name: string) => string | null } | null;
   querySelectorAll: (selector: string) => ArrayLike<{ textContent: string | null; getAttribute?: (name: string) => string | null }>;
 }) {
+  const pageText = documentLike.body?.innerText ?? "";
   const linkedinUrl = normalizeUrl(documentLike.location.href.split("?")[0] ?? "");
   const titleName = documentLike.title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
   const h1 = clean(documentLike.querySelector("h1")?.textContent);
@@ -135,19 +116,25 @@ export function captureFromLinkedInDocument(documentLike: {
   const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || titleName.split(" - ")[0] || "";
   const { firstName, lastName } = splitFullName(fullName);
 
-  const headline =
+  const experience = parseExperienceFromText(pageText);
+  const headlineText =
     headlineFromDom(documentLike)
     || headlineFromOpenGraph(documentLike)
-    || headlineFromPageText(documentLike, fullName)
+    || headlineFromPageText(pageText, fullName)
     || headlineFromTitle(documentLike.title);
-  const { role, company } = parseHeadline(headline);
-  const links = extractLinks(documentLike);
+  const headline = parseHeadline(headlineText);
+  const { role, company } = mergeLinkedInRoleCompany(experience, headline);
 
-  return {
+  const links = extractLinks(documentLike);
+  const contact = parseContactInfoFromText(pageText);
+  const email = links.email || contact.email;
+  const phone = links.phone || contact.phone;
+
+  const profile = {
     firstName,
     lastName,
-    email: links.email,
-    phone: links.phone,
+    email,
+    phone,
     company,
     role,
     companyWebsite: links.companyWebsite,
@@ -155,7 +142,10 @@ export function captureFromLinkedInDocument(documentLike: {
     linkedinUrl,
     sourceUrl: linkedinUrl,
     source: "linkedin" as const,
-  } satisfies CapturedProfile;
+    context: buildLinkedInCaptureContext({ role, company, email, phone, linkedinUrl }),
+  };
+
+  return profile satisfies CapturedProfile;
 }
 
 export function captureFromGenericDocument(documentLike: {

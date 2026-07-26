@@ -63,6 +63,7 @@ async function enrichProfile(baseUrl, profile, pageText) {
       profile: {
         ...profile,
         ...payload.profile,
+        context: payload.profile.context || profile.context || "",
         linkedinUrl: profile.linkedinUrl || payload.profile.linkedinUrl || "",
         sourceUrl: profile.sourceUrl || payload.profile.sourceUrl || "",
         source: "extension",

@@ -64,7 +64,8 @@ export function buildLinkedInImportInitialState(input: {
         company: profile.company?.trim() || "",
         companyWebsite: profile.companyWebsite?.trim() || "",
         personalWebsite: profile.personalWebsite?.trim() || "",
-        context: isExtensionImport ? "Captured from browser extension." : "Added from LinkedIn.",
+        context: profile.context?.trim()
+          || (isExtensionImport ? "Captured from browser extension." : "Added from LinkedIn."),
       },
       lookupStatus: "ready",
       lookupMessage: "Imported visible page details from your browser. Checking LinkedIn for anything else we can verify…",

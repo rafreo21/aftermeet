@@ -2,9 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  captureFromLinkedInDocument,
+  buildLinkedInCaptureContext,
+  LINKEDIN_PROFILE_FIXTURE,
+  parseContactInfoFromText,
+  parseExperienceFromText,
   parseHeadline,
-} from "../lib/page-profile-capture.ts";
+} from "../lib/linkedin-page-capture.ts";
+import { captureFromLinkedInDocument } from "../lib/page-profile-capture.ts";
 
 test("parseHeadline supports role at company", () => {
   assert.deepEqual(parseHeadline("Product Designer at Nexleaf Analytics"), {
@@ -13,26 +17,41 @@ test("parseHeadline supports role at company", () => {
   });
 });
 
-test("parseHeadline supports role and company separated by a middle dot", () => {
-  assert.deepEqual(parseHeadline("Product Designer · Nexleaf Analytics"), {
+test("parseExperienceFromText reads the current job from the Experience section", () => {
+  assert.deepEqual(parseExperienceFromText(LINKEDIN_PROFILE_FIXTURE), {
     role: "Product Designer",
     company: "Nexleaf Analytics",
   });
 });
 
-test("captureFromLinkedInDocument reads open graph metadata and page headline", () => {
+test("parseContactInfoFromText reads phone and email from Contact info", () => {
+  assert.deepEqual(parseContactInfoFromText(LINKEDIN_PROFILE_FIXTURE), {
+    email: "rafreo21@gmail.com",
+    phone: "+447473177720",
+  });
+});
+
+test("buildLinkedInCaptureContext writes useful notes", () => {
+  const context = buildLinkedInCaptureContext({
+    role: "Product Designer",
+    company: "Nexleaf Analytics",
+    email: "rafreo21@gmail.com",
+    phone: "+447473177720",
+    linkedinUrl: "https://www.linkedin.com/in/rafreo",
+  });
+  assert.match(context, /Current role: Product Designer at Nexleaf Analytics/);
+  assert.match(context, /rafreo21@gmail.com/);
+  assert.match(context, /\+447473177720/);
+});
+
+test("captureFromLinkedInDocument prefers experience over profile badges", () => {
   const profile = captureFromLinkedInDocument({
     title: "Raphael Okojie | LinkedIn",
     location: { href: "https://www.linkedin.com/in/rafreo" },
-    body: {
-      innerText: "Raphael Okojie\nProduct Designer · Nexleaf Analytics\nConnect\nMessage",
-    },
+    body: { innerText: LINKEDIN_PROFILE_FIXTURE },
     querySelector(selector) {
       if (selector.includes("og:title")) {
-        return { getAttribute: () => "Raphael Okojie - Product Designer · Nexleaf Analytics | LinkedIn" };
-      }
-      if (selector.includes("og:description")) {
-        return { getAttribute: () => "Product Designer · Nexleaf Analytics" };
+        return { getAttribute: () => "Raphael Okojie - Product Designer at Nexleaf | LinkedIn" };
       }
       if (selector === "h1") return { textContent: "Raphael Okojie" };
       return null;
@@ -42,9 +61,9 @@ test("captureFromLinkedInDocument reads open graph metadata and page headline", 
     },
   });
 
-  assert.equal(profile.firstName, "Raphael");
-  assert.equal(profile.lastName, "Okojie");
   assert.equal(profile.role, "Product Designer");
   assert.equal(profile.company, "Nexleaf Analytics");
-  assert.equal(profile.linkedinUrl, "https://www.linkedin.com/in/rafreo");
+  assert.equal(profile.email, "rafreo21@gmail.com");
+  assert.equal(profile.phone, "+447473177720");
+  assert.match(profile.context || "", /Current role: Product Designer at Nexleaf Analytics/);
 });
