@@ -14,6 +14,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { AppShell } from "../../components/AppShell";
+import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contact-methods";
 import {
@@ -54,6 +55,8 @@ export default function CardsPage() {
   const [svgCopied, setSvgCopied] = useState(false);
   const [showWidgetHelp, setShowWidgetHelp] = useState(false);
   const [viewingCard, setViewingCard] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [qrError, setQrError] = useState("");
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
 
   useEffect(() => {
@@ -63,6 +66,7 @@ export default function CardsPage() {
       if (!library.length) {
         setCards([]);
         setViewingCard(false);
+        setHydrated(true);
         return;
       }
       const selectedId = getActiveCardId(localStorage, library);
@@ -76,8 +80,9 @@ export default function CardsPage() {
       setProfile(nextProfile);
       setPhoto(selected.photo || "");
       setViewingCard(Boolean(requestedId && library.some((card) => card.id === requestedId)));
-    } catch {}
+    } catch { setQrError("We couldn’t load your saved cards. Refresh the page to try again."); }
     setShareUrl(`${window.location.origin}/c/${nextProfile.slug}`);
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -87,8 +92,16 @@ export default function CardsPage() {
       errorCorrectionLevel: "H",
       color: { dark: "#163300", light: "#ffffff" },
     } as const;
-    QRCode.toDataURL(shareUrl, options).then(setQr);
-    QRCode.toString(shareUrl, { ...options, type: "svg" }).then(setQrSvg);
+    setQr("");
+    setQrSvg("");
+    setQrError("");
+    Promise.all([
+      QRCode.toDataURL(shareUrl, options),
+      QRCode.toString(shareUrl, { ...options, type: "svg" }),
+    ]).then(([image, svg]) => {
+      setQr(image);
+      setQrSvg(svg);
+    }).catch(() => setQrError("We couldn’t generate this QR code. Check the card link and try again."));
   }, [shareUrl]);
 
   function toProfile(card: LibraryCard): Profile {
@@ -171,7 +184,8 @@ export default function CardsPage() {
       subtitle={`${cards.length} of ${MAX_CARDS} cards created`}
     >
       <div className="flow-page">
-        {!cards.length ? (
+        {qrError && <StatusMessage tone="error">{qrError}</StatusMessage>}
+        {!hydrated ? <PageSkeleton rows={3} /> : !cards.length ? (
           <section className="cards-empty-state">
             <div className="cards-empty-visual"><div><QrCodeIcon size={42} weight="bold" /></div><span><PlusIcon size={22} weight="bold" /></span></div>
             <span className="step-pill">Your first card</span>
@@ -233,13 +247,13 @@ export default function CardsPage() {
               <li><span>2</span>Point at the QR</li>
               <li><span>3</span>Open your card</li>
             </ol>
-            {qr && <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div>}
+            {qr ? <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div> : !qrError && <div className="inline-qr-frame" aria-label="Generating QR code" aria-busy="true"><span className="skeleton qr-skeleton" /></div>}
             <div className="inline-qr-url"><span>Public card link</span><strong>{shareUrl}</strong></div>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>
               {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
             </div>
-            <Button fullWidth size="small" variant="ghost" onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : "Copy QR as SVG"}</Button>
+            <Button fullWidth size="small" variant="ghost" disabled={!qrSvg} onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : qrSvg ? "Copy QR as SVG" : "Generating QR…"}</Button>
             <section className="phone-widget-panel">
               <div className="phone-widget-head"><span><DeviceMobileIcon size={22} weight="bold" /></span><div><h3>Use this card from your phone</h3><p>Open it instantly from the AfterMeet app or your Home Screen widget.</p></div></div>
               <div className="phone-widget-actions">

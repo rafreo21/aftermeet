@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
+import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
@@ -26,7 +27,7 @@ export default function HomeDashboard() {
       active="home"
       title="Home"
       subtitle="Your relationship workspace"
-      actions={<LinkButton size="small" href="/app/contacts/new"><PlusIcon size={16} weight="bold" />Add contact</LinkButton>}
+      actions={<LinkButton size="small" href="/app/encounters/new"><MicrophoneIcon size={16} weight="fill" />Capture encounter</LinkButton>}
     >
       <div className="flow-page">
         <section className="dashboard-hero">
@@ -40,7 +41,7 @@ export default function HomeDashboard() {
             {[
               ["01", IdentificationCardIcon, "Create your card", "Set your public identity.", "/app/cards"],
               ["02", QrCodeIcon, "Share and scan", "Open your card and QR together.", "/app/cards#share"],
-              ["03", UsersThreeIcon, "Capture context", "Remember who you met and why.", "/app/contacts/new"],
+              ["03", MicrophoneIcon, "Capture context", "Record with consent and remember what mattered.", "/app/encounters/new"],
               ["04", PaperPlaneTiltIcon, "Complete follow-up", "Finish the next promised action.", "/app/followups"],
             ].map(([number, Icon, title, text, href]) => (
               <a className="journey-step" href={String(href)} key={String(number)}>
@@ -51,6 +52,9 @@ export default function HomeDashboard() {
         </section>
 
         <div className="dashboard-grid">
+          <article className="dashboard-card dashboard-card-primary">
+            <span>Quick capture</span><MicrophoneIcon size={30} weight="fill" /><h2>Start an encounter</h2><p>Record with consent, keep private notes, and review every shared next step.</p><LinkButton href="/app/encounters/new">Start capture <ArrowRightIcon size={16} weight="bold" /></LinkButton>
+          </article>
           <article className="dashboard-card">
             <span>My card</span><IdentificationCardIcon size={30} weight="bold" /><h2>Ready to share</h2><p>Your card and scannable QR now live in one focused workspace.</p><LinkButton variant="secondary" href="/app/cards">Open my card <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>

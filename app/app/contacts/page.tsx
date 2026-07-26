@@ -6,6 +6,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { AppShell } from "../../components/AppShell";
+import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { TextField } from "../../components/FormField";
 import "../product.css";
@@ -50,38 +51,54 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [query, setQuery] = useState("");
   const [importMessage, setImportMessage] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { try { setContacts(JSON.parse(localStorage.getItem("aftermeet-contacts-v1") || "[]")); } catch {} }, []);
+  useEffect(() => {
+    try { setContacts(JSON.parse(localStorage.getItem("aftermeet-contacts-v1") || "[]")); }
+    catch { setImportError("We couldn’t load your saved contacts. Refresh the page to try again."); }
+    finally { setHydrated(true); }
+  }, []);
   const visible = useMemo(() => contacts.filter((contact) => `${contact.firstName} ${contact.lastName} ${contact.company}`.toLowerCase().includes(query.toLowerCase())), [contacts, query]);
 
   async function importContacts(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    const imported = file.name.toLowerCase().endsWith(".vcf") ? parseVcard(text) : parseCsv(text);
-    if (!imported.length) {
-      setImportMessage("No contacts were found. Try a CSV or vCard file.");
+    setImporting(true);
+    setImportMessage("");
+    setImportError("");
+    try {
+      const text = await file.text();
+      const imported = file.name.toLowerCase().endsWith(".vcf") ? parseVcard(text) : parseCsv(text);
+      if (!imported.length) {
+        setImportError("No contacts were found. Check that the file is a valid CSV or vCard and try again.");
+        return;
+      }
+      const existingKeys = new Set(contacts.map((contact) => `${contact.email.toLowerCase()}|${contact.firstName.toLowerCase()}|${contact.lastName.toLowerCase()}`));
+      const unique = imported.filter((contact) => !existingKeys.has(`${contact.email.toLowerCase()}|${contact.firstName.toLowerCase()}|${contact.lastName.toLowerCase()}`));
+      const next = [...contacts, ...unique];
+      setContacts(next);
+      localStorage.setItem("aftermeet-contacts-v1", JSON.stringify(next));
+      setImportMessage(`${unique.length} contact${unique.length === 1 ? "" : "s"} imported${unique.length < imported.length ? ` · ${imported.length - unique.length} duplicate${imported.length - unique.length === 1 ? "" : "s"} skipped` : ""}.`);
+    } catch {
+      setImportError("We couldn’t read that file. Try exporting it again as CSV or vCard.");
+    } finally {
       event.target.value = "";
-      return;
+      setImporting(false);
     }
-    const existingKeys = new Set(contacts.map((contact) => `${contact.email.toLowerCase()}|${contact.firstName.toLowerCase()}|${contact.lastName.toLowerCase()}`));
-    const unique = imported.filter((contact) => !existingKeys.has(`${contact.email.toLowerCase()}|${contact.firstName.toLowerCase()}|${contact.lastName.toLowerCase()}`));
-    const next = [...contacts, ...unique];
-    setContacts(next);
-    localStorage.setItem("aftermeet-contacts-v1", JSON.stringify(next));
-    setImportMessage(`${unique.length} contact${unique.length === 1 ? "" : "s"} imported${unique.length < imported.length ? ` · ${imported.length - unique.length} duplicate${imported.length - unique.length === 1 ? "" : "s"} skipped` : ""}.`);
-    event.target.value = "";
   }
 
-  const importButton = <Button variant="secondary" onClick={() => importInput.current?.click()}><FileArrowUpIcon size={17} weight="bold" />Import contacts</Button>;
+  const importButton = <Button variant="secondary" loading={importing} onClick={() => importInput.current?.click()}><FileArrowUpIcon size={17} weight="bold" />{importing ? "Importing…" : "Import contacts"}</Button>;
 
   return (
     <AppShell active="contacts" title="Contacts" subtitle="People, meetings, and the context that makes follow-up personal.">
       <div className="flow-page">
         <input ref={importInput} className="sr-only" type="file" accept=".csv,.vcf,text/csv,text/vcard" onChange={importContacts} />
         <div className="flow-heading"><div><h1>People you’ve met.</h1><p>A useful contact record remembers more than a name and email.</p></div></div>
-        {importMessage && <p className="contact-import-message" role="status">{importMessage}</p>}
-        {contacts.length ? <><div className="contact-toolbar"><div className="contact-search"><TextField label="Search contacts" value={query} onChange={(e) => setQuery(e.target.value)} leadingIcon={<MagnifyingGlassIcon size={18} />} /></div><div className="contact-toolbar-actions">{importButton}<LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton></div></div><div className="contact-list">{visible.map((contact) => <article className="contact-row" key={contact.id}><span className="contact-avatar">{contact.firstName[0]}{contact.lastName[0]}</span><div><h3>{contact.firstName} {contact.lastName}</h3><p>{contact.role}{contact.company ? ` · ${contact.company}` : ""}</p>{contact.source && <small className="contact-source">{contact.source === "vcard" ? "vCard import" : `${contact.source.toUpperCase()} import`}</small>}</div><LinkButton size="small" variant="secondary" href="/app/followups">Create follow-up</LinkButton></article>)}</div></> : <div className="empty-state"><div><span className="empty-icon"><UsersThreeIcon size={32} weight="bold" /></span><h2>No contacts yet</h2><p>Add someone you’ve met or bring in existing contacts from a CSV or vCard file.</p><div className="empty-state-actions"><LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton>{importButton}</div></div></div>}
+        {importMessage && <StatusMessage tone="success">{importMessage}</StatusMessage>}
+        {importError && <StatusMessage tone="error" action={<Button size="small" variant="ghost" onClick={() => setImportError("")}>Dismiss</Button>}>{importError}</StatusMessage>}
+        {!hydrated ? <PageSkeleton rows={3} /> : contacts.length ? <><div className="contact-toolbar"><div className="contact-search"><TextField label="Search contacts" value={query} onChange={(e) => setQuery(e.target.value)} leadingIcon={<MagnifyingGlassIcon size={18} />} /></div><div className="contact-toolbar-actions">{importButton}<LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton></div></div>{visible.length ? <div className="contact-list">{visible.map((contact) => <article className="contact-row" key={contact.id}><span className="contact-avatar">{contact.firstName[0]}{contact.lastName[0]}</span><div><h3>{contact.firstName} {contact.lastName}</h3><p>{contact.role}{contact.company ? ` · ${contact.company}` : ""}</p>{contact.source && <small className="contact-source">{contact.source === "vcard" ? "vCard import" : `${contact.source.toUpperCase()} import`}</small>}</div><LinkButton size="small" variant="secondary" href="/app/followups">Create follow-up</LinkButton></article>)}</div> : <div className="empty-state"><div><h2>No matching people</h2><p>Try a different name or company.</p><Button variant="secondary" onClick={() => setQuery("")}>Clear search</Button></div></div>}</> : <div className="empty-state"><div><span className="empty-icon"><UsersThreeIcon size={32} weight="bold" /></span><h2>No contacts yet</h2><p>Add someone you’ve met or bring in existing contacts from a CSV or vCard file.</p><div className="empty-state-actions"><LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton>{importButton}</div></div></div>}
       </div>
     </AppShell>
   );

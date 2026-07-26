@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CheckSquareIcon } from "@phosphor-icons/react/dist/csr/CheckSquare";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
+import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
@@ -27,8 +27,8 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
   const nav = [
     ["home", "/app", HouseIcon, "Home"],
     ["cards", "/app/cards", IdentificationCardIcon, "My card"],
-    ["contacts", "/app/contacts", UsersThreeIcon, "Contacts"],
-    ["followups", "/app/followups", PaperPlaneTiltIcon, "Follow-ups"],
+    ["contacts", "/app/contacts", UsersThreeIcon, "People"],
+    ["followups", "/app/followups", PaperPlaneTiltIcon, "Inbox"],
   ] as const;
 
   return (
@@ -41,9 +41,11 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
               <Icon size={20} weight="bold" /> {label}
             </a>
           ))}
+          <a className="capture-nav" href="/app/encounters/new">
+            <MicrophoneIcon size={20} weight="fill" /> Capture
+          </a>
         </nav>
         <div className="sidebar-bottom">
-          <a href="/hub"><CheckSquareIcon size={20} weight="bold" /> MVP hub</a>
           <div className="workspace-card">
             <span>{initials || "AM"}</span>
             <div>{label}<small>{user.email}</small></div>

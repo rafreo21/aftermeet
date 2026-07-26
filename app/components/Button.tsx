@@ -5,6 +5,7 @@ type SharedButtonProps = {
   variant?: "primary" | "secondary" | "ghost";
   size?: "small" | "normal";
   fullWidth?: boolean;
+  loading?: boolean;
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & SharedButtonProps;
@@ -46,6 +47,7 @@ export function Button({
   variant = "primary",
   size = "normal",
   fullWidth = false,
+  loading = false,
   className = "",
   type = "button",
   ...props
@@ -54,8 +56,11 @@ export function Button({
     <button
       {...props}
       type={type}
+      disabled={loading || props.disabled}
+      aria-busy={loading || undefined}
       className={buttonClasses(variant, size, fullWidth, className)}
     >
+      {loading && <span className="button-spinner" aria-hidden="true" />}
       {children}
     </button>
   );
@@ -66,6 +71,7 @@ export function LinkButton({
   variant = "primary",
   size = "normal",
   fullWidth = false,
+  loading: _loading = false,
   className = "",
   ...props
 }: LinkButtonProps) {

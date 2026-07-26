@@ -37,7 +37,7 @@ export default async function AuthPage({
           />
         )}
       </section>
-      <footer className="auth-footer"><span>Private by default</span><a href="/hub">View MVP hub</a></footer>
+      <footer className="auth-footer"><span>Private by default</span></footer>
     </main>
   );
 }

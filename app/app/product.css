@@ -224,3 +224,22 @@
 @media (prefers-reduced-motion: reduce) {
   .product-sidebar { transition: none; }
 }
+.button-spinner { width: 15px; height: 15px; flex: 0 0 auto; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ui-spin .7s linear infinite; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+.status-message { padding: 12px 14px; display: flex; align-items: center; gap: 10px; border-radius: 8px; font-size: 13px; font-weight: 700; line-height: 1.45; }
+.status-message > svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.status-message > div { flex: 1; }
+.status-success { background: #e7f8dc; color: #205d0d; }
+.status-error { background: #fff0ed; color: #a32015; }
+.status-info { background: #eef6ff; color: #174f78; }
+.page-skeleton { padding: 24px; display: grid; gap: 14px; border-radius: 12px; background: white; }
+.skeleton { display: block; overflow: hidden; position: relative; border-radius: 7px; background: #e9ede7; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); animation: skeleton-shimmer 1.25s infinite; }
+.skeleton-title { width: min(420px,70%); height: 42px; }
+.skeleton-copy { width: min(560px,90%); height: 18px; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
+.skeleton-card { min-height: 150px; }
+.qr-skeleton { width: min(100%, 320px); aspect-ratio: 1; }
+@keyframes skeleton-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .button-spinner, .skeleton::after { animation-duration: 2s; } }
+@media (max-width: 700px) { .skeleton-grid { grid-template-columns: 1fr; } }

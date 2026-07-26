@@ -324,7 +324,7 @@ export default function CardEditor() {
 
   return (
     <AppShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
-      actions={<Button size="small" disabled={publishing} onClick={save}>{publishing ? "Publishing…" : saved ? <><CheckCircleIcon weight="fill" /> Published</> : "Save and publish"}</Button>}>
+      actions={<Button size="small" loading={publishing} onClick={save}>{publishing ? "Publishing…" : saved ? <><CheckCircleIcon weight="fill" /> Published</> : "Save and publish"}</Button>}>
       <section className="card-creator">
         <nav className="creator-steps" aria-label="Card creation progress">
           {steps.map(({ label, Icon }, index) => (
@@ -455,7 +455,7 @@ export default function CardEditor() {
             <footer className="creator-actions">
               {saveError ? <p className="creator-save-error" role="alert">{saveError}</p> : null}
               <Button variant="ghost" disabled={step === 0} onClick={() => goToStep(step - 1)}><ArrowLeftIcon /> Back</Button>
-              <Button disabled={publishing} onClick={continueFlow}>{step === 2 ? publishing ? "Publishing…" : "Save and publish" : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
+              <Button loading={publishing} onClick={continueFlow}>{step === 2 ? publishing ? "Publishing…" : "Save and publish" : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
             </footer>
           </section>
 
