@@ -117,13 +117,7 @@ export function captureFromLinkedInDocument(documentLike: {
   const { firstName, lastName } = splitFullName(fullName);
 
   const experience = parseExperienceFromText(pageText);
-  const headlineText =
-    headlineFromDom(documentLike)
-    || headlineFromOpenGraph(documentLike)
-    || headlineFromPageText(pageText, fullName)
-    || headlineFromTitle(documentLike.title);
-  const headline = parseHeadline(headlineText);
-  const { role, company } = mergeLinkedInRoleCompany(experience, headline);
+  const { role, company } = mergeLinkedInRoleCompany(experience);
 
   const links = extractLinks(documentLike);
   const contact = parseContactInfoFromText(pageText);

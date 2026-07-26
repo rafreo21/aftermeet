@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AfterMeet Capture",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Capture people from LinkedIn and the web into AfterMeet.",
   "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [

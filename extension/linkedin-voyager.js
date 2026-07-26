@@ -1,20 +1,8 @@
 (function initAfterMeetLinkedInVoyager() {
   const API_BASE = "https://www.linkedin.com/voyager/api";
   const EXPERIENCE_QUERY_ID = "voyagerIdentityDashProfileComponents.7af5d6f176f11583b382e37e5639e69e";
-  const DASH_TOP_CARD_DECORATION = "com.linkedin.voyager.dash.deco.identity.profile.WebTopCardCore-6";
-
   function clean(value) {
     return (value ?? "").replace(/\s+/g, " ").trim();
-  }
-
-  function parseHeadline(headline) {
-    const cleaned = clean(headline);
-    if (!cleaned) return { role: "", company: "" };
-    const atMatch = cleaned.match(/^(.+?)\s+at\s+(.+)$/i);
-    if (atMatch) return { role: clean(atMatch[1]), company: clean(atMatch[2]) };
-    const dotParts = cleaned.split(/\s*[·|@]\s*/).map(clean).filter(Boolean);
-    if (dotParts.length >= 2) return { role: dotParts[0], company: dotParts.slice(1).join(" · ") };
-    return { role: cleaned, company: "" };
   }
 
   function parsePublicId(url) {
@@ -80,22 +68,6 @@
     };
   }
 
-  function parseDashTopCard(data) {
-    for (const item of data?.included ?? []) {
-      const headline = clean(item.headline) || clean(item.multiLocaleHeadline?.en_US);
-      if (!headline) continue;
-      const { role, company } = parseHeadline(headline);
-      return {
-        firstName: clean(item.firstName) || clean(item.multiLocaleFirstName?.en_US),
-        lastName: clean(item.lastName) || clean(item.multiLocaleLastName?.en_US),
-        urnId: urnIdFromEntityUrn(item.entityUrn),
-        role,
-        company,
-      };
-    }
-    return {};
-  }
-
   function websiteLabel(item) {
     const type = item?.type ?? {};
     return clean(type["com.linkedin.voyager.identity.profile.StandardWebsite"]?.category)
@@ -155,18 +127,13 @@
     if (!Array.isArray(value)) {
       if (typeof value.emailAddress === "string" && !out.email) out.email = value.emailAddress.toLowerCase();
       if (Array.isArray(value.phoneNumbers) && !out.phone) out.phone = clean(value.phoneNumbers[0]?.number);
-      if (typeof value.headline === "string" && !out.role) {
-        const parsed = parseHeadline(value.headline);
-        out.role = parsed.role;
-        out.company = parsed.company;
-      }
       if (typeof value.firstName === "string" && !out.firstName) out.firstName = clean(value.firstName);
       if (typeof value.lastName === "string" && !out.lastName) out.lastName = clean(value.lastName);
       if (typeof value.entityUrn === "string" && !out.urnId) out.urnId = urnIdFromEntityUrn(value.entityUrn);
-      if (value.positionView?.elements?.length && !out.role) {
+      if (value.positionView?.elements?.length) {
         const current = value.positionView.elements.find(isCurrentPosition) || value.positionView.elements[0];
-        out.role = clean(current?.title);
-        out.company = companyFromPosition(current);
+        if (!out.role) out.role = clean(current?.title);
+        if (!out.company) out.company = companyFromPosition(current);
       }
     }
 
@@ -209,12 +176,8 @@
       if (match) out.phone = match[1];
     }
     if (!out.role) {
-      const match = html.match(/"headline"\s*:\s*"([^"]+)"/i);
-      if (match) {
-        const parsed = parseHeadline(match[1]);
-        out.role = parsed.role;
-        out.company = parsed.company;
-      }
+      const match = html.match(/"title"\s*:\s*"([^"]+)"/i);
+      if (match && isValidExperienceRole(match[1])) out.role = match[1];
     }
 
     return out;
@@ -227,19 +190,38 @@
     return match?.[1] ?? "";
   }
 
-  function mergeFields(target, source) {
-    ["firstName", "lastName", "role", "company", "email", "phone", "companyWebsite", "personalWebsite", "urnId"].forEach((field) => {
-      const value = clean(source[field]);
-      if (value) target[field] = value;
-    });
+  function mergeExperienceFields(target, source) {
+    if (isValidExperienceRole(source.role)) target.role = clean(source.role);
+    if (isValidExperienceCompany(source.company)) target.company = stripEmploymentSuffix(source.company);
     return target;
   }
 
-  async function fetchDashTopCard(publicId) {
-    return voyagerGet(
-      `/identity/dash/profiles?q=memberIdentity&memberIdentity=${encodeURIComponent(publicId)}&decorationId=${DASH_TOP_CARD_DECORATION}`,
-      true,
-    );
+  function isValidExperienceRole(value) {
+    const role = clean(value);
+    if (!role || role.length > 80) return false;
+    if (/^(uk global talent|open to work|hiring|verified|premium|top voice)$/i.test(role)) return false;
+    if (/manage, lead|responsible for|i manage|^[•-]/i.test(role)) return false;
+    return true;
+  }
+
+  function isValidExperienceCompany(value) {
+    const company = clean(value);
+    if (!company || company.length > 80) return false;
+    if (/manage, lead|responsible for|i manage|^[•-]/i.test(company)) return false;
+    return true;
+  }
+
+  function stripEmploymentSuffix(value) {
+    return clean(value.split(" · ")[0]?.split(" | ")[0]);
+  }
+
+  function mergeFields(target, source) {
+    ["firstName", "lastName", "email", "phone", "urnId"].forEach((field) => {
+      const value = clean(source[field]);
+      if (value) target[field] = value;
+    });
+    mergeExperienceFields(target, source);
+    return target;
   }
 
   async function fetchExperienceGraphql(urnId) {
@@ -259,15 +241,13 @@
 
     const parsed = { ...parseEmbeddedSnapshot() };
 
-    const [profileView, contactInfo, dashTopCard] = await Promise.all([
+    const [profileView, contactInfo] = await Promise.all([
       voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileView`),
       voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`),
-      fetchDashTopCard(id),
     ]);
 
     mergeFields(parsed, parseProfileView(profileView));
     mergeFields(parsed, parseContactInfo(contactInfo));
-    mergeFields(parsed, parseDashTopCard(dashTopCard));
 
     if (!parsed.role || !parsed.company) {
       const urnId = parsed.urnId || findProfileUrnInPage();

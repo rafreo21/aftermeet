@@ -1,3 +1,9 @@
+import {
+  captureExperienceFromSection,
+  parseExperienceSectionText,
+  sanitizeExperienceRoleCompany,
+} from "./linkedin-experience-capture.ts";
+
 function clean(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -38,25 +44,7 @@ function isJunkProfileLine(line: string) {
 }
 
 export function parseExperienceFromText(pageText: string) {
-  const lines = pageText.split("\n").map(clean).filter(Boolean);
-  const experienceIndex = lines.findIndex((line) => /^experience$/i.test(line));
-  if (experienceIndex < 0) return { role: "", company: "" };
-
-  const role = lines.slice(experienceIndex + 1).find((line) => !isJunkProfileLine(line) && line.length <= 80) ?? "";
-  if (!role) return { role: "", company: "" };
-
-  const roleIndex = lines.indexOf(role, experienceIndex + 1);
-  const companyLine = lines.slice(roleIndex + 1).find((line) => {
-    if (isJunkProfileLine(line)) return false;
-    if (line.length > 100) return false;
-    return line.includes("·") || /full-time|part-time|contract|self-employed|internship|freelance/i.test(line);
-  }) ?? "";
-
-  if (companyLine) {
-    return { role, company: stripEmploymentSuffix(companyLine) };
-  }
-
-  return parseHeadline(role);
+  return parseExperienceSectionText(pageText);
 }
 
 export function parseContactInfoFromText(pageText: string) {
@@ -121,18 +109,8 @@ export function buildLinkedInCaptureContext(profile: {
   return parts.join(" ");
 }
 
-export function mergeLinkedInRoleCompany(
-  experience: { role: string; company: string },
-  headline: { role: string; company: string },
-) {
-  const role = experience.role || headline.role;
-  let company = experience.company || headline.company;
-
-  if (company.length > 80 || /[•]|manage, lead|responsible for/i.test(company)) {
-    company = experience.company || (headline.company.length <= 80 ? headline.company : "");
-  }
-
-  return { role, company };
+export function mergeLinkedInRoleCompany(experience: { role: string; company: string }) {
+  return sanitizeExperienceRoleCompany(experience);
 }
 
 export const LINKEDIN_PROFILE_FIXTURE = `

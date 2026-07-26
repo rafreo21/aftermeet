@@ -15,46 +15,127 @@
     return `https://${trimmed.replace(/^\/\//, "")}`;
   }
 
-  function parseHeadline(headline) {
-    const cleaned = clean(headline);
-    if (!cleaned) return { role: "", company: "" };
-    const atMatch = cleaned.match(/^(.+?)\s+at\s+(.+)$/i);
-    if (atMatch) return { role: clean(atMatch[1]), company: clean(atMatch[2]) };
-    const dotParts = cleaned.split(/\s*[·|@]\s*/).map(clean).filter(Boolean);
-    if (dotParts.length >= 2) return { role: dotParts[0], company: dotParts.slice(1).join(" · ") };
-    return { role: cleaned, company: "" };
-  }
-
   function stripEmploymentSuffix(value) {
     return clean(value.split(" · ")[0]?.split(" | ")[0]);
   }
 
-  function isJunkProfileLine(line) {
+  function isValidExperienceRole(value) {
+    const role = clean(value);
+    if (!role || role.length > 80) return false;
+    if (/^(uk global talent|open to work|hiring|verified|premium|top voice)$/i.test(role)) return false;
+    if (/manage, lead|responsible for|i manage|^[•-]/i.test(role)) return false;
+    return true;
+  }
+
+  function isValidExperienceCompany(value) {
+    const company = clean(value);
+    if (!company || company.length > 80) return false;
+    if (/manage, lead|responsible for|i manage|^[•-]/i.test(company)) return false;
+    return true;
+  }
+
+  function sanitizeExperience(input) {
+    return {
+      role: isValidExperienceRole(input.role) ? clean(input.role) : "",
+      company: isValidExperienceCompany(input.company) ? stripEmploymentSuffix(input.company) : "",
+    };
+  }
+
+  function isJunkExperienceLine(line) {
     const value = clean(line);
-    if (!value || value.length > 120) return true;
-    if (/^\d+\+?\s*connections?$/i.test(value)) return true;
-    if (/^(message|connect|follow|more|contact info|about|activity|posts|comments|videos|images|documents)$/i.test(value)) return true;
-    if (/^(open to work|hiring|verified|premium|top voice|uk global talent)$/i.test(value)) return true;
-    if (/^[A-Z][a-z]+(?:,\s*[A-Z][a-z]+){0,3},\s*[A-Z][a-z]+(?: Area)?(?:,\s*[A-Z][a-z]+)?$/.test(value)) return true;
-    if (/^•/.test(value)) return true;
-    if (/^(full-time|part-time|contract|self-employed|internship|freelance)$/i.test(value)) return true;
+    if (!value || value.length > 100) return true;
+    if (/^(uk global talent|open to work|hiring|verified|premium|top voice|show all)$/i.test(value)) return true;
     if (/^\d{4}\s*[–-]\s*(present|\d{4})/i.test(value)) return true;
+    if (/manage, lead|responsible for|i manage/i.test(value)) return true;
+    if (/^(full-time|part-time|contract|self-employed|internship|freelance)$/i.test(value)) return true;
     return false;
   }
 
-  function parseExperienceFromText(pageText) {
-    const lines = pageText.split("\n").map(clean).filter(Boolean);
+  function parseExperienceSectionText(sectionText) {
+    const lines = sectionText.split("\n").map(clean).filter(Boolean);
     const experienceIndex = lines.findIndex((line) => /^experience$/i.test(line));
-    if (experienceIndex < 0) return { role: "", company: "" };
-    const role = lines.slice(experienceIndex + 1).find((line) => !isJunkProfileLine(line) && line.length <= 80) || "";
+    const startIndex = experienceIndex >= 0 ? experienceIndex + 1 : 0;
+    const role = lines.slice(startIndex).find((line) => !isJunkExperienceLine(line) && line.length <= 80) || "";
     if (!role) return { role: "", company: "" };
-    const roleIndex = lines.indexOf(role, experienceIndex + 1);
+
+    const roleIndex = lines.indexOf(role, startIndex);
     const companyLine = lines.slice(roleIndex + 1).find((line) => {
-      if (isJunkProfileLine(line) || line.length > 100) return false;
+      if (isJunkExperienceLine(line)) return false;
       return line.includes("·") || /full-time|part-time|contract|self-employed|internship|freelance/i.test(line);
     }) || "";
-    if (companyLine) return { role, company: stripEmploymentSuffix(companyLine) };
-    return parseHeadline(role);
+
+    return sanitizeExperience({
+      role,
+      company: companyLine ? stripEmploymentSuffix(companyLine) : "",
+    });
+  }
+
+  function findExperienceSection() {
+    const anchor = document.getElementById("experience");
+    if (!anchor) return null;
+    return anchor.closest("section")
+      || anchor.closest(".artdeco-card")
+      || anchor.parentElement;
+  }
+
+  async function ensureExperienceVisible() {
+    const target = document.getElementById("experience")
+      || document.querySelector('[data-view-name*="experience" i]');
+    if (!target) return;
+    target.scrollIntoView({ block: "center" });
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+  }
+
+  function captureExperienceFromSection(section) {
+    if (!section) return { role: "", company: "" };
+
+    const entries = section.querySelectorAll(
+      "li.pvs-list__paged-list-item, li.artdeco-list__item, [data-view-name=\"profile-component-entity\"]",
+    );
+    const firstEntry = entries[0];
+    if (firstEntry) {
+      const hiddenSpans = [...firstEntry.querySelectorAll('span[aria-hidden="true"]')]
+        .map((node) => clean(node.textContent))
+        .filter(Boolean);
+
+      if (hiddenSpans.length >= 2) {
+        const parsed = sanitizeExperience({
+          role: hiddenSpans[0],
+          company: stripEmploymentSuffix(hiddenSpans[1]),
+        });
+        if (parsed.role && parsed.company) return parsed;
+      }
+
+      const role = clean(
+        firstEntry.querySelector('.t-bold span[aria-hidden="true"]')?.textContent
+        || firstEntry.querySelector(".mr1.hoverable-link-text span")?.textContent
+        || firstEntry.querySelector(".t-bold")?.textContent,
+      );
+      const companyLine = clean(
+        firstEntry.querySelector('.t-14.t-normal span[aria-hidden="true"]')?.textContent
+        || firstEntry.querySelector(".t-14.t-normal")?.textContent,
+      );
+      const parsed = sanitizeExperience({
+        role,
+        company: stripEmploymentSuffix(companyLine),
+      });
+      if (parsed.role && parsed.company) return parsed;
+    }
+
+    return parseExperienceSectionText(section.innerText || "");
+  }
+
+  async function captureCurrentExperience() {
+    await ensureExperienceVisible();
+    const section = findExperienceSection();
+    const fromSection = captureExperienceFromSection(section);
+    if (fromSection.role && fromSection.company) return fromSection;
+
+    const pageText = document.body?.innerText ?? "";
+    return sanitizeExperience({
+      role: fromSection.role || parseExperienceSectionText(pageText).role,
+      company: fromSection.company || parseExperienceSectionText(pageText).company,
+    });
   }
 
   function parseContactInfoFromText(pageText) {
@@ -77,32 +158,7 @@
         }
       }
     }
-    if (!phone) {
-      const match = pageText.match(/(\+\d[\d\s().-]{7,}\d)/);
-      if (match) phone = match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
-    }
     return { email, phone };
-  }
-
-  function headlineFromPageText(pageText, fullName) {
-    const lines = pageText.split("\n").map(clean).filter(Boolean);
-    const nameIndex = lines.findIndex((line) => line === fullName || line.startsWith(fullName));
-    if (nameIndex < 0) return "";
-    for (let index = nameIndex + 1; index < Math.min(nameIndex + 6, lines.length); index += 1) {
-      const candidate = lines[index];
-      if (isJunkProfileLine(candidate)) continue;
-      if (/ at | · /.test(candidate)) return candidate;
-    }
-    return "";
-  }
-
-  function mergeLinkedInRoleCompany(experience, headline) {
-    const role = experience.role || headline.role;
-    let company = experience.company || headline.company;
-    if (company.length > 80 || /[•]|manage, lead|responsible for/i.test(company)) {
-      company = experience.company || (headline.company.length <= 80 ? headline.company : "");
-    }
-    return { role, company };
   }
 
   function buildLinkedInCaptureContext(profile) {
@@ -120,132 +176,25 @@
     return clean(node?.content || node?.getAttribute?.("content"));
   }
 
-  function headlineFromTitle(title) {
-    const titleName = title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
-    const dashParts = titleName.split(/\s+[-–—]\s+/);
-    if (dashParts.length > 1) return dashParts.slice(1).join(" - ");
-    return "";
-  }
-
-  function headlineFromOpenGraph() {
-    const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
-    if (ogTitle) {
-      const dashParts = ogTitle.split(/\s+[-–—]\s+/);
-      if (dashParts.length > 1) return dashParts.slice(1).join(" - ");
-    }
-    return readMeta("og:description");
-  }
-
-  function headlineFromMetaTags() {
-    const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
-    const titleParts = ogTitle.split(/\s+[-–—]\s+/);
-    if (titleParts.length > 1) {
-      const headline = titleParts.slice(1).join(" - ");
-      if (!isJunkProfileLine(headline)) return headline;
-    }
-    const description = readMeta("og:description");
-    if (description && !isJunkProfileLine(description)) return description;
-    return "";
-  }
-
-  async function ensureExperienceVisible() {
-    const target = document.getElementById("experience")
-      || document.querySelector('[data-view-name*="experience" i]');
-    if (!target) return;
-    target.scrollIntoView({ block: "center" });
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
-  }
-
-  function headlineFromDom() {
-    const selectors = [
-      ".text-body-medium",
-      "[data-generated-suggestion-target]",
-      "div[data-view-name=\"profile-card\"] h2",
-      ".pv-text-details__left-panel h2",
-      ".top-card-layout__headline",
-    ];
-    for (const selector of selectors) {
-      const nodes = selector === ".text-body-medium"
-        ? document.querySelectorAll(selector)
-        : [document.querySelector(selector)].filter(Boolean);
-      for (const node of nodes) {
-        const value = clean(node?.textContent);
-        if (!value || value.length > 120 || isJunkProfileLine(value)) continue;
-        if (/ at | · /.test(value) || parseHeadline(value).company) return value;
-      }
-    }
-    return "";
-  }
-
-  function captureExperienceFromDom() {
-    const section = document.getElementById("experience")?.closest("section")
-      || document.querySelector('[data-view-name="profile-card-experience"]')
-      || document.querySelector("section.artdeco-card.pvs-loader__profile-card");
-    if (!section) return { role: "", company: "" };
-
-    const firstEntry = section.querySelector(".artdeco-list__item, li.pvs-list__paged-list-item, ul.pvs-list > li");
-    if (!firstEntry) return { role: "", company: "" };
-
-    const role = clean(
-      firstEntry.querySelector(".t-bold span[aria-hidden=\"true\"]")?.textContent
-      || firstEntry.querySelector(".mr1.hoverable-link-text span")?.textContent
-      || firstEntry.querySelector(".t-bold")?.textContent,
-    );
-    const companyLine = clean(
-      firstEntry.querySelector(".t-14.t-normal span[aria-hidden=\"true\"]")?.textContent
-      || firstEntry.querySelector(".pv-entity__secondary-title")?.textContent
-      || firstEntry.querySelector(".t-14.t-normal")?.textContent,
-    );
-
-    return {
-      role,
-      company: stripEmploymentSuffix(companyLine),
-    };
-  }
-
   function extractLinks() {
     let email = "";
     let phone = "";
-    let companyWebsite = "";
-    let personalWebsite = "";
-    document.querySelectorAll("a[href^='mailto:'], a[href^='tel:'], a[href^='http']").forEach((node) => {
+    document.querySelectorAll("a[href^='mailto:'], a[href^='tel:']").forEach((node) => {
       const href = node.getAttribute("href") || "";
       if (!email && href.startsWith("mailto:")) email = clean(href.replace(/^mailto:/i, "").split("?")[0]);
       if (!phone && href.startsWith("tel:")) phone = clean(href.replace(/^tel:/i, "").split("?")[0]);
-      if (!href.startsWith("http") || /linkedin\.com/i.test(href)) return;
-      const label = clean(node.textContent).toLowerCase();
-      const url = normalizeUrl(href);
-      if (!personalWebsite && /portfolio|website|blog|site|personal/i.test(label)) personalWebsite = url;
-      if (!companyWebsite && /company|employer|organization/i.test(label)) companyWebsite = url;
     });
-    return { email, phone, companyWebsite, personalWebsite };
+    return { email, phone };
   }
 
   async function captureLinkedInProfileFromDom() {
-    await ensureExperienceVisible();
     const pageText = document.body?.innerText ?? "";
     const linkedinUrl = normalizeUrl(window.location.href.split("?")[0]);
-    const titleName = document.title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
     const h1 = clean(document.querySelector("h1")?.textContent);
     const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
-    const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || titleName.split(" - ")[0] || "";
+    const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || document.title.split(" - ")[0] || "";
     const { firstName, lastName } = splitName(fullName);
-
-    const experience = parseExperienceFromText(pageText);
-    const domExperience = captureExperienceFromDom();
-    const headlineText =
-      headlineFromMetaTags()
-      || headlineFromDom()
-      || headlineFromOpenGraph()
-      || headlineFromPageText(pageText, fullName)
-      || headlineFromTitle(document.title);
-    const { role, company } = mergeLinkedInRoleCompany(
-      {
-        role: domExperience.role || experience.role,
-        company: domExperience.company || experience.company,
-      },
-      parseHeadline(headlineText),
-    );
+    const { role, company } = await captureCurrentExperience();
 
     const links = extractLinks();
     const contact = parseContactInfoFromText(pageText);
@@ -259,8 +208,8 @@
       phone,
       company,
       role,
-      companyWebsite: links.companyWebsite,
-      personalWebsite: links.personalWebsite,
+      companyWebsite: "",
+      personalWebsite: "",
       linkedinUrl,
       sourceUrl: linkedinUrl,
       source: "extension",
@@ -280,10 +229,13 @@
       if (!voyager) return domProfile;
 
       const merged = { ...domProfile };
-      ["firstName", "lastName", "role", "company", "email", "phone", "companyWebsite", "personalWebsite"].forEach((field) => {
+      ["firstName", "lastName", "email", "phone"].forEach((field) => {
         const value = clean(voyager[field]);
         if (value) merged[field] = value;
       });
+      if (isValidExperienceRole(voyager.role)) merged.role = clean(voyager.role);
+      if (isValidExperienceCompany(voyager.company)) merged.company = stripEmploymentSuffix(voyager.company);
+
       merged.context = buildLinkedInCaptureContext({
         role: merged.role,
         company: merged.company,
@@ -309,7 +261,7 @@
       phone: "",
       company: "",
       role: "",
-      companyWebsite: /linkedin\.com/i.test(sourceUrl) ? "" : sourceUrl,
+      companyWebsite: "",
       personalWebsite: "",
       linkedinUrl: /linkedin\.com\/in\//i.test(sourceUrl) ? sourceUrl : "",
       sourceUrl,
