@@ -29,6 +29,16 @@ test("parseContactInfoFromText reads phone and email from Contact info", () => {
     email: "rafreo21@gmail.com",
     phone: "+447473177720",
   });
+  assert.deepEqual(parseContactInfoFromText(`
+Contact info
+Email
+someone@example.com
+Phone
++1 (555) 123-4567 (Mobile)
+`.trim()), {
+    email: "someone@example.com",
+    phone: "+15551234567",
+  });
 });
 
 test("buildLinkedInCaptureContext writes useful notes", () => {

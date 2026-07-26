@@ -86,7 +86,7 @@ async function enrichProfile(baseUrl, profile, pageText) {
 }
 
 captureButton.addEventListener("click", async () => {
-  status.textContent = "Fetching experience from LinkedIn…";
+  status.textContent = "Fetching profile and contact info…";
   await saveSettings();
   const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, "") || "http://localhost:3000";
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

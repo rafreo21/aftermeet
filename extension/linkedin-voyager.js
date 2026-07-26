@@ -12,6 +12,8 @@
 
   let experienceCache = null;
   let experienceCacheKey = "";
+  let contactCache = null;
+  let contactCacheKey = "";
 
   function clean(value) {
     return (value ?? "").replace(/\s+/g, " ").trim();
@@ -138,12 +140,125 @@
       if (!companyWebsite && /company|employer|organization/.test(label)) companyWebsite = url;
       if (!personalWebsite && !companyWebsite) personalWebsite = url;
     }
+
+    let phone = "";
+    for (const item of data.phoneNumbers ?? []) {
+      phone = normalizePhone(item?.number);
+      if (phone) break;
+    }
+
     return {
       email: clean(data.emailAddress).toLowerCase(),
-      phone: clean(data.phoneNumbers?.[0]?.number),
+      phone,
       companyWebsite,
       personalWebsite,
     };
+  }
+
+  function normalizePhone(value) {
+    const cleaned = clean(value);
+    if (!cleaned) return "";
+    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d)/);
+    if (!match) return cleaned.replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    return match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+  }
+
+  function mergeContactFields(target, source) {
+    const email = clean(source.email).toLowerCase();
+    const phone = normalizePhone(source.phone);
+    if (email) target.email = email;
+    if (phone) target.phone = phone;
+    return target;
+  }
+
+  function parseContactInfoFromText(pageText) {
+    const lines = pageText.split("\n").map(clean).filter(Boolean);
+    let email = "";
+    let phone = "";
+
+    for (const line of lines) {
+      if (!email) {
+        const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+        if (match) email = match[0].toLowerCase();
+      }
+    }
+
+    const emailIndex = lines.findIndex((line) => /^email$/i.test(line));
+    if (emailIndex >= 0 && !email) {
+      for (const line of lines.slice(emailIndex + 1, emailIndex + 4)) {
+        const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+        if (match) {
+          email = match[0].toLowerCase();
+          break;
+        }
+      }
+    }
+
+    const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
+    if (phoneIndex >= 0) {
+      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
+        const normalized = normalizePhone(line);
+        if (normalized) {
+          phone = normalized;
+          break;
+        }
+      }
+    }
+
+    if (!phone) {
+      const match = pageText.match(/(\+\d[\d\s().-]{7,}\d)/);
+      if (match) phone = normalizePhone(match[1]);
+    }
+
+    return { email, phone };
+  }
+
+  async function fetchContactInfoOverlayPage(publicId) {
+    const id = clean(publicId);
+    if (!id) return { email: "", phone: "" };
+
+    const referer = `https://www.linkedin.com/in/${encodeURIComponent(id)}/`;
+    const response = await fetch(`${referer}overlay/contact-info/`, {
+      credentials: "include",
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "x-restli-protocol-version": "2.0.0",
+      },
+    });
+    if (!response.ok) return { email: "", phone: "" };
+
+    const html = await response.text();
+    const embedded = parseEmbeddedFromHtml(html);
+    const text = parseContactInfoFromText(htmlToVisibleText(html));
+    return {
+      email: embedded.email || text.email,
+      phone: embedded.phone || text.phone,
+    };
+  }
+
+  async function fetchLinkedInContactInfo(publicId) {
+    const id = clean(publicId);
+    if (!id) return { email: "", phone: "" };
+
+    const cacheKey = `${id}:contact`;
+    if (contactCache && contactCacheKey === cacheKey) return contactCache;
+
+    const result = { email: "", phone: "" };
+    mergeContactFields(result, parseEmbeddedSnapshot());
+
+    const referer = `https://www.linkedin.com/in/${encodeURIComponent(id)}/`;
+    const api = await voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`, false, referer);
+    mergeContactFields(result, parseContactInfo(api));
+
+    if (!result.email || !result.phone) {
+      mergeContactFields(result, await fetchContactInfoOverlayPage(id));
+    }
+
+    if (result.email || result.phone) {
+      contactCache = result;
+      contactCacheKey = cacheKey;
+    }
+    return result;
   }
 
   function parseGraphqlExperienceItem(item) {
@@ -488,10 +603,14 @@
 
   window.aftermeetFetchLinkedInExperience = fetchLinkedInExperience;
 
+  window.aftermeetFetchLinkedInContactInfo = fetchLinkedInContactInfo;
+
   window.aftermeetPrefetchLinkedInExperience = function aftermeetPrefetchLinkedInExperience(publicId) {
     const id = clean(publicId);
     if (!id) return;
-    void fetchLinkedInExperience(id, parseEmbeddedSnapshot());
+    const seed = parseEmbeddedSnapshot();
+    void fetchLinkedInExperience(id, seed);
+    void fetchLinkedInContactInfo(id);
   };
 
   window.aftermeetLinkedInPublicId = parsePublicId;

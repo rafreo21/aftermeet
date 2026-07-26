@@ -199,26 +199,150 @@
     return parseExperienceSectionText(section.innerText || "");
   }
 
+  function normalizePhone(value) {
+    const cleaned = clean(value);
+    if (!cleaned) return "";
+    const match = cleaned.match(/(\+\d[\d\s().-]{7,}\d)/);
+    if (!match) return cleaned.replace(/[^\d+]/g, "").replace(/^\+/, "+");
+    return match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+  }
+
   function parseContactInfoFromText(pageText) {
     const lines = pageText.split("\n").map(clean).filter(Boolean);
     let email = "";
     let phone = "";
+
     for (const line of lines) {
       if (!email) {
         const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
         if (match) email = match[0].toLowerCase();
       }
     }
-    const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
-    if (phoneIndex >= 0) {
-      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
-        const match = line.match(/(\+\d[\d\s().-]{7,}\d)/);
+
+    const emailIndex = lines.findIndex((line) => /^email$/i.test(line));
+    if (emailIndex >= 0 && !email) {
+      for (const line of lines.slice(emailIndex + 1, emailIndex + 4)) {
+        const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
         if (match) {
-          phone = match[1].replace(/[^\d+]/g, "").replace(/^\+/, "+");
+          email = match[0].toLowerCase();
           break;
         }
       }
     }
+
+    const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
+    if (phoneIndex >= 0) {
+      for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
+        const normalized = normalizePhone(line);
+        if (normalized) {
+          phone = normalized;
+          break;
+        }
+      }
+    }
+
+    if (!phone) {
+      const match = pageText.match(/(\+\d[\d\s().-]{7,}\d)/);
+      if (match) phone = normalizePhone(match[1]);
+    }
+
+    return { email, phone };
+  }
+
+  function extractLinksFrom(root) {
+    let email = "";
+    let phone = "";
+    root.querySelectorAll("a[href^='mailto:'], a[href^='tel:']").forEach((node) => {
+      const href = node.getAttribute("href") || "";
+      if (!email && href.startsWith("mailto:")) email = clean(href.replace(/^mailto:/i, "").split("?")[0]).toLowerCase();
+      if (!phone && href.startsWith("tel:")) phone = normalizePhone(href.replace(/^tel:/i, "").split("?")[0]);
+    });
+    return { email, phone };
+  }
+
+  function findContactInfoTrigger() {
+    const selectors = [
+      "#top-card-text-details-contact-info",
+      "a[href*='/overlay/contact-info']",
+      "a[href*='contact-info']",
+      "[data-view-name*='contact-info' i]",
+    ];
+    for (const selector of selectors) {
+      const node = document.querySelector(selector);
+      if (node) return node;
+    }
+    return [...document.querySelectorAll("a, button")].find((node) => /^contact info$/i.test(clean(node.textContent))) || null;
+  }
+
+  function findContactInfoModal() {
+    return document.querySelector(
+      ".artdeco-modal[role='dialog'], div[role='dialog'][aria-labelledby*='contact' i], .artdeco-modal",
+    );
+  }
+
+  function closeContactInfoModal() {
+    document.querySelector(".artdeco-modal__dismiss, button[aria-label='Dismiss']")?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }));
+  }
+
+  async function captureContactInfoFromModal() {
+    const openModal = findContactInfoModal();
+    if (openModal) {
+      const fromOpen = {
+        ...extractLinksFrom(openModal),
+        ...parseContactInfoFromText(openModal.innerText || ""),
+      };
+      if (fromOpen.email || fromOpen.phone) return fromOpen;
+    }
+
+    const trigger = findContactInfoTrigger();
+    if (!trigger) return { email: "", phone: "" };
+
+    scrollNodeIntoView(trigger);
+    await sleep(150);
+    trigger.click();
+
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      await sleep(250);
+      const modal = findContactInfoModal();
+      if (!modal) continue;
+
+      const links = extractLinksFrom(modal);
+      const text = parseContactInfoFromText(modal.innerText || "");
+      const email = links.email || text.email;
+      const phone = links.phone || text.phone;
+      if (email || phone) {
+        closeContactInfoModal();
+        return { email, phone };
+      }
+    }
+
+    closeContactInfoModal();
+    return { email: "", phone: "" };
+  }
+
+  async function resolveContactDetails(publicId, seed = {}) {
+    let email = clean(seed.email).toLowerCase();
+    let phone = normalizePhone(seed.phone);
+
+    if (email && phone) return { email, phone };
+
+    if (publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
+      try {
+        const fetched = await window.aftermeetFetchLinkedInContactInfo(publicId);
+        email = email || clean(fetched.email).toLowerCase();
+        phone = phone || normalizePhone(fetched.phone);
+      } catch {
+        /* fall back to modal */
+      }
+    }
+
+    if (!email || !phone) {
+      const modal = await captureContactInfoFromModal();
+      email = email || clean(modal.email).toLowerCase();
+      phone = phone || normalizePhone(modal.phone);
+    }
+
     return { email, phone };
   }
 
@@ -238,14 +362,7 @@
   }
 
   function extractLinks() {
-    let email = "";
-    let phone = "";
-    document.querySelectorAll("a[href^='mailto:'], a[href^='tel:']").forEach((node) => {
-      const href = node.getAttribute("href") || "";
-      if (!email && href.startsWith("mailto:")) email = clean(href.replace(/^mailto:/i, "").split("?")[0]);
-      if (!phone && href.startsWith("tel:")) phone = clean(href.replace(/^tel:/i, "").split("?")[0]);
-    });
-    return { email, phone };
+    return extractLinksFrom(document);
   }
 
   function captureLinkedInProfileBase() {
@@ -315,11 +432,14 @@
     if (voyager) {
       const voyagerName = normalizeProfileName(`${clean(voyager.firstName)} ${clean(voyager.lastName)}`.trim());
       if (voyagerName) merged.fullName = voyagerName;
-      ["email", "phone"].forEach((field) => {
-        const value = clean(voyager[field]);
-        if (value) merged[field] = value;
-      });
     }
+
+    const contact = await resolveContactDetails(publicId, {
+      email: merged.email || voyager?.email,
+      phone: merged.phone || voyager?.phone,
+    });
+    merged.email = contact.email;
+    merged.phone = contact.phone;
 
     merged.context = buildLinkedInCaptureContext({
       role: merged.role,

@@ -59,6 +59,17 @@ export function parseContactInfoFromText(pageText: string) {
     }
   }
 
+  const emailIndex = lines.findIndex((line) => /^email$/i.test(line));
+  if (emailIndex >= 0 && !email) {
+    for (const line of lines.slice(emailIndex + 1, emailIndex + 4)) {
+      const match = line.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
+      if (match) {
+        email = match[0].toLowerCase();
+        break;
+      }
+    }
+  }
+
   const phoneIndex = lines.findIndex((line) => /^phone$/i.test(line));
   if (phoneIndex >= 0) {
     for (const line of lines.slice(phoneIndex + 1, phoneIndex + 4)) {
