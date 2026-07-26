@@ -43,6 +43,8 @@ export default function ContactDetailPage() {
     if (contact.email) items.push({ label: contact.email, href: `mailto:${contact.email}`, Icon: EnvelopeSimpleIcon });
     if (contact.phone) items.push({ label: contact.phone, href: `tel:${contact.phone.replace(/\s+/g, "")}`, Icon: PhoneIcon });
     if (contact.linkedinUrl) items.push({ label: "LinkedIn profile", href: linkedinHref(contact.linkedinUrl), Icon: LinkedinLogoIcon });
+    if (contact.companyWebsite) items.push({ label: "Company website", href: linkedinHref(contact.companyWebsite), Icon: IdentificationCardIcon });
+    if (contact.personalWebsite) items.push({ label: "Portfolio", href: linkedinHref(contact.personalWebsite), Icon: IdentificationCardIcon });
     return items;
   }, [contact]);
 

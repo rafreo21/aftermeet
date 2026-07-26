@@ -1,4 +1,4 @@
-export type ContactSource = "csv" | "vcard" | "manual" | "exchange" | "badge" | "linkedin" | "scan";
+export type ContactSource = "csv" | "vcard" | "manual" | "exchange" | "badge" | "linkedin" | "scan" | "extension";
 
 export type Contact = {
   id: string;
@@ -9,6 +9,8 @@ export type Contact = {
   linkedinUrl?: string;
   company: string;
   role: string;
+  companyWebsite?: string;
+  personalWebsite?: string;
   context: string;
   source?: ContactSource;
   exchangeId?: string;

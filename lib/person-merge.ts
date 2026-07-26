@@ -17,7 +17,7 @@ export function mergeContacts(existing: Contact, incoming: Contact): Contact {
     .filter((value, index, list) => list.indexOf(value) === index)
     .join("\n\n");
 
-  const sourcePriority: ContactSource[] = ["exchange", "badge", "scan", "linkedin", "vcard", "csv", "manual"];
+  const sourcePriority: ContactSource[] = ["exchange", "badge", "scan", "extension", "linkedin", "vcard", "csv", "manual"];
   const pickSource = () => {
     const existingRank = existing.source ? sourcePriority.indexOf(existing.source) : sourcePriority.length;
     const incomingRank = incoming.source ? sourcePriority.indexOf(incoming.source) : sourcePriority.length;
@@ -36,6 +36,8 @@ export function mergeContacts(existing: Contact, incoming: Contact): Contact {
     linkedinUrl: mergeField(existing.linkedinUrl, incoming.linkedinUrl) || undefined,
     company: mergeField(existing.company, incoming.company),
     role: mergeField(existing.role, incoming.role),
+    companyWebsite: mergeField(existing.companyWebsite, incoming.companyWebsite) || undefined,
+    personalWebsite: mergeField(existing.personalWebsite, incoming.personalWebsite) || undefined,
     context: mergedContext,
     source: pickSource(),
     exchangeId: existing.exchangeId || incoming.exchangeId,

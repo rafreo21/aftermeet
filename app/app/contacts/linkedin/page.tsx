@@ -13,6 +13,7 @@ import { TextAreaField, TextField } from "../../../components/FormField";
 import { type Contact } from "../../../../lib/contacts";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
+import type { CapturedProfile } from "../../../../lib/page-profile-capture";
 import "../../product.css";
 import "../../flow.css";
 
@@ -33,15 +34,29 @@ type LinkedInProfileResponse = {
 const emptyProfileFields = {
   firstName: "",
   lastName: "",
+  email: "",
+  phone: "",
   role: "",
   company: "",
+  companyWebsite: "",
+  personalWebsite: "",
 };
+
+function decodeCaptureParam(raw: string): Partial<CapturedProfile> | null {
+  try {
+    const json = decodeURIComponent(escape(atob(raw.replace(/-/g, "+").replace(/_/g, "/"))));
+    return JSON.parse(json) as Partial<CapturedProfile>;
+  } catch {
+    return null;
+  }
+}
 
 export default function LinkedInImportPage() {
   const [input, setInput] = useState(() => {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("url") ?? "";
   });
+  const [importSource, setImportSource] = useState<Contact["source"]>("linkedin");
   const [form, setForm] = useState({
     ...emptyProfileFields,
     context: "Added from LinkedIn.",
@@ -52,18 +67,48 @@ export default function LinkedInImportPage() {
   const [lookupMessage, setLookupMessage] = useState("");
   const lookupRequestRef = useRef(0);
   const activeHandleRef = useRef("");
+  const extensionImportRef = useRef(false);
 
   const parsed = useMemo(() => parseLinkedInProfileInput(input), [input]);
   const linkedinUrl = parsed ? normalizeLinkedInUrl(parsed.url) : "";
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const capture = params.get("capture");
+    if (!capture) return;
+    const profile = decodeCaptureParam(capture);
+    if (!profile) return;
+
+    extensionImportRef.current = true;
+    setImportSource(params.get("source") === "extension" ? "extension" : "linkedin");
+    if (profile.linkedinUrl || profile.sourceUrl) {
+      setInput(profile.linkedinUrl || profile.sourceUrl || "");
+    }
+    setForm({
+      firstName: profile.firstName?.trim() || "",
+      lastName: profile.lastName?.trim() || "",
+      email: profile.email?.trim() || "",
+      phone: profile.phone?.trim() || "",
+      role: profile.role?.trim() || "",
+      company: profile.company?.trim() || "",
+      companyWebsite: profile.companyWebsite?.trim() || "",
+      personalWebsite: profile.personalWebsite?.trim() || "",
+      context: params.get("source") === "extension"
+        ? "Captured from browser extension."
+        : "Added from LinkedIn.",
+    });
+    setLookupStatus("ready");
+    setLookupMessage("Imported visible page details from your browser. Review before saving.");
+  }, []);
 
   function applyVerifiedProfile(payload: LinkedInProfileResponse) {
     if (payload.source !== "opengraph" || !payload.profile) return;
     setForm((current) => ({
       ...current,
-      firstName: payload.profile?.firstName?.trim() || "",
-      lastName: payload.profile?.lastName?.trim() || "",
-      role: payload.profile?.role?.trim() || "",
-      company: payload.profile?.company?.trim() || "",
+      firstName: payload.profile?.firstName?.trim() || current.firstName,
+      lastName: payload.profile?.lastName?.trim() || current.lastName,
+      role: payload.profile?.role?.trim() || current.role,
+      company: payload.profile?.company?.trim() || current.company,
     }));
   }
 
@@ -97,6 +142,7 @@ export default function LinkedInImportPage() {
   }
 
   useEffect(() => {
+    if (extensionImportRef.current) return;
     if (!parsed?.url || !parsed.handle) {
       activeHandleRef.current = "";
       setLookupStatus("idle");
@@ -110,6 +156,7 @@ export default function LinkedInImportPage() {
       setForm((current) => ({
         ...current,
         ...emptyProfileFields,
+        context: current.context,
       }));
     }
 
@@ -127,6 +174,7 @@ export default function LinkedInImportPage() {
       setError("Paste a LinkedIn profile URL like linkedin.com/in/username.");
       return;
     }
+    extensionImportRef.current = false;
     const requestId = lookupRequestRef.current + 1;
     lookupRequestRef.current = requestId;
     void loadProfileDetails(parsed.url, parsed.handle, requestId);
@@ -144,15 +192,18 @@ export default function LinkedInImportPage() {
     }
 
     const contact: Contact = {
-      id: `linkedin-${parsed.handle}`,
+      id: `${importSource}-${parsed.handle}`,
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      email: "",
+      email: form.email.trim(),
+      phone: form.phone.trim() || undefined,
       linkedinUrl,
       company: form.company.trim(),
       role: form.role.trim(),
+      companyWebsite: form.companyWebsite.trim() || undefined,
+      personalWebsite: form.personalWebsite.trim() || undefined,
       context: form.context.trim(),
-      source: "linkedin",
+      source: importSource,
     };
     resolveAndSaveContact(contact);
     setSavedId(contact.id);
@@ -162,7 +213,7 @@ export default function LinkedInImportPage() {
     <AppShell
       active="contacts"
       title="Add from LinkedIn"
-      subtitle="Paste a profile URL after a badge scan or a quick hallway intro."
+      subtitle="Paste a profile URL or capture from the browser extension."
       actions={
         <LinkButton size="small" variant="ghost" href="/app/contacts">
           <ArrowLeftIcon size={16} />Contacts
@@ -173,7 +224,7 @@ export default function LinkedInImportPage() {
         <header>
           <span className="step-pill">Capture people</span>
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
-          <p>We’ll save the profile link. If LinkedIn exposes verified public details, we’ll fill them in — otherwise add what you remember from the conversation.</p>
+          <p>Use the AfterMeet browser extension on a profile page, or paste a URL here. Review every field before saving.</p>
         </header>
         <TextField
           label="LinkedIn URL"
@@ -201,8 +252,16 @@ export default function LinkedInImportPage() {
           <TextField label="Last name" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Optional" />
         </div>
         <div className="field-row two">
+          <TextField label="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Only if visible on the page" />
+          <TextField label="Phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Only if visible on the page" />
+        </div>
+        <div className="field-row two">
           <TextField label="Role" value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder="e.g. Product designer" />
           <TextField label="Company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} placeholder="e.g. Northstar" />
+        </div>
+        <div className="field-row two">
+          <TextField label="Employer website" value={form.companyWebsite} onChange={(event) => setForm((current) => ({ ...current, companyWebsite: event.target.value }))} placeholder="https://company.com" />
+          <TextField label="Portfolio / personal site" value={form.personalWebsite} onChange={(event) => setForm((current) => ({ ...current, personalWebsite: event.target.value }))} placeholder="https://theirsite.com" />
         </div>
         <TextAreaField
           label="What mattered?"

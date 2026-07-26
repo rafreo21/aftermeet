@@ -4,6 +4,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 
 import { buildHeuristicDraft, type EncounterExtractionDraft } from "./encounter-extraction";
+import { isAiGatewayConfigured, refreshAiGatewayAuth } from "./ai-gateway-auth";
 import { normalizeTranscriptForExtraction } from "./transcript-cleanup";
 
 const extractionSchema = z.object({
@@ -20,11 +21,8 @@ function extractionModel() {
   return process.env.AFTERMEET_EXTRACTION_MODEL?.trim() || "openai/gpt-5.4";
 }
 
-export function isAiExtractionConfigured() {
-  return Boolean(
-    process.env.AI_GATEWAY_API_KEY?.trim()
-    || process.env.VERCEL_OIDC_TOKEN?.trim(),
-  );
+export async function isAiExtractionConfigured() {
+  return isAiGatewayConfigured();
 }
 
 export async function extractEncounterDraft(transcript: string, personName: string): Promise<{
@@ -40,7 +38,7 @@ export async function extractEncounterDraft(transcript: string, personName: stri
     throw new Error("Transcript is too short to extract meeting context.");
   }
 
-  if (!isAiExtractionConfigured()) {
+  if (!(await isAiExtractionConfigured())) {
     return {
       draft: heuristic,
       source: "heuristic",
@@ -48,6 +46,8 @@ export async function extractEncounterDraft(transcript: string, personName: stri
       unavailable: "ai_not_configured",
     };
   }
+
+  await refreshAiGatewayAuth();
 
   try {
     const result = await generateText({

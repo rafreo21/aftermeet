@@ -11,6 +11,8 @@ export type ContactRow = {
   linkedin_url: string;
   company: string;
   role: string;
+  company_website: string;
+  personal_website: string;
   context: string;
   source: ContactSource | null;
   exchange_id: string | null;
@@ -36,6 +38,8 @@ export function contactFromRow(row: ContactRow): Contact {
     linkedinUrl: row.linkedin_url || undefined,
     company: row.company,
     role: row.role,
+    companyWebsite: row.company_website || undefined,
+    personalWebsite: row.personal_website || undefined,
     context: row.context,
     source: row.source ?? undefined,
     exchangeId: row.exchange_id ?? undefined,
@@ -61,6 +65,8 @@ export function contactToRow(
     linkedin_url: contact.linkedinUrl?.trim() ?? "",
     company: contact.company.trim(),
     role: contact.role.trim(),
+    company_website: contact.companyWebsite?.trim() ?? "",
+    personal_website: contact.personalWebsite?.trim() ?? "",
     context: contact.context.trim(),
     source: contact.source ?? null,
     exchange_id: contact.exchangeId ?? null,

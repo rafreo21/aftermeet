@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AfterMeet Capture</title>
+    <style>
+      body { font: 14px/1.4 system-ui, sans-serif; margin: 0; min-width: 280px; color: #102018; }
+      main { padding: 14px; display: grid; gap: 10px; }
+      label { display: grid; gap: 4px; font-size: 12px; color: #476457; }
+      input { border: 1px solid #c8dcc8; border-radius: 10px; padding: 8px 10px; }
+      button { border: 0; border-radius: 999px; padding: 10px 14px; background: #9fe870; color: #102018; font-weight: 700; cursor: pointer; }
+      .status { font-size: 12px; color: #476457; min-height: 18px; }
+      .preview { font-size: 12px; background: #f4f9f1; border-radius: 12px; padding: 10px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <strong>Capture to AfterMeet</strong>
+      <label>
+        AfterMeet URL
+        <input id="base-url" type="url" placeholder="http://localhost:3000" />
+      </label>
+      <div id="preview" class="preview">Open a LinkedIn profile, then capture.</div>
+      <button id="capture" type="button">Capture this page</button>
+      <p id="status" class="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
