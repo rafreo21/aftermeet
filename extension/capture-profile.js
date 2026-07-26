@@ -3,9 +3,22 @@
     return (value ?? "").replace(/\s+/g, " ").trim();
   }
 
-  function splitName(fullName) {
-    const parts = clean(fullName).split(/\s+/).filter(Boolean);
-    return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") };
+  function normalizeProfileName(value) {
+    return clean(value)
+      .replace(/\s*\|\s*LinkedIn\s*$/i, "")
+      .replace(/\s*[-–—]\s*LinkedIn\s*$/i, "")
+      .replace(/\s*·\s*LinkedIn\s*$/i, "");
+  }
+
+  function readProfileFullName() {
+    const h1 = normalizeProfileName(document.querySelector("h1")?.textContent);
+    const ogTitle = normalizeProfileName(readMeta("og:title"));
+    const titleName = normalizeProfileName(document.title);
+    return h1
+      || ogTitle.split(/\s+[-–—]\s+/)[0]
+      || titleName.split(/\s+[-–—]\s+/)[0]
+      || titleName.split("|")[0]
+      || "";
   }
 
   function normalizeUrl(value) {
@@ -238,10 +251,7 @@
   function captureLinkedInProfileBase() {
     const pageText = document.body?.innerText ?? "";
     const linkedinUrl = normalizeUrl(window.location.href.split("?")[0]);
-    const h1 = clean(document.querySelector("h1")?.textContent);
-    const ogTitle = readMeta("og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
-    const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || document.title.split(" - ")[0] || "";
-    const { firstName, lastName } = splitName(fullName);
+    const fullName = readProfileFullName();
 
     const links = extractLinks();
     const contact = parseContactInfoFromText(pageText);
@@ -249,8 +259,7 @@
     const phone = links.phone || contact.phone;
 
     return {
-      firstName,
-      lastName,
+      fullName,
       email,
       phone,
       company: "",
@@ -304,7 +313,9 @@
     };
 
     if (voyager) {
-      ["firstName", "lastName", "email", "phone"].forEach((field) => {
+      const voyagerName = normalizeProfileName(`${clean(voyager.firstName)} ${clean(voyager.lastName)}`.trim());
+      if (voyagerName) merged.fullName = voyagerName;
+      ["email", "phone"].forEach((field) => {
         const value = clean(voyager[field]);
         if (value) merged[field] = value;
       });
@@ -324,10 +335,8 @@
     const sourceUrl = normalizeUrl(window.location.href.split("?")[0]);
     const title = clean(document.title);
     const h1 = clean(document.querySelector("h1")?.textContent);
-    const { firstName, lastName } = splitName(h1 || title.split("|")[0] || title);
     return {
-      firstName,
-      lastName,
+      fullName: normalizeProfileName(h1 || title.split("|")[0] || title),
       email: "",
       phone: "",
       company: "",

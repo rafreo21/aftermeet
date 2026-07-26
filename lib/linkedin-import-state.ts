@@ -1,12 +1,12 @@
 import type { Contact } from "./contacts.ts";
+import { capturedProfileFullName } from "./contacts.ts";
 import type { CapturedProfile } from "./page-profile-capture.ts";
 
 export type LinkedInImportInitialState = {
   input: string;
   importSource: Contact["source"];
   form: {
-    firstName: string;
-    lastName: string;
+    fullName: string;
     email: string;
     phone: string;
     role: string;
@@ -19,8 +19,7 @@ export type LinkedInImportInitialState = {
 };
 
 const emptyProfileFields = {
-  firstName: "",
-  lastName: "",
+  fullName: "",
   email: "",
   phone: "",
   role: "",
@@ -52,8 +51,7 @@ export function buildLinkedInImportInitialState(input: {
       input: profile.linkedinUrl?.trim() || profile.sourceUrl?.trim() || initialUrl,
       importSource: isExtensionImport ? "extension" : "linkedin",
       form: {
-        firstName: profile.firstName?.trim() || "",
-        lastName: profile.lastName?.trim() || "",
+        fullName: capturedProfileFullName(profile),
         email: profile.email?.trim() || "",
         phone: profile.phone?.trim() || "",
         role: profile.role?.trim() || "",

@@ -10,7 +10,7 @@ import { AppShell } from "../../../components/AppShell";
 import { StatusMessage } from "../../../components/AsyncState";
 import { Button, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
-import { type Contact } from "../../../../lib/contacts";
+import { capturedProfileFullName, splitFullName, type Contact } from "../../../../lib/contacts";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
 import type { LinkedInImportInitialState } from "../../../../lib/linkedin-import-state";
@@ -19,6 +19,7 @@ import "../../flow.css";
 
 type LinkedInProfileResponse = {
   profile?: {
+    fullName?: string;
     firstName?: string;
     lastName?: string;
     role?: string;
@@ -32,8 +33,7 @@ type LinkedInProfileResponse = {
 };
 
 const emptyProfileFields = {
-  firstName: "",
-  lastName: "",
+  fullName: "",
   email: "",
   phone: "",
   role: "",
@@ -57,10 +57,10 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
 
   function applyVerifiedProfile(payload: LinkedInProfileResponse) {
     if (payload.source !== "opengraph" || !payload.profile) return;
+    const fullName = capturedProfileFullName(payload.profile);
     setForm((current) => ({
       ...current,
-      firstName: payload.profile?.firstName?.trim() || current.firstName,
-      lastName: payload.profile?.lastName?.trim() || current.lastName,
+      fullName: fullName || current.fullName,
       role: payload.profile?.role?.trim() || current.role,
       company: payload.profile?.company?.trim() || current.company,
     }));
@@ -147,15 +147,16 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       setError("Paste a LinkedIn profile URL like linkedin.com/in/username.");
       return;
     }
-    if (!form.firstName.trim()) {
-      setError("Add at least a first name.");
+    if (!form.fullName.trim()) {
+      setError("Add a full name.");
       return;
     }
 
+    const { firstName, lastName } = splitFullName(form.fullName);
     const contact: Contact = {
       id: `${importSource}-${parsed.handle}`,
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
+      firstName,
+      lastName,
       email: form.email.trim(),
       phone: form.phone.trim() || undefined,
       linkedinUrl,
@@ -185,10 +186,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
           <p>Use the AfterMeet browser extension on a profile page, or paste a URL here. Review every field before saving.</p>
         </header>
-        <div className="field-row two">
-          <TextField label="First name" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="From the conversation" />
-          <TextField label="Last name" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Optional" />
-        </div>
+        <TextField label="Full name" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="From the profile or conversation" />
         <div className="field-row two">
           <TextField label="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Only if visible on the page" />
           <TextField label="Phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Only if visible on the page" />

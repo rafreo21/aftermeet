@@ -61,6 +61,7 @@ test("captureFromLinkedInDocument prefers experience over profile badges", () =>
     },
   });
 
+  assert.equal(profile.fullName, "Raphael Okojie");
   assert.equal(profile.role, "Product Designer");
   assert.equal(profile.company, "Nexleaf Analytics");
   assert.equal(profile.email, "rafreo21@gmail.com");

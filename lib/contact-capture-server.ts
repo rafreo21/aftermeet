@@ -4,6 +4,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 
 import { refreshAiGatewayAuth } from "./ai-gateway-auth";
+import { capturedProfileFullName } from "./contacts.ts";
 import { buildLinkedInCaptureContext } from "./linkedin-page-capture.ts";
 import type { CapturedProfile } from "./page-profile-capture";
 
@@ -23,7 +24,7 @@ function captureModel() {
   return process.env.AFTERMEET_EXTRACTION_MODEL?.trim() || "openai/gpt-5.4";
 }
 
-function shouldKeepOriginalValue(field: keyof CapturedProfile, original: string, enriched: string) {
+function shouldKeepOriginalValue(field: keyof CapturedProfile | "fullName", original: string, enriched: string) {
   if (!enriched.trim()) return true;
   if (!original.trim()) return false;
   if (field === "company" && (enriched.length > 80 || /manage, lead|responsible for|^[•-]/i.test(enriched))) return true;
@@ -35,15 +36,26 @@ function shouldKeepOriginalValue(field: keyof CapturedProfile, original: string,
 function mergeEnrichedProfile(original: CapturedProfile, enriched: z.infer<typeof captureSchema>) {
   const merged: CapturedProfile = {
     ...original,
-    ...enriched,
+    fullName: original.fullName || capturedProfileFullName(original),
+    email: enriched.email,
+    phone: enriched.phone,
+    role: enriched.role,
+    company: enriched.company,
+    companyWebsite: enriched.companyWebsite,
+    personalWebsite: enriched.personalWebsite,
     linkedinUrl: original.linkedinUrl,
     sourceUrl: original.sourceUrl,
     source: original.source,
   };
 
-  (["firstName", "lastName", "email", "phone", "role", "company", "companyWebsite", "personalWebsite"] as const).forEach((field) => {
-    if (shouldKeepOriginalValue(field, original[field], enriched[field])) {
-      merged[field] = original[field];
+  const enrichedName = capturedProfileFullName(enriched);
+  if (enrichedName && !shouldKeepOriginalValue("fullName", merged.fullName, enrichedName)) {
+    merged.fullName = enrichedName;
+  }
+
+  (["email", "phone", "role", "company", "companyWebsite", "personalWebsite"] as const).forEach((field) => {
+    if (shouldKeepOriginalValue(field, original[field] ?? "", enriched[field])) {
+      merged[field] = original[field] ?? "";
     }
   });
 

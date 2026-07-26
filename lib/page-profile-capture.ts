@@ -1,4 +1,4 @@
-import { splitFullName } from "./contacts.ts";
+import { capturedProfileFullName, normalizeLinkedInProfileName } from "./contacts.ts";
 import {
   buildLinkedInCaptureContext,
   headlineFromPageText,
@@ -9,8 +9,9 @@ import {
 } from "./linkedin-page-capture.ts";
 
 export type CapturedProfile = {
-  firstName: string;
-  lastName: string;
+  fullName: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
   company: string;
@@ -113,8 +114,9 @@ export function captureFromLinkedInDocument(documentLike: {
   const titleName = documentLike.title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
   const h1 = clean(documentLike.querySelector("h1")?.textContent);
   const ogTitle = readMetaContent(documentLike, "og:title").replace(/\s*\|\s*LinkedIn\s*$/i, "");
-  const fullName = h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || titleName.split(" - ")[0] || "";
-  const { firstName, lastName } = splitFullName(fullName);
+  const fullName = normalizeLinkedInProfileName(
+    h1 || ogTitle.split(/\s+[-–—]\s+/)[0] || titleName.split(/\s+[-–—]\s+/)[0] || titleName.split("|")[0] || "",
+  );
 
   const experience = parseExperienceFromText(pageText);
   const { role, company } = mergeLinkedInRoleCompany(experience);
@@ -125,8 +127,7 @@ export function captureFromLinkedInDocument(documentLike: {
   const phone = links.phone || contact.phone;
 
   const profile = {
-    firstName,
-    lastName,
+    fullName,
     email,
     phone,
     company,
@@ -150,11 +151,8 @@ export function captureFromGenericDocument(documentLike: {
   const sourceUrl = normalizeUrl(documentLike.location.href);
   const title = clean(documentLike.title);
   const h1 = clean(documentLike.querySelector("h1")?.textContent);
-  const { firstName, lastName } = splitFullName(h1 || title.split("|")[0] || title);
-
   return {
-    firstName,
-    lastName,
+    fullName: normalizeLinkedInProfileName(h1 || title.split("|")[0] || title),
     email: "",
     phone: "",
     company: "",

@@ -12,7 +12,7 @@ function encodePayload(profile) {
 
 function renderPreview(profile) {
   const lines = [
-    [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Unknown name",
+    profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Unknown name",
     [profile.role, profile.company].filter(Boolean).join(" · "),
     profile.email,
     profile.phone,
@@ -63,11 +63,14 @@ async function enrichProfile(baseUrl, profile, pageText) {
     if (!payload?.profile) return { profile, message: "" };
 
     const merged = { ...profile };
-    for (const field of ["firstName", "lastName", "email", "phone", "role", "company", "context"]) {
+    for (const field of ["fullName", "email", "phone", "role", "company", "context"]) {
       const next = payload.profile[field]?.trim?.() ?? "";
       const prev = profile[field]?.trim?.() ?? "";
       if (next) merged[field] = payload.profile[field];
       else if (prev) merged[field] = profile[field];
+    }
+    if (!merged.fullName && (payload.profile.firstName || payload.profile.lastName)) {
+      merged.fullName = [payload.profile.firstName, payload.profile.lastName].filter(Boolean).join(" ");
     }
     merged.linkedinUrl = profile.linkedinUrl || payload.profile.linkedinUrl || "";
     merged.sourceUrl = profile.sourceUrl || payload.profile.sourceUrl || "";

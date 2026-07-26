@@ -71,9 +71,29 @@ export function contactDisplayName(contact: Pick<Contact, "firstName" | "lastNam
   return `${contact.firstName} ${contact.lastName}`.trim();
 }
 
+export function normalizeLinkedInProfileName(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s*\|\s*LinkedIn\s*$/i, "")
+    .replace(/\s*[-–—]\s*LinkedIn\s*$/i, "")
+    .replace(/\s*·\s*LinkedIn\s*$/i, "");
+}
+
 export function splitFullName(fullName: string) {
-  const parts = fullName.trim().split(/\s+/);
+  const normalized = normalizeLinkedInProfileName(fullName);
+  const parts = normalized.split(/\s+/).filter(Boolean);
   return { firstName: parts[0] || "Guest", lastName: parts.slice(1).join(" ") };
+}
+
+export function capturedProfileFullName(profile: {
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+}) {
+  const direct = normalizeLinkedInProfileName(profile.fullName ?? "");
+  if (direct) return direct;
+  return normalizeLinkedInProfileName([profile.firstName, profile.lastName].filter(Boolean).join(" "));
 }
 
 export function contactFromExchange(exchange: {
