@@ -3,36 +3,64 @@
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
-import type { EnrichmentStep } from "../../lib/contact-enrichment";
+import type { EnrichmentProvider, EnrichmentStep } from "../../lib/contact-enrichment";
 
-function stepIcon(status: EnrichmentStep["status"]) {
-  if (status === "found") return <CheckCircleIcon size={18} weight="fill" className="enrichment-step-icon found" />;
-  if (status === "skipped") return <MinusCircleIcon size={18} className="enrichment-step-icon skipped" />;
-  if (status === "miss") return <MinusCircleIcon size={18} className="enrichment-step-icon miss" />;
-  return <CircleIcon size={18} className="enrichment-step-icon pending" />;
-}
+const statusStyles: Record<EnrichmentStep["status"], string> = {
+  found: "text-[#15803d]",
+  miss: "text-[#98a39a]",
+  skipped: "text-[#98a39a]",
+  pending: "text-[#c8dcc8]",
+  running: "text-[#52604b]",
+};
 
-export function EnrichmentWaterfall({ steps }: { steps: EnrichmentStep[] }) {
+export function EnrichmentWaterfall({
+  steps,
+  providers = [],
+}: {
+  steps: EnrichmentStep[];
+  providers?: EnrichmentProvider[];
+}) {
   if (!steps.length) return null;
 
   return (
-    <ol className="enrichment-waterfall" aria-label="Contact lookup progress">
-      {steps.map((step, index) => (
-        <li key={step.id} className={`enrichment-step enrichment-step-${step.status}`}>
-          <span className="enrichment-step-track">
-            {stepIcon(step.status)}
-            {index < steps.length - 1 ? <span className="enrichment-step-line" aria-hidden="true" /> : null}
-          </span>
-          <div className="enrichment-step-body">
-            <strong>{step.label}</strong>
-            {step.status === "found" && step.value ? (
-              <span className="enrichment-step-found">{step.value}</span>
-            ) : step.detail ? (
-              <small>{step.detail}</small>
-            ) : null}
-          </div>
-        </li>
-      ))}
-    </ol>
+    <div className="grid gap-4">
+      {providers.length ? (
+        <p className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[#98a39a]">
+          {providers.length} databases · verified sources only
+        </p>
+      ) : null}
+      <ol className="m-0 grid list-none gap-0 p-0" aria-label="Waterfall enrichment progress">
+        {steps.map((step, index) => (
+          <li key={step.id} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
+            <div className="relative flex justify-center">
+              {step.status === "found" ? (
+                <CheckCircleIcon size={18} weight="fill" className={statusStyles.found} />
+              ) : step.status === "skipped" || step.status === "miss" ? (
+                <MinusCircleIcon size={18} className={statusStyles[step.status]} />
+              ) : (
+                <CircleIcon size={18} className={statusStyles[step.status]} />
+              )}
+              {index < steps.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-[22px] bottom-0 w-px bg-[#c8dcc8]"
+                />
+              ) : null}
+            </div>
+            <div className="pb-4">
+              <p className="m-0 text-sm font-semibold text-[#163300]">{step.label}</p>
+              {step.status === "found" && step.value ? (
+                <p className="mt-1 mb-0 text-sm font-semibold text-[#15803d]">{step.value}</p>
+              ) : null}
+              {step.detail ? (
+                <p className={`mt-1 mb-0 text-xs leading-5 ${step.status === "running" ? "text-[#52604b]" : "text-[#60675d]"}`}>
+                  {step.detail}
+                </p>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

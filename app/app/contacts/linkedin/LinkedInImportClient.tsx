@@ -19,6 +19,7 @@ import { TextAreaField } from "../../../components/FormField";
 import { capturedProfileFullName, splitFullName, type Contact } from "../../../../lib/contacts";
 import { sanitizePhoneNumber } from "../../../../lib/contact-fields";
 import type { EnrichmentField, EnrichmentResult, EnrichmentStep } from "../../../../lib/contact-enrichment";
+import { isFillableEnrichmentResult } from "../../../../lib/contact-enrichment";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
 import type { LinkedInImportInitialState } from "../../../../lib/linkedin-import-state";
@@ -52,12 +53,12 @@ const emptyProfileFields = {
 };
 
 function initialFieldSources(initial: LinkedInImportInitialState): FieldSources {
-  const linkedInSource = initial.isExtensionImport ? "Extension" : initial.form.fullName ? "LinkedIn" : "";
+  const linkedInSource = initial.isExtensionImport ? "LinkedIn" : initial.form.fullName ? "LinkedIn" : "";
   return {
     fullName: initial.form.fullName ? linkedInSource || "LinkedIn" : "",
     workEmail: initial.form.workEmail ? linkedInSource || "LinkedIn" : "",
-    personalEmail: initial.form.personalEmail ? linkedInSource || "LinkedIn" : "",
-    phone: initial.form.phone ? linkedInSource || "LinkedIn" : "",
+    personalEmail: initial.form.personalEmail ? "LinkedIn Contact info" : "",
+    phone: initial.form.phone ? "LinkedIn Contact info" : "",
     role: initial.form.role ? linkedInSource || "LinkedIn" : "",
     company: initial.form.company ? linkedInSource || "LinkedIn" : "",
     linkedinUrl: initial.input ? "LinkedIn" : "",
@@ -245,7 +246,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       }
 
       const result = await animateEnrichmentResult(payload, setEnrichmentSteps);
-      if (result.value) {
+      if (isFillableEnrichmentResult(result)) {
         if (field === "email") {
           setForm((current) => ({ ...current, workEmail: result.value }));
           setFieldSources((current) => ({
@@ -260,7 +261,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           }));
         }
       } else {
-        setEnrichError(`No ${field === "email" ? "work email" : "phone"} found across the sources we checked.`);
+        setEnrichError(`No verified ${field === "email" ? "work email" : "phone"} found across our databases.`);
       }
     } catch {
       setEnrichError("Could not reach enrichment services.");
@@ -311,7 +312,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       key: "workEmail" as const,
       label: "Work email",
       value: form.workEmail,
-      placeholder: "Work address from enrichment",
+      placeholder: "Run waterfall enrichment to find verified work email",
       source: fieldSources.workEmail,
       enrichable: "email" as const,
     },
@@ -364,11 +365,11 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
         </LinkButton>
       }
     >
-      <form className="contact-form-card contact-form-wide" onSubmit={save}>
+      <form className="contact-form-card max-w-3xl mx-auto grid gap-6" onSubmit={save}>
         <header>
           <span className="step-pill">Capture people</span>
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
-          <p>Review each field in the table below. Personal email and phone usually come from LinkedIn Contact info. Use Find work email for company-domain guesses.</p>
+          <p>Review each field below. Personal email and phone come from LinkedIn Contact info. Use Find work email to run our verified database waterfall — we never fill guessed addresses.</p>
         </header>
 
         <ProfileCaptureTable
@@ -406,7 +407,14 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           placeholder="Optional notes from the conversation."
         />
         {savedId ? (
-          <StatusMessage tone="success">Saved to your contacts.</StatusMessage>
+          <>
+            <StatusMessage tone="success">Saved to your contacts.</StatusMessage>
+            <div className="form-actions align-start">
+              <LinkButton variant="secondary" href="/app/contacts/linkedin">
+                <LinkedinLogoIcon size={16} weight="bold" />Capture another profile
+              </LinkButton>
+            </div>
+          </>
         ) : null}
         <div className="form-actions">
           <LinkButton variant="ghost" href="/app/contacts">Cancel</LinkButton>

@@ -2,8 +2,14 @@ import { splitFullName } from "./contacts.ts";
 import { sanitizePhoneNumber } from "./contact-fields.ts";
 
 export type EnrichmentField = "email" | "phone";
-export type EnrichmentConfidence = "verified" | "likely" | "guess" | "none";
+export type EnrichmentConfidence = "verified" | "likely" | "none";
 export type EnrichmentStepStatus = "pending" | "running" | "found" | "miss" | "skipped";
+
+export type EnrichmentProvider = {
+  id: string;
+  label: string;
+  description: string;
+};
 
 export type EnrichmentStep = {
   id: string;
@@ -31,6 +37,22 @@ export type EnrichmentResult = {
   provider: string;
   steps: EnrichmentStep[];
 };
+
+/** Surfe-style provider order — verified sources only, no pattern guessing. */
+export const WORK_EMAIL_PROVIDERS: EnrichmentProvider[] = [
+  { id: "linkedin", label: "LinkedIn", description: "Work email visible on profile or Contact info" },
+  { id: "hunter", label: "Hunter.io", description: "Verified work email lookup" },
+  { id: "findymail", label: "Findymail", description: "B2B email database" },
+  { id: "rocketreach", label: "RocketReach", description: "Professional contact database" },
+  { id: "apollo", label: "Apollo.io", description: "Sales intelligence database" },
+];
+
+export const PHONE_PROVIDERS: EnrichmentProvider[] = [
+  { id: "linkedin", label: "LinkedIn", description: "Phone visible on profile or Contact info" },
+  { id: "prospeo", label: "Prospeo", description: "Mobile number lookup" },
+  { id: "upcell", label: "Upcell", description: "Direct dial database" },
+  { id: "contactout", label: "ContactOut", description: "Phone enrichment database" },
+];
 
 function clean(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -69,74 +91,37 @@ export function guessWorkEmail(fullName: string, company: string) {
   return `${localParts[0]}@${domain}`;
 }
 
-function normalizePhone(value: string) {
-  const digits = value.replace(/[^\d+]/g, "");
-  return digits.startsWith("+") ? digits : digits.replace(/^00/, "+");
-}
-
-function linkedInStep(
-  field: EnrichmentField,
-  seedEmail: string,
-  seedWorkEmail: string,
-  seedPersonalEmail: string,
-  seedPhone: string,
-): EnrichmentStep {
-  const value = field === "email"
-    ? clean(seedWorkEmail).toLowerCase() || clean(seedPersonalEmail).toLowerCase() || clean(seedEmail).toLowerCase()
-    : sanitizePhoneNumber(seedPhone);
+function linkedInWorkEmailStep(seedWorkEmail: string): EnrichmentStep {
+  const value = clean(seedWorkEmail).toLowerCase();
   return {
     id: "linkedin",
     label: "LinkedIn",
     status: value ? "found" : "miss",
     value: value || undefined,
-    detail: value ? "Visible on profile or Contact info" : "Nothing visible for your account",
+    detail: value
+      ? "Work email visible on LinkedIn"
+      : "No work email visible for your account on LinkedIn",
   };
 }
 
-function patternStep(field: EnrichmentField, fullName: string, company: string): EnrichmentStep {
-  if (field !== "email") {
-    return {
-      id: "pattern",
-      label: "Work email pattern",
-      status: "skipped",
-      detail: "Pattern guessing only applies to email",
-    };
-  }
-
-  const value = guessWorkEmail(fullName, company);
-  if (!value) {
-    return {
-      id: "pattern",
-      label: "Work email pattern",
-      status: "miss",
-      detail: "Need a company name to guess a domain",
-    };
-  }
-
+function linkedInPhoneStep(seedPhone: string): EnrichmentStep {
+  const value = sanitizePhoneNumber(seedPhone);
   return {
-    id: "pattern",
-    label: "Work email pattern",
-    status: "found",
-    value,
-    detail: `Likely format for ${guessCompanyDomain(company)}`,
+    id: "linkedin",
+    label: "LinkedIn",
+    status: value ? "found" : "miss",
+    value: value || undefined,
+    detail: value
+      ? "Phone visible on LinkedIn Contact info"
+      : "No phone visible for your account on LinkedIn",
   };
 }
 
 async function hunterStep(
-  field: EnrichmentField,
   fullName: string,
   company: string,
   apiKey: string | undefined,
 ): Promise<EnrichmentStep> {
-  if (field !== "email") {
-    return {
-      id: "hunter",
-      label: "Hunter.io",
-      status: "skipped",
-      detail: "Phone lookup providers coming next",
-    };
-  }
-
   if (!apiKey) {
     return {
       id: "hunter",
@@ -193,7 +178,7 @@ async function hunterStep(
       label: "Hunter.io",
       status: "found",
       value: email,
-      detail: score ? `Confidence score ${score}` : "Verified work email",
+      detail: score ? `Verified · confidence ${score}` : "Verified work email",
     };
   } catch {
     return {
@@ -205,38 +190,57 @@ async function hunterStep(
   }
 }
 
-function placeholderProviders(field: EnrichmentField): EnrichmentStep[] {
-  if (field === "email") {
-    return [
-      { id: "findymail", label: "Findymail", status: "skipped", detail: "Coming soon" },
-      { id: "rocketreach", label: "RocketReach", status: "skipped", detail: "Coming soon" },
-    ];
-  }
-
-  return [
-    { id: "prospeo", label: "Prospeo", status: "skipped", detail: "Coming soon" },
-    { id: "upcell", label: "Upcell", status: "skipped", detail: "Coming soon" },
-    { id: "contactout", label: "ContactOut", status: "skipped", detail: "Coming soon" },
-  ];
+function skippedBecauseFound(provider: EnrichmentProvider): EnrichmentStep {
+  return {
+    id: provider.id,
+    label: provider.label,
+    status: "skipped",
+    detail: "Skipped — verified match already found",
+  };
 }
 
-function pickResult(field: EnrichmentField, steps: EnrichmentStep[]): Pick<EnrichmentResult, "value" | "confidence" | "provider"> {
-  const priority = field === "email"
-    ? ["hunter", "linkedin", "pattern"]
-    : ["linkedin"];
+function placeholderStep(provider: EnrichmentProvider): EnrichmentStep {
+  return {
+    id: provider.id,
+    label: provider.label,
+    status: "skipped",
+    detail: `${provider.description} · coming soon`,
+  };
+}
 
-  for (const id of priority) {
-    const step = steps.find((candidate) => candidate.id === id && candidate.status === "found" && candidate.value);
-    if (!step?.value) continue;
-    const confidence: EnrichmentConfidence = step.id === "hunter"
-      ? "verified"
-      : step.id === "linkedin"
-        ? "likely"
-        : "guess";
-    return { value: step.value, confidence, provider: step.id };
+function stepConfidence(step: EnrichmentStep): EnrichmentConfidence {
+  if (step.status !== "found" || !step.value) return "none";
+  if (step.id === "hunter") return "verified";
+  if (step.id === "linkedin") return "likely";
+  return "none";
+}
+
+function buildResult(
+  field: EnrichmentField,
+  steps: EnrichmentStep[],
+  winningStep: EnrichmentStep | null,
+): EnrichmentResult {
+  if (!winningStep?.value) {
+    return {
+      field,
+      value: "",
+      confidence: "none",
+      provider: "",
+      steps,
+    };
   }
 
-  return { value: "", confidence: "none", provider: "" };
+  return {
+    field,
+    value: winningStep.value,
+    confidence: stepConfidence(winningStep),
+    provider: winningStep.id,
+    steps,
+  };
+}
+
+export function isFillableEnrichmentResult(result: EnrichmentResult) {
+  return Boolean(result.value) && result.confidence !== "none";
 }
 
 export async function enrichContactField(
@@ -245,37 +249,69 @@ export async function enrichContactField(
 ): Promise<EnrichmentResult> {
   const fullName = clean(input.fullName);
   const company = clean(input.company);
-  const seedEmail = clean(input.seedEmail ?? "");
+  const seedWorkEmail = clean(input.seedWorkEmail ?? "");
   const seedPhone = clean(input.seedPhone ?? "");
 
-  const steps: EnrichmentStep[] = [
-    linkedInStep(
-      input.field,
-      input.seedEmail ?? "",
-      input.seedWorkEmail ?? "",
-      input.seedPersonalEmail ?? "",
-      input.seedPhone ?? "",
-    ),
-    patternStep(input.field, fullName, company),
-    await hunterStep(input.field, fullName, company, options.hunterApiKey),
-    ...placeholderProviders(input.field),
-  ];
+  if (input.field === "email") {
+    const steps: EnrichmentStep[] = [];
+    const providers = WORK_EMAIL_PROVIDERS;
 
-  const picked = pickResult(input.field, steps);
-  return {
-    field: input.field,
-    value: picked.value,
-    confidence: picked.confidence,
-    provider: picked.provider,
-    steps,
-  };
+    const linkedin = linkedInWorkEmailStep(seedWorkEmail);
+    steps.push(linkedin);
+    if (linkedin.status === "found" && linkedin.value) {
+      steps.push(...providers.slice(1).map(skippedBecauseFound));
+      return buildResult("email", steps, linkedin);
+    }
+
+    const hunter = await hunterStep(fullName, company, options.hunterApiKey);
+    steps.push(hunter);
+    if (hunter.status === "found" && hunter.value) {
+      steps.push(...providers.slice(2).map(skippedBecauseFound));
+      return buildResult("email", steps, hunter);
+    }
+
+    for (const provider of providers.slice(2)) {
+      steps.push(placeholderStep(provider));
+    }
+
+    return buildResult("email", steps, null);
+  }
+
+  const steps: EnrichmentStep[] = [];
+  const providers = PHONE_PROVIDERS;
+
+  const linkedin = linkedInPhoneStep(seedPhone);
+  steps.push(linkedin);
+  if (linkedin.status === "found" && linkedin.value) {
+    steps.push(...providers.slice(1).map(skippedBecauseFound));
+    return buildResult("phone", steps, linkedin);
+  }
+
+  for (const provider of providers.slice(1)) {
+    steps.push(placeholderStep(provider));
+  }
+
+  return buildResult("phone", steps, null);
 }
 
 export function enrichmentSourceLabel(provider: string) {
   switch (provider) {
     case "linkedin": return "LinkedIn";
-    case "pattern": return "Pattern guess";
     case "hunter": return "Hunter.io";
+    case "findymail": return "Findymail";
+    case "rocketreach": return "RocketReach";
+    case "apollo": return "Apollo.io";
+    case "prospeo": return "Prospeo";
+    case "upcell": return "Upcell";
+    case "contactout": return "ContactOut";
     default: return provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : "";
+  }
+}
+
+export function enrichmentConfidenceLabel(confidence: EnrichmentConfidence) {
+  switch (confidence) {
+    case "verified": return "Verified";
+    case "likely": return "From LinkedIn";
+    default: return "";
   }
 }

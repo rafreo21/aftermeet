@@ -3,13 +3,9 @@ const preview = document.getElementById("preview");
 const status = document.getElementById("status");
 const captureButton = document.getElementById("capture");
 const openAfterMeetButton = document.getElementById("open-aftermeet");
+const versionLabel = document.getElementById("version");
 
-function encodePayload(profile) {
-  return btoa(unescape(encodeURIComponent(JSON.stringify(profile))))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
+if (versionLabel) versionLabel.textContent = "v0.3.6";
 
 function renderPreview(profile) {
   const lines = [
@@ -29,128 +25,157 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  await chrome.storage.sync.set({ aftermeetBaseUrl: baseUrlInput.value.trim() || "https://aftermeet-beta.vercel.app" });
+  await chrome.storage.sync.set({
+    aftermeetBaseUrl: baseUrlInput.value.trim() || "https://aftermeet-beta.vercel.app",
+  });
 }
 
-async function captureActiveTab(tabId) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, { type: "aftermeet-capture" });
-  } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["phone-utils.js", "linkedin-voyager.js", "capture-profile.js"],
-    });
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: async () => await window.aftermeetCapturePage(),
-    });
-    return result;
-  }
-}
+async function refreshFromStorage() {
+  const { aftermeetLastCapture, aftermeetCaptureStatus } = await chrome.storage.local.get([
+    "aftermeetLastCapture",
+    "aftermeetCaptureStatus",
+  ]);
 
-async function enrichProfile(baseUrl, profile, pageText) {
-  const missingContact = !profile.email?.trim() && !profile.phone?.trim();
-  if (profile.role?.trim() && profile.company?.trim() && !missingContact) {
-    return { profile, message: "Captured profile details from LinkedIn." };
-  }
-
-  try {
-    const response = await fetch(`${baseUrl}/api/contacts/capture`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile, pageText }),
-    });
-    if (!response.ok) return { profile, message: "" };
-    const payload = await response.json();
-    if (!payload?.profile) return { profile, message: "" };
-
-    const merged = { ...profile };
-    for (const field of ["fullName", "email", "phone", "role", "company", "context"]) {
-      const next = payload.profile[field]?.trim?.() ?? "";
-      const prev = profile[field]?.trim?.() ?? "";
-      if (next) merged[field] = payload.profile[field];
-      else if (prev) merged[field] = profile[field];
-    }
-    if (!merged.fullName && (payload.profile.firstName || payload.profile.lastName)) {
-      merged.fullName = [payload.profile.firstName, payload.profile.lastName].filter(Boolean).join(" ");
-    }
-    merged.linkedinUrl = profile.linkedinUrl || payload.profile.linkedinUrl || "";
-    merged.sourceUrl = profile.sourceUrl || payload.profile.sourceUrl || "";
-    merged.source = "extension";
-
-    return {
-      profile: merged,
-      message: typeof payload.message === "string" ? payload.message : "Cleaned captured profile details.",
+  if (aftermeetLastCapture?.profile) {
+    renderPreview(aftermeetLastCapture.profile);
+    openAfterMeetButton.classList.remove("hidden");
+    openAfterMeetButton.onclick = () => {
+      if (aftermeetLastCapture.importUrl) {
+        void chrome.runtime.sendMessage({
+          type: "aftermeet-open-import",
+          importUrl: aftermeetLastCapture.importUrl,
+          active: true,
+        });
+      }
     };
-  } catch {
-    return { profile, message: "" };
+  }
+
+  if (aftermeetCaptureStatus?.state === "running") {
+    const startedAt = aftermeetCaptureStatus.startedAt || 0;
+    const stale = Date.now() - startedAt > 90_000;
+    if (stale) {
+      await chrome.storage.local.set({
+        aftermeetCaptureStatus: {
+          state: "error",
+          message: "Previous capture timed out. You can capture again.",
+          finishedAt: Date.now(),
+        },
+      });
+      status.textContent = "Previous capture timed out. You can capture again.";
+      captureButton.disabled = false;
+      return;
+    }
+    status.textContent = "Capture running on LinkedIn… You can close this popup.";
+    captureButton.disabled = true;
+    return;
+  }
+
+  captureButton.disabled = false;
+
+  if (aftermeetCaptureStatus?.state === "done" && aftermeetCaptureStatus.message) {
+    status.textContent = aftermeetCaptureStatus.message;
+    if (aftermeetCaptureStatus.profile) renderPreview(aftermeetCaptureStatus.profile);
+    return;
+  }
+
+  if (aftermeetCaptureStatus?.state === "error" && aftermeetCaptureStatus.message) {
+    status.textContent = aftermeetCaptureStatus.message;
   }
 }
 
-function buildImportUrl(baseUrl, profile) {
-  const target = new URL("/app/contacts/linkedin", baseUrl);
-  if (profile.linkedinUrl || profile.sourceUrl) {
-    target.searchParams.set("url", profile.linkedinUrl || profile.sourceUrl);
+async function injectCaptureScripts(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["phone-utils.js", "linkedin-voyager.js", "capture-profile.js"],
+  });
+}
+
+async function startCapture(tabId, baseUrl) {
+  await chrome.storage.local.set({
+    aftermeetCaptureStatus: {
+      state: "running",
+      startedAt: Date.now(),
+    },
+  });
+
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "aftermeet-capture-and-finish", baseUrl });
+    return;
+  } catch {
+    await injectCaptureScripts(tabId);
   }
-  target.searchParams.set("capture", encodePayload(profile));
-  target.searchParams.set("source", "extension");
-  return target.toString();
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: async (aftermeetBaseUrl) => {
+      const payload = await window.aftermeetCapturePage();
+      return chrome.runtime.sendMessage({
+        type: "aftermeet-finish-import",
+        baseUrl: aftermeetBaseUrl,
+        payload,
+      });
+    },
+    args: [baseUrl],
+  });
 }
 
 captureButton.addEventListener("click", async () => {
   openAfterMeetButton.classList.add("hidden");
-  status.textContent = "Reading Contact info on this profile…";
+  captureButton.disabled = true;
+  status.textContent = "Reading Contact info on this profile… Stay on the LinkedIn tab.";
   await saveSettings();
+
   const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, "") || "https://aftermeet-beta.vercel.app";
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
     status.textContent = "No active tab found.";
+    captureButton.disabled = false;
     return;
   }
 
-  let payload;
+  if (!/linkedin\.com\/in\//i.test(tab.url || "")) {
+    status.textContent = "Open a LinkedIn profile page first, then capture.";
+    captureButton.disabled = false;
+    return;
+  }
+
   try {
-    payload = await captureActiveTab(tab.id);
+    void startCapture(tab.id, baseUrl);
+    status.textContent = "Capture running… AfterMeet will open in a background tab when done.";
+    captureButton.disabled = true;
   } catch {
-    status.textContent = "Could not read this page.";
-    return;
+    status.textContent = "Could not start capture on this tab. Remove and re-add the extension, then try again.";
+    captureButton.disabled = false;
   }
+});
 
-  const profile = payload?.profile;
-  if (!profile) {
-    status.textContent = "Could not read this page.";
-    return;
-  }
+const resetButton = document.getElementById("reset");
 
-  renderPreview(profile);
-  status.textContent = "Finishing capture…";
-
-  const enriched = await enrichProfile(baseUrl, profile, payload.pageText ?? "");
-  renderPreview(enriched.profile);
-
-  const importUrl = buildImportUrl(baseUrl, enriched.profile);
+async function resetCaptureState() {
   await chrome.storage.local.set({
-    aftermeetLastCapture: {
-      importUrl,
-      profile: enriched.profile,
-      capturedAt: Date.now(),
+    aftermeetCaptureStatus: {
+      state: "idle",
+      message: "Ready to capture another profile.",
+      finishedAt: Date.now(),
     },
   });
+  status.textContent = "Ready to capture another profile on LinkedIn.";
+  captureButton.disabled = false;
+}
 
-  openAfterMeetButton.classList.remove("hidden");
-  openAfterMeetButton.onclick = () => {
-    void chrome.tabs.create({ url: importUrl, active: true });
-  };
+if (resetButton) {
+  resetButton.addEventListener("click", () => {
+    void resetCaptureState();
+  });
+}
 
-  const parts = [];
-  if (enriched.profile.workEmail || enriched.profile.personalEmail || enriched.profile.email) parts.push("email");
-  if (enriched.profile.phone) parts.push("phone");
-  const contactNote = parts.length
-    ? `Captured ${parts.join(" and ")} from LinkedIn.`
-    : "No email or phone visible in Contact info for you on LinkedIn.";
-  status.textContent = `${contactNote} You stayed on LinkedIn — open AfterMeet only when you're ready.`;
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.aftermeetCaptureStatus || changes.aftermeetLastCapture) {
+    void refreshFromStorage();
+  }
 });
 
 baseUrlInput.addEventListener("change", saveSettings);
 void loadSettings();
+void refreshFromStorage();

@@ -4,12 +4,16 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { PhoneIcon } from "@phosphor-icons/react/dist/csr/Phone";
 import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
 import { Button } from "./Button";
+import { TextField } from "./FormField";
 import { EnrichmentWaterfall } from "./EnrichmentWaterfall";
 import {
+  enrichmentConfidenceLabel,
   enrichmentSourceLabel,
   type EnrichmentField,
   type EnrichmentResult,
   type EnrichmentStep,
+  WORK_EMAIL_PROVIDERS,
+  PHONE_PROVIDERS,
 } from "../../lib/contact-enrichment";
 
 export type ProfileFieldKey =
@@ -40,11 +44,6 @@ type ProfileCaptureTableProps = {
   error?: string;
 };
 
-function sourceBadge(source?: string) {
-  if (!source) return <span className="capture-source capture-source-empty">—</span>;
-  return <span className="capture-source">{source}</span>;
-}
-
 export function ProfileCaptureTable({
   rows,
   onChange,
@@ -54,67 +53,65 @@ export function ProfileCaptureTable({
   error,
 }: ProfileCaptureTableProps) {
   return (
-    <div className="capture-table-wrap">
-      <table className="capture-table">
-        <thead>
-          <tr>
-            <th scope="col">Field</th>
-            <th scope="col">Value</th>
-            <th scope="col">Source</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <th scope="row">{row.label}</th>
-              <td>
-                <input
-                  className="capture-table-input"
-                  value={row.value}
-                  readOnly={row.readOnly}
-                  placeholder={row.placeholder}
-                  onChange={(event) => onChange(row.key, event.target.value)}
-                />
-              </td>
-              <td>{sourceBadge(row.source)}</td>
-              <td className="capture-table-action">
-                {row.enrichable && onEnrich ? (
-                  <Button
-                    type="button"
-                    size="small"
-                    variant="secondary"
-                    loading={enrichingField === row.enrichable}
-                    disabled={Boolean(enrichingField && enrichingField !== row.enrichable)}
-                    onClick={() => void onEnrich(row.enrichable!)}
-                  >
-                    {row.enrichable === "email" ? (
-                      <><EnvelopeSimpleIcon size={15} weight="bold" />Find work email</>
-                    ) : (
-                      <><PhoneIcon size={15} weight="bold" />Find phone</>
-                    )}
-                  </Button>
+    <div className="grid gap-5">
+      {rows.map((row) => (
+        <div key={row.key} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-4">
+          <TextField
+            label={row.label}
+            value={row.value}
+            readOnly={row.readOnly}
+            placeholder={row.placeholder}
+            hint={row.source ? row.source : undefined}
+            onChange={(event) => onChange(row.key, event.target.value)}
+          />
+          {row.enrichable && onEnrich ? (
+            <div className="flex lg:justify-end">
+              <Button
+                type="button"
+                size="small"
+                variant="secondary"
+                fullWidth
+                className="lg:w-auto"
+                loading={enrichingField === row.enrichable}
+                disabled={Boolean(enrichingField && enrichingField !== row.enrichable)}
+                onClick={() => void onEnrich(row.enrichable!)}
+              >
+                {row.enrichable === "email" ? (
+                  <><EnvelopeSimpleIcon size={15} weight="bold" />Find work email</>
                 ) : (
-                  <span className="capture-source capture-source-empty">—</span>
+                  <><PhoneIcon size={15} weight="bold" />Find phone</>
                 )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {enrichingField ? (
-        <div className="capture-enrichment-panel">
-          <header>
-            <MagnifyingGlassIcon size={18} weight="bold" />
-            <div>
-              <strong>Searching {enrichingField === "email" ? "email" : "phone"} sources</strong>
-              <p>LinkedIn first, then pattern guess and enrichment providers.</p>
+              </Button>
             </div>
-          </header>
-          <EnrichmentWaterfall steps={enrichmentSteps} />
+          ) : null}
+        </div>
+      ))}
+
+      {enrichingField ? (
+        <div className="rounded-xl bg-[#fbfdf8] p-4 sm:p-5">
+          <div className="mb-4 flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#e2f6d5] text-[#163300]">
+              <MagnifyingGlassIcon size={18} weight="bold" />
+            </span>
+            <div>
+              <p className="m-0 text-sm font-bold text-[#163300]">
+                Waterfall enrichment · {enrichingField === "email" ? "work email" : "phone"}
+              </p>
+              <p className="mt-1 mb-0 text-xs leading-5 text-[#60675d]">
+                Searching verified databases in order. We stop at the first verified match — no pattern guesses.
+              </p>
+            </div>
+          </div>
+          <EnrichmentWaterfall
+            steps={enrichmentSteps}
+            providers={enrichingField === "email" ? WORK_EMAIL_PROVIDERS : PHONE_PROVIDERS}
+          />
         </div>
       ) : null}
-      {error ? <p className="capture-table-error">{error}</p> : null}
+
+      {error ? (
+        <p className="m-0 text-sm font-semibold text-[#b42318]">{error}</p>
+      ) : null}
     </div>
   );
 }
@@ -122,22 +119,22 @@ export function ProfileCaptureTable({
 export async function animateEnrichmentResult(
   result: EnrichmentResult,
   onStep: (steps: EnrichmentResult["steps"]) => void,
-  delayMs = 320,
+  delayMs = 420,
 ) {
   const revealed: EnrichmentResult["steps"] = [];
   for (const step of result.steps) {
-    revealed.push({ ...step, status: step.status === "pending" ? "running" : step.status });
+    revealed.push({ ...step, status: "running", detail: step.detail || "Searching…" });
     onStep([...revealed]);
     await new Promise((resolve) => window.setTimeout(resolve, delayMs));
     revealed[revealed.length - 1] = step;
     onStep([...revealed]);
-    if (step.status === "found" && step.value) break;
   }
-  onStep(result.steps);
   return result;
 }
 
 export function sourceLabelFromEnrichment(result: EnrichmentResult | null) {
   if (!result?.provider) return "";
-  return enrichmentSourceLabel(result.provider);
+  const source = enrichmentSourceLabel(result.provider);
+  const confidence = enrichmentConfidenceLabel(result.confidence);
+  return confidence ? `${source} · ${confidence}` : source;
 }

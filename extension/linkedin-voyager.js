@@ -380,19 +380,24 @@
     mergeContactFields(result, seed);
 
     const referer = `https://www.linkedin.com/in/${encodeURIComponent(id)}/`;
-    const [apiJson, apiNormalized, sdui, graphql, overlay] = await Promise.all([
-      voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`, false, referer),
-      voyagerGet(`/identity/profiles/${encodeURIComponent(id)}/profileContactInfo`, true, referer),
+    const profileIds = [...new Set([seed.urnId, id].filter(Boolean))];
+    const apiCalls = profileIds.flatMap((profileId) => ([
+      voyagerGet(`/identity/profiles/${encodeURIComponent(profileId)}/profileContactInfo`, false, referer),
+      voyagerGet(`/identity/profiles/${encodeURIComponent(profileId)}/profileContactInfo`, true, referer),
+    ]));
+    const responses = await Promise.all([
+      ...apiCalls,
       fetchSduiContactInfo(id, seed.urnId),
       fetchContactInfoGraphql(seed.urnId, id),
       fetchContactInfoOverlayPage(id),
     ]);
 
-    mergeContactFields(result, parseContactInfoResponse(apiJson));
-    mergeContactFields(result, parseContactInfoResponse(apiNormalized));
-    mergeContactFields(result, sdui);
-    mergeContactFields(result, graphql);
-    mergeContactFields(result, overlay);
+    for (let index = 0; index < apiCalls.length; index += 1) {
+      mergeContactFields(result, parseContactInfoResponse(responses[index]));
+    }
+    mergeContactFields(result, responses[apiCalls.length]);
+    mergeContactFields(result, responses[apiCalls.length + 1]);
+    mergeContactFields(result, responses[apiCalls.length + 2]);
 
     if (result.email || result.phone) {
       contactCache = result;
@@ -756,4 +761,6 @@
   };
 
   window.aftermeetLinkedInPublicId = parsePublicId;
+
+  window.aftermeetParseEmbeddedSnapshot = parseEmbeddedSnapshot;
 })();

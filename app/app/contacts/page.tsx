@@ -14,7 +14,8 @@ import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { TextField } from "../../components/FormField";
 import { contactDisplayName, contactFromExchange, readContacts, type Contact } from "../../../lib/contacts";
-import type { EnrichmentField } from "../../../lib/contact-enrichment";
+import type { EnrichmentField, EnrichmentResult } from "../../../lib/contact-enrichment";
+import { isFillableEnrichmentResult } from "../../../lib/contact-enrichment";
 import { resolveAndSaveContact } from "../../../lib/person-links";
 import { hydrateContactsFromServer } from "../../../lib/contacts-sync";
 import "../product.css";
@@ -133,22 +134,25 @@ export default function ContactsPage() {
           company: contact.company,
           linkedinUrl: contact.linkedinUrl,
           field,
+          seedWorkEmail: contact.workEmail,
+          seedPersonalEmail: contact.personalEmail,
           seedEmail: contact.email,
           seedPhone: contact.phone,
         }),
       });
-      const payload = await response.json() as { value?: string; error?: string };
+      const payload = await response.json() as EnrichmentResult & { error?: string };
       if (!response.ok) {
         setImportError(payload.error || `Could not find a ${field}.`);
         return;
       }
-      if (!payload.value) {
-        setImportMessage(`No ${field} found for ${contactDisplayName(contact)}.`);
+      if (!isFillableEnrichmentResult(payload)) {
+        setImportMessage(`No verified ${field} found for ${contactDisplayName(contact)}.`);
         return;
       }
       resolveAndSaveContact({
         ...contact,
         email: field === "email" ? payload.value : contact.email,
+        workEmail: field === "email" ? payload.value : contact.workEmail,
         phone: field === "phone" ? payload.value : contact.phone,
       });
       setContacts(readContacts());
@@ -255,72 +259,79 @@ export default function ContactsPage() {
             <div className="contact-toolbar-actions">{captureButtons}{importButton}<LinkButton href="/app/contacts/new"><PlusIcon size={17} weight="bold" />Add person</LinkButton></div>
           </div>
           {visible.length ? (
-            <div className="contacts-table-wrap">
-              <table className="contacts-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Profile</th>
-                    <th scope="col">Company</th>
-                    <th scope="col">Email</th>
-                    <th scope="col">Mobile</th>
-                    <th scope="col">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((contact) => (
-                    <tr key={contact.id}>
-                      <td>
-                        <div className="contacts-table-profile">
-                          <span className="contact-avatar">{contact.firstName[0]}{contact.lastName[0]}</span>
-                          <div>
-                            <strong>{contact.firstName} {contact.lastName}</strong>
-                            <small>{contact.role || contactSourceLabel(contact.source) || "Contact"}</small>
-                          </div>
+            <ul className="m-0 grid list-none gap-3 p-0">
+              {visible.map((contact) => (
+                <li
+                  key={contact.id}
+                  className="rounded-xl border border-[#d5d9d3] bg-white p-4 shadow-[0_10px_30px_rgba(22,51,0,0.05)] sm:p-5"
+                >
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="contact-avatar shrink-0">{contact.firstName[0]}{contact.lastName[0]}</span>
+                      <div className="min-w-0">
+                        <p className="m-0 truncate text-base font-bold text-[#163300]">
+                          {contact.firstName} {contact.lastName}
+                        </p>
+                        <p className="m-0 truncate text-xs text-[#60675d]">
+                          {contact.role || contactSourceLabel(contact.source) || "Contact"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-center xl:gap-4 xl:flex-1 xl:max-w-3xl">
+                      <div className="min-w-0">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[#98a39a]">Company</p>
+                        <p className="m-0 mt-1 truncate text-sm font-semibold text-[#163300]">{contact.company || "—"}</p>
+                        {contact.source ? (
+                          <p className="m-0 mt-0.5 truncate text-xs text-[#60675d]">{contactSourceLabel(contact.source)}</p>
+                        ) : null}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[#98a39a]">Email</p>
+                        <div className="mt-1">
+                          {contact.email ? (
+                            <p className="m-0 truncate text-sm text-[#163300]">{contact.email}</p>
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              loading={enrichingKey === `${contact.id}:email`}
+                              onClick={() => void enrichContactField(contact, "email")}
+                            >
+                              <EnvelopeSimpleIcon size={15} weight="bold" />Find email
+                            </Button>
+                          )}
                         </div>
-                      </td>
-                      <td className="contacts-table-company">
-                        <strong>{contact.company || "—"}</strong>
-                        {contact.source ? <small>{contactSourceLabel(contact.source)}</small> : null}
-                      </td>
-                      <td>
-                        {contact.email ? (
-                          <span>{contact.email}</span>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="secondary"
-                            loading={enrichingKey === `${contact.id}:email`}
-                            onClick={() => void enrichContactField(contact, "email")}
-                          >
-                            <EnvelopeSimpleIcon size={15} weight="bold" />Find email
-                          </Button>
-                        )}
-                      </td>
-                      <td>
-                        {contact.phone ? (
-                          <span>{contact.phone}</span>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="secondary"
-                            loading={enrichingKey === `${contact.id}:phone`}
-                            onClick={() => void enrichContactField(contact, "phone")}
-                          >
-                            <PhoneIcon size={15} weight="bold" />Find mobile
-                          </Button>
-                        )}
-                      </td>
-                      <td>
-                        <div className="contacts-table-actions">
-                          <LinkButton size="small" variant="secondary" href={`/app/contacts/${contact.id}`}>Open</LinkButton>
-                          <LinkButton size="small" variant="ghost" href="/app/followups">Follow-up</LinkButton>
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[#98a39a]">Mobile</p>
+                        <div className="mt-1">
+                          {contact.phone ? (
+                            <p className="m-0 truncate text-sm text-[#163300]">{contact.phone}</p>
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              loading={enrichingKey === `${contact.id}:phone`}
+                              onClick={() => void enrichContactField(contact, "phone")}
+                            >
+                              <PhoneIcon size={15} weight="bold" />Find mobile
+                            </Button>
+                          )}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                      <LinkButton size="small" variant="secondary" href={`/app/contacts/${contact.id}`}>Open</LinkButton>
+                      <LinkButton size="small" variant="ghost" href="/app/followups">Follow-up</LinkButton>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           ) : (
             <div className="empty-state"><div><h2>No matching people</h2><p>Try a different name or company.</p><Button variant="secondary" onClick={() => setQuery("")}>Clear search</Button></div></div>
           )}

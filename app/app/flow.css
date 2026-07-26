@@ -249,45 +249,6 @@
 .contact-form-card.contact-form-wide { max-width: 980px; }
 .contact-form-card header h1 { margin: 0; font-size: 40px; letter-spacing: -.045em; }
 .contact-form-card header p { color: var(--p-muted); line-height: 1.5; }
-.capture-table-wrap { overflow: auto; border-radius: 12px; background: white; box-shadow: 0 10px 30px rgba(22,51,0,.05); }
-.capture-table { width: 100%; min-width: 760px; border-collapse: collapse; }
-.capture-table th, .capture-table td { padding: 14px 16px; border-bottom: 1px solid var(--p-line); text-align: left; vertical-align: middle; }
-.capture-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--p-muted); background: var(--p-ice); }
-.capture-table tbody th[scope="row"] { width: 150px; font-size: 13px; color: var(--p-navy); white-space: nowrap; }
-.capture-table-input { width: 100%; min-width: 180px; border: 1px solid var(--p-line); border-radius: 8px; padding: 10px 12px; font: inherit; color: var(--p-navy); background: white; }
-.capture-table-input:focus { outline: 2px solid rgba(159,232,112,.55); border-color: var(--p-blue); }
-.capture-table-input:read-only { background: var(--p-ice); color: var(--p-muted); }
-.capture-table-action { width: 140px; white-space: nowrap; }
-.capture-source { display: inline-flex; align-items: center; padding: 5px 8px; border-radius: 999px; background: var(--p-sky); color: var(--p-navy); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.capture-source-empty { background: transparent; color: #9aa39a; }
-.capture-enrichment-panel { padding: 18px 20px 20px; border-top: 1px solid var(--p-line); background: #fbfcf9; }
-.capture-enrichment-panel header { display: flex; align-items: start; gap: 12px; margin-bottom: 14px; }
-.capture-enrichment-panel header strong { display: block; font-size: 14px; }
-.capture-enrichment-panel header p { margin: 4px 0 0; color: var(--p-muted); font-size: 12px; line-height: 1.45; }
-.capture-table-error { margin: 0; padding: 0 16px 16px; color: #b42318; font-size: 12px; font-weight: 700; }
-.enrichment-waterfall { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
-.enrichment-step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; min-height: 42px; }
-.enrichment-step-track { position: relative; display: grid; justify-items: center; min-height: 100%; }
-.enrichment-step-line { position: absolute; top: 22px; bottom: -8px; width: 2px; background: #c8dcc8; }
-.enrichment-step-icon.found { color: #15803d; }
-.enrichment-step-icon.miss, .enrichment-step-icon.skipped { color: #98a39a; }
-.enrichment-step-icon.pending { color: #c8dcc8; }
-.enrichment-step-body { padding-bottom: 10px; }
-.enrichment-step-body strong { display: block; font-size: 13px; }
-.enrichment-step-body small, .enrichment-step-found { display: block; margin-top: 3px; color: var(--p-muted); font-size: 12px; }
-.enrichment-step-found { color: #15803d; font-weight: 700; }
-.contacts-table-wrap { overflow: auto; border-radius: 12px; background: white; box-shadow: 0 10px 30px rgba(22,51,0,.05); }
-.contacts-table { width: 100%; min-width: 980px; border-collapse: collapse; }
-.contacts-table th, .contacts-table td { padding: 14px 16px; border-bottom: 1px solid var(--p-line); text-align: left; vertical-align: middle; }
-.contacts-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--p-muted); background: var(--p-ice); }
-.contacts-table-profile { display: flex; align-items: center; gap: 12px; min-width: 220px; }
-.contacts-table-profile strong { display: block; font-size: 14px; }
-.contacts-table-profile small { color: var(--p-muted); font-size: 11px; }
-.contacts-table-company { min-width: 160px; }
-.contacts-table-company strong { display: block; font-size: 13px; }
-.contacts-table-company small { color: var(--p-muted); font-size: 11px; }
-.contacts-table-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; white-space: nowrap; }
-.contacts-table-empty { color: var(--p-muted); font-size: 12px; font-style: italic; }
 .context-box { padding: 18px; border-radius: 9px; background: var(--p-sky); }
 .context-box h3 { margin: 0 0 5px; }
 .context-box p { margin: 0; color: var(--p-muted); font-size: 13px; line-height: 1.5; }

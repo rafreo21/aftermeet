@@ -23,7 +23,10 @@ Then reload the extension again.
 1. Set your AfterMeet URL in the popup (`http://localhost:3000` for local dev)
 2. Open a LinkedIn profile (`linkedin.com/in/...`)
 3. Click the extension icon → **Capture this page**
-4. Review the imported details in AfterMeet → save to People
+4. Stay on LinkedIn while capture runs (about 10–20 seconds). AfterMeet opens in a **background tab** with the import ready.
+5. Review the imported details in AfterMeet → save to People
+
+Reload the extension at `chrome://extensions` after every update (currently **v0.3.5**). If you still see errors mentioning `capture-utils.js`, click **Remove** on the extension, then **Load unpacked** again on this folder.
 
 ## Notes
 

@@ -17,9 +17,19 @@
   }
 
   function guessCompanyDomain(company) {
-    const stripped = company.replace(/\([^)]*\)/g, " ").replace(/\b(?:inc|llc|ltd|corp|co|company)\.?\b/gi, " ").trim();
-    const slug = stripped.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 48);
-    return slug ? `${slug}.com` : "";
+    const stripped = company.replace(/\([^)]*\)/g, " ").replace(/\b(?:formerly|previously)\b.+/i, "").trim();
+    const lowered = stripped.toLowerCase();
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/.test(lowered)) return lowered;
+
+    const slug = lowered.replace(/[^a-z0-9]+/g, "").slice(0, 48);
+    const words = lowered.split(/\s+/).filter((word) => word.length > 2);
+    const candidates = [
+      slug ? `${slug}.com` : "",
+      words.length >= 2 ? `${words.slice(0, 2).join("")}.com` : "",
+      words[0] ? `${words[0]}.com` : "",
+    ].filter(Boolean);
+
+    return candidates[0] || "";
   }
 
   function isLikelyPersonalEmail(email) {
@@ -30,9 +40,42 @@
     const normalized = clean(email).toLowerCase();
     if (!normalized.includes("@")) return false;
     const domain = emailDomain(normalized);
+    if (domainMatchesCompany(domain, company)) return true;
     const companyDomain = guessCompanyDomain(company);
     if (companyDomain && (domain === companyDomain || domain.endsWith(`.${companyDomain}`))) return true;
     return !isLikelyPersonalEmail(normalized);
+  }
+
+  function domainMatchesCompany(domain, company) {
+    if (!domain || !company) return false;
+    const words = company.replace(/\([^)]*\)/g, " ").split(/\s+/).filter((word) => word.length > 2);
+    const candidates = [
+      guessCompanyDomain(company),
+      words.length >= 2 ? `${words.slice(0, 2).join("").toLowerCase().replace(/[^a-z0-9]/g, "")}.com` : "",
+      ...words.map((word) => `${word.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`),
+    ].filter(Boolean);
+    const stem = domain.replace(/\.[^.]+$/, "");
+    return candidates.some((candidate) => {
+      const candidateStem = candidate.replace(/\.[^.]+$/, "");
+      return domain === candidate || domain.endsWith(`.${candidate}`) || candidateStem.includes(stem) || stem.includes(candidateStem);
+    });
+  }
+
+  function mergeLinkedInContactEmail(target, email, company) {
+    const normalized = clean(email).toLowerCase();
+    if (!normalized) return target;
+
+    const domain = emailDomain(normalized);
+    if (domainMatchesCompany(domain, company) || (isLikelyWorkEmail(normalized, company) && !isLikelyPersonalEmail(normalized))) {
+      if (!target.workEmail) target.workEmail = normalized;
+    } else if (!target.personalEmail) {
+      target.personalEmail = normalized;
+    } else if (!target.workEmail) {
+      target.workEmail = normalized;
+    }
+
+    target.email = target.workEmail || target.personalEmail || normalized;
+    return target;
   }
 
   function mergeCapturedEmail(target, email, company) {
@@ -336,10 +379,14 @@
     return parseContactInfoFromText(text);
   }
 
-  function mergeContactResult(target, source, company = "") {
+  function mergeContactResult(target, source, company = "", fromLinkedIn = false) {
     const email = clean(source.email).toLowerCase();
     const phone = sanitizePhoneNumber(source.phone);
-    if (email) mergeCapturedEmail(target, email, company || target.company || "");
+    const companyHint = company || target.company || "";
+    if (email) {
+      if (fromLinkedIn) mergeLinkedInContactEmail(target, email, companyHint);
+      else mergeCapturedEmail(target, email, companyHint);
+    }
     if (phone) target.phone = phone;
     return target;
   }
@@ -386,7 +433,7 @@
       readCaptured() {
         const result = { email: "", phone: "" };
         for (const text of captured) {
-          mergeContactResult(result, parseContactFromResponseText(text));
+          mergeContactResult(result, parseContactFromResponseText(text), "", true);
         }
         return result;
       },
@@ -418,11 +465,11 @@
 
   function findContactInfoSurfaces(root = document) {
     return [...root.querySelectorAll(
-      '[role="dialog"], .artdeco-modal, .artdeco-offcanvas, aside, section, .pv-contact-info, [class*="contact-info"]',
+      '[role="dialog"], .artdeco-modal, .artdeco-offcanvas, aside, section, .pv-contact-info, .pv-profile-section, [class*="contact-info"], [data-view-name*="contact" i]',
     )]
       .filter((node) => {
         const text = node.innerText || "";
-        return /contact info/i.test(text)
+        return /contact info|email address|phone number/i.test(text)
           || Boolean(node.querySelector('a[href^="mailto:"], a[href^="tel:"]'));
       });
   }
@@ -434,15 +481,41 @@
     return true;
   }
 
+  function profilePath(url) {
+    return normalizeUrl(String(url ?? "").split("?")[0].split("#")[0]);
+  }
+
   async function restoreProfileUrl(originalUrl) {
-    const target = originalUrl.split("?")[0].split("#")[0];
-    const current = window.location.href.split("?")[0].split("#")[0];
-    if (current === target) return;
-    window.history.back();
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      await sleep(200);
-      const next = window.location.href.split("?")[0].split("#")[0];
-      if (next === target) return;
+    const target = profilePath(originalUrl);
+    if (profilePath(window.location.href) === target) return;
+
+    closeContactInfoModal();
+    await sleep(220);
+    if (profilePath(window.location.href) === target) return;
+
+    const onContactOverlay = /contact-info|overlay/i.test(window.location.href);
+    if (onContactOverlay && window.history.length > 1) {
+      window.history.back();
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        await sleep(180);
+        if (profilePath(window.location.href) === target) return;
+      }
+    }
+
+    if (onContactOverlay) {
+      try {
+        window.history.replaceState(window.history.state, "", target);
+      } catch {
+        /* ignore replace failures */
+      }
+    }
+  }
+
+  async function scrollProfileToTop() {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    const container = scrollContainerFor(document.body);
+    if (container && container !== document.documentElement && container !== document.body) {
+      container.scrollTo({ top: 0, behavior: "instant" });
     }
   }
 
@@ -497,13 +570,15 @@
   }
 
   async function captureContactInfoFromModal(requirements = {}) {
+    const companyHint = clean(requirements.company || "");
     const requireEmail = requirements.requireEmail !== false;
-    const requirePhone = requirements.requirePhone !== false;
+    const requirePhone = requirements.requirePhone === true;
+    const emptyContact = { workEmail: "", personalEmail: "", email: "", phone: "", company: companyHint };
     const existing = scanForContactInfo();
-    const emptyContact = { workEmail: "", personalEmail: "", email: "", phone: "", company: "" };
-    if (contactRequirementsMet({ ...emptyContact, ...existing, email: existing.email }, requireEmail, requirePhone)) {
-      const resolved = { ...emptyContact };
-      mergeContactResult(resolved, existing);
+    const resolved = { ...emptyContact };
+    mergeContactResult(resolved, existing, companyHint, true);
+
+    if (contactRequirementsMet(resolved, requireEmail, requirePhone)) {
       return resolved;
     }
 
@@ -511,72 +586,75 @@
     const profileUrl = window.location.href;
     const publicId = window.aftermeetLinkedInPublicId?.(profileUrl) || "";
     const tap = installContactNetworkTap();
+    let openedContactUi = false;
 
     try {
-      let resolved = { workEmail: "", personalEmail: "", email: "", phone: "", company: "" };
-      mergeContactResult(resolved, existing);
+      if (trigger) {
+        scrollNodeIntoView(trigger);
+        await sleep(120);
+        clickElement(trigger);
+        openedContactUi = true;
+        await sleep(400);
+      }
 
       if (publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function") {
-        mergeContactResult(resolved, await window.aftermeetFetchLinkedInContactInfo(publicId).catch(() => ({})), resolved.company);
+        mergeContactResult(
+          resolved,
+          await window.aftermeetFetchLinkedInContactInfo(publicId).catch(() => ({})),
+          companyHint,
+          true,
+        );
       }
 
       if (trigger) {
         const href = trigger.getAttribute("href") || trigger.href || "";
-        mergeContactResult(resolved, await fetchContactInfoFromHref(href), resolved.company);
+        mergeContactResult(resolved, await fetchContactInfoFromHref(href), companyHint, true);
       }
 
-      if (contactRequirementsMet(resolved, requireEmail, requirePhone)) {
-        return resolved;
-      }
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        mergeContactResult(resolved, scanForContactInfo(), companyHint, true);
+        mergeContactResult(resolved, tap.readCaptured(), companyHint, true);
 
-      if (!trigger) return resolved;
+        if (publicId && typeof window.aftermeetFetchLinkedInContactInfo === "function" && attempt % 8 === 7) {
+          mergeContactResult(
+            resolved,
+            await window.aftermeetFetchLinkedInContactInfo(publicId).catch(() => ({})),
+            companyHint,
+            true,
+          );
+        }
 
-      scrollNodeIntoView(trigger);
-      await sleep(120);
-
-      let observerResolved = null;
-      const observer = new MutationObserver(() => {
-        const found = scanForContactInfo();
-        if (found.email || found.phone) observerResolved = found;
-      });
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-      clickElement(trigger);
-
-      for (let attempt = 0; attempt < 36; attempt += 1) {
-        await sleep(250);
-        mergeContactResult(resolved, scanForContactInfo());
-        mergeContactResult(resolved, tap.readCaptured());
-        if (observerResolved) mergeContactResult(resolved, observerResolved);
         if (contactRequirementsMet(resolved, requireEmail, requirePhone)) break;
+        await sleep(200);
       }
 
-      observer.disconnect();
-      closeContactInfoModal();
-      await restoreProfileUrl(profileUrl);
       return resolved;
     } finally {
       tap.restore();
       closeContactInfoModal();
-      await restoreProfileUrl(profileUrl);
+      if (openedContactUi && profilePath(window.location.href) !== profilePath(profileUrl)) {
+        await restoreProfileUrl(profileUrl);
+      }
     }
   }
 
   async function resolveContactDetails(publicId, seed = {}) {
+    const companyHint = clean(seed.company || "");
     const resolved = {
       workEmail: "",
       personalEmail: "",
       email: "",
       phone: sanitizePhoneNumber(seed.phone),
-      company: "",
+      company: companyHint,
     };
-    mergeContactResult(resolved, seed);
+    mergeContactResult(resolved, seed, companyHint, true);
 
     const modal = await captureContactInfoFromModal({
+      company: companyHint,
       requireEmail: !(resolved.workEmail || resolved.personalEmail || resolved.email),
-      requirePhone: !resolved.phone,
+      requirePhone: false,
     });
-    mergeContactResult(resolved, modal, modal.company);
+    mergeContactResult(resolved, modal, companyHint, true);
 
     resolved.email = resolved.workEmail || resolved.personalEmail;
     return resolved;
@@ -632,23 +710,33 @@
     const publicId = window.aftermeetLinkedInPublicId?.(window.location.href) || "";
     const baseProfile = captureLinkedInProfileBase();
 
-    const contact = await resolveContactDetails(publicId, {
-      email: baseProfile.email,
-      phone: baseProfile.phone,
-    });
-
+    let companyHint = "";
+    let roleHint = "";
     let voyager = null;
+
     if (publicId && typeof window.aftermeetFetchLinkedInVoyager === "function") {
       try {
         voyager = await window.aftermeetFetchLinkedInVoyager(publicId);
+        companyHint = sanitizeExperience({ role: voyager?.role, company: voyager?.company }).company;
+        roleHint = sanitizeExperience({ role: voyager?.role, company: voyager?.company }).role;
       } catch {
         voyager = null;
       }
     }
 
-    let { role, company } = voyager
-      ? sanitizeExperience({ role: voyager.role, company: voyager.company })
-      : { role: "", company: "" };
+    if (!companyHint && typeof window.aftermeetParseEmbeddedSnapshot === "function") {
+      const snapshot = window.aftermeetParseEmbeddedSnapshot();
+      companyHint = clean(snapshot?.company || "");
+      roleHint = roleHint || clean(snapshot?.role || "");
+    }
+
+    const contact = await resolveContactDetails(publicId, {
+      email: baseProfile.email,
+      phone: baseProfile.phone,
+      company: companyHint,
+    });
+
+    let { role, company } = { role: roleHint, company: companyHint || contact.company };
 
     if (!hasCompleteExperience({ role, company }) && publicId && typeof window.aftermeetFetchLinkedInExperience === "function") {
       try {
@@ -675,7 +763,11 @@
       email: contact.workEmail || contact.personalEmail || baseProfile.email,
       phone: contact.phone,
     };
-    mergeCapturedEmail(merged, voyager?.email, company);
+
+    if (merged.email && !(merged.workEmail || merged.personalEmail)) {
+      mergeLinkedInContactEmail(merged, merged.email, company);
+    }
+    if (voyager?.email) mergeLinkedInContactEmail(merged, voyager.email, company);
     merged.email = merged.workEmail || merged.personalEmail;
     merged.phone = sanitizePhoneNumber(merged.phone || voyager?.phone);
 
@@ -716,12 +808,22 @@
   }
 
   window.aftermeetCapturePage = async function aftermeetCapturePage() {
-    const profile = /linkedin\.com\/in\//i.test(window.location.href)
-      ? await captureLinkedInProfile()
-      : captureGenericProfile();
-    return {
-      profile,
-      pageText: document.body?.innerText?.slice(0, 8000) ?? "",
-    };
+    try {
+      const profile = /linkedin\.com\/in\//i.test(window.location.href)
+        ? await captureLinkedInProfile()
+        : captureGenericProfile();
+      if (/linkedin\.com\/in\//i.test(window.location.href)) {
+        await scrollProfileToTop();
+      }
+      return {
+        profile,
+        pageText: document.body?.innerText?.slice(0, 8000) ?? "",
+      };
+    } catch (error) {
+      if (/linkedin\.com\/in\//i.test(window.location.href)) {
+        await scrollProfileToTop();
+      }
+      throw error;
+    }
   };
 })();

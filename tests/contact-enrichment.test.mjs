@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   enrichContactField,
+  enrichmentConfidenceLabel,
   guessCompanyDomain,
   guessWorkEmail,
+  isFillableEnrichmentResult,
+  WORK_EMAIL_PROVIDERS,
 } from "../lib/contact-enrichment.ts";
 
 test("guessCompanyDomain strips legal suffixes and parentheses", () => {
@@ -12,44 +15,73 @@ test("guessCompanyDomain strips legal suffixes and parentheses", () => {
   assert.equal(guessCompanyDomain("Nexleaf Analytics, Inc."), "nexleafanalytics.com");
 });
 
-test("guessWorkEmail builds a first.last pattern", () => {
+test("guessWorkEmail builds a first.last pattern for internal use only", () => {
   assert.equal(
     guessWorkEmail("Oluwatosin Kazeem", "Autospend"),
     "oluwatosin.kazeem@autospend.com",
   );
 });
 
-test("enrichContactField prefers LinkedIn seed email over pattern guess", async () => {
+test("work email waterfall uses Surfe provider order", () => {
+  assert.deepEqual(
+    WORK_EMAIL_PROVIDERS.map((provider) => provider.id),
+    ["linkedin", "hunter", "findymail", "rocketreach", "apollo"],
+  );
+});
+
+test("enrichContactField uses LinkedIn work email when visible", async () => {
   const result = await enrichContactField({
-    fullName: "Raphael Okojie",
-    company: "Nexleaf Analytics",
+    fullName: "Victoria Lessor",
+    company: "Inspired Thinking Group",
     field: "email",
-    seedEmail: "rafreo21@gmail.com",
+    seedWorkEmail: "victoria.lessor@inspiredthinking.com",
+    seedPersonalEmail: "victoria@gmail.com",
   });
 
-  assert.equal(result.value, "rafreo21@gmail.com");
+  assert.equal(result.value, "victoria.lessor@inspiredthinking.com");
   assert.equal(result.provider, "linkedin");
-  assert.equal(result.steps[0]?.status, "found");
+  assert.equal(result.confidence, "likely");
+  assert.equal(result.steps[1]?.status, "skipped");
+  assert.equal(result.steps[1]?.detail, "Skipped — verified match already found");
 });
 
-test("enrichContactField falls back to pattern guess when LinkedIn is empty", async () => {
+test("enrichContactField does not use personal email for work email lookup", async () => {
+  const result = await enrichContactField({
+    fullName: "Victoria Lessor",
+    company: "Inspired Thinking Group",
+    field: "email",
+    seedPersonalEmail: "victoria@gmail.com",
+  });
+
+  assert.equal(result.value, "");
+  assert.equal(result.confidence, "none");
+  assert.equal(result.steps[0]?.status, "miss");
+});
+
+test("enrichContactField never returns pattern guesses", async () => {
   const result = await enrichContactField({
     fullName: "Ken Wu",
     company: "Stripe",
     field: "email",
   });
 
-  assert.equal(result.value, "ken.wu@stripe.com");
-  assert.equal(result.provider, "pattern");
+  assert.equal(result.value, "");
+  assert.equal(result.provider, "");
+  assert.ok(!result.steps.some((step) => step.id === "pattern"));
+  assert.equal(result.steps.find((step) => step.id === "hunter")?.status, "skipped");
 });
 
-test("enrichContactField skips Hunter when API key is missing", async () => {
+test("isFillableEnrichmentResult rejects empty results", async () => {
   const result = await enrichContactField({
     fullName: "Ken Wu",
     company: "Stripe",
     field: "email",
   });
 
-  const hunter = result.steps.find((step) => step.id === "hunter");
-  assert.equal(hunter?.status, "skipped");
+  assert.equal(isFillableEnrichmentResult(result), false);
+});
+
+test("enrichmentConfidenceLabel maps verified providers", () => {
+  assert.equal(enrichmentConfidenceLabel("verified"), "Verified");
+  assert.equal(enrichmentConfidenceLabel("likely"), "From LinkedIn");
 });
