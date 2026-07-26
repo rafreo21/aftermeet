@@ -38,8 +38,6 @@ const emptyProfileFields = {
   phone: "",
   role: "",
   company: "",
-  companyWebsite: "",
-  personalWebsite: "",
 };
 
 export function LinkedInImportClient({ initial }: { initial: LinkedInImportInitialState }) {
@@ -159,8 +157,6 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
       linkedinUrl,
       company: form.company.trim(),
       role: form.role.trim(),
-      companyWebsite: form.companyWebsite.trim() || undefined,
-      personalWebsite: form.personalWebsite.trim() || undefined,
       context: form.context.trim(),
       source: importSource,
     };
@@ -185,8 +181,20 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
           <p>Use the AfterMeet browser extension on a profile page, or paste a URL here. Review every field before saving.</p>
         </header>
+        <div className="field-row two">
+          <TextField label="First name" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="From the conversation" />
+          <TextField label="Last name" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Optional" />
+        </div>
+        <div className="field-row two">
+          <TextField label="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Only if visible on the page" />
+          <TextField label="Phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Only if visible on the page" />
+        </div>
+        <div className="field-row two">
+          <TextField label="Role" value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder="e.g. Product designer" />
+          <TextField label="Company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} placeholder="e.g. Northstar" />
+        </div>
         <TextField
-          label="LinkedIn URL"
+          label="LinkedIn profile link"
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="https://www.linkedin.com/in/username"
@@ -205,22 +213,6 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           <Button type="button" variant="secondary" loading={lookupStatus === "loading"} onClick={refreshProfile}>
             <ArrowsClockwiseIcon size={16} weight="bold" />Check LinkedIn again
           </Button>
-        </div>
-        <div className="field-row two">
-          <TextField label="First name" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="From the conversation" />
-          <TextField label="Last name" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Optional" />
-        </div>
-        <div className="field-row two">
-          <TextField label="Email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Only if visible on the page" />
-          <TextField label="Phone" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Only if visible on the page" />
-        </div>
-        <div className="field-row two">
-          <TextField label="Role" value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder="e.g. Product designer" />
-          <TextField label="Company" value={form.company} onChange={(event) => setForm((current) => ({ ...current, company: event.target.value }))} placeholder="e.g. Northstar" />
-        </div>
-        <div className="field-row two">
-          <TextField label="Employer website" value={form.companyWebsite} onChange={(event) => setForm((current) => ({ ...current, companyWebsite: event.target.value }))} placeholder="https://company.com" />
-          <TextField label="Portfolio / personal site" value={form.personalWebsite} onChange={(event) => setForm((current) => ({ ...current, personalWebsite: event.target.value }))} placeholder="https://theirsite.com" />
         </div>
         <TextAreaField
           label="What mattered?"

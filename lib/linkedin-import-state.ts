@@ -11,8 +11,6 @@ export type LinkedInImportInitialState = {
     phone: string;
     role: string;
     company: string;
-    companyWebsite: string;
-    personalWebsite: string;
     context: string;
   };
   lookupStatus: "idle" | "loading" | "ready" | "partial";
@@ -27,8 +25,6 @@ const emptyProfileFields = {
   phone: "",
   role: "",
   company: "",
-  companyWebsite: "",
-  personalWebsite: "",
 };
 
 export function decodeCaptureParam(raw: string): Partial<CapturedProfile> | null {
@@ -62,8 +58,6 @@ export function buildLinkedInImportInitialState(input: {
         phone: profile.phone?.trim() || "",
         role: profile.role?.trim() || "",
         company: profile.company?.trim() || "",
-        companyWebsite: profile.companyWebsite?.trim() || "",
-        personalWebsite: profile.personalWebsite?.trim() || "",
         context: profile.context?.trim()
           || (isExtensionImport ? "Captured from browser extension." : "Added from LinkedIn."),
       },

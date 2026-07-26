@@ -16,8 +16,6 @@ function renderPreview(profile) {
     [profile.role, profile.company].filter(Boolean).join(" · "),
     profile.email,
     profile.phone,
-    profile.personalWebsite,
-    profile.companyWebsite,
     profile.linkedinUrl,
   ].filter(Boolean);
   preview.textContent = lines.length ? lines.join("\n") : "No profile details found on this page.";
