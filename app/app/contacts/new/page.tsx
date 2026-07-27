@@ -7,7 +7,13 @@ import { AppShell } from "../../../components/AppShell";
 import { ActiveCampaignField, defaultCampaignId } from "../../../components/ActiveCampaignField";
 import { Button, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
-import { findContactById, type Contact } from "../../../../lib/contacts";
+import {
+  capturedProfileFullName,
+  contactDisplayName,
+  findContactById,
+  splitFullName,
+  type Contact,
+} from "../../../../lib/contacts";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
 import "../../product.css";
@@ -15,8 +21,7 @@ import "../../flow.css";
 
 export default function NewContactPage() {
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
+    fullName: "",
     email: "",
     phone: "",
     linkedinUrl: "",
@@ -38,8 +43,7 @@ export default function NewContactPage() {
       if (profile) {
         setForm((current) => ({
           ...current,
-          firstName: current.firstName || profile.firstName,
-          lastName: current.lastName || profile.lastName,
+          fullName: current.fullName || capturedProfileFullName(profile),
           linkedinUrl: normalizeLinkedInUrl(profile.url),
         }));
       }
@@ -48,8 +52,7 @@ export default function NewContactPage() {
       const contact = findContactById(contactId);
       if (contact) {
         setForm({
-          firstName: contact.firstName,
-          lastName: contact.lastName,
+          fullName: contactDisplayName(contact),
           email: contact.email,
           phone: contact.phone ?? "",
           linkedinUrl: contact.linkedinUrl ?? "",
@@ -65,12 +68,16 @@ export default function NewContactPage() {
 
   function save(event: React.FormEvent) {
     event.preventDefault();
-    if (!form.firstName.trim()) { setError("Add at least a first name."); return; }
+    if (!form.fullName.trim()) {
+      setError("Enter their full name.");
+      return;
+    }
+    const { firstName, lastName } = splitFullName(form.fullName);
     const profile = form.linkedinUrl ? parseLinkedInProfileInput(form.linkedinUrl) : null;
     const contact: Contact = {
       id: profile ? `linkedin-${profile.handle}` : crypto.randomUUID(),
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
+      firstName,
+      lastName,
       email: form.email.trim(),
       phone: form.phone.trim() || undefined,
       linkedinUrl: form.linkedinUrl.trim() ? normalizeLinkedInUrl(form.linkedinUrl.trim()) : undefined,
@@ -91,7 +98,7 @@ export default function NewContactPage() {
     <AppShell active="contacts" title="New contact" subtitle="Capture who they are, what mattered, and what happens next." actions={<LinkButton size="small" variant="ghost" href="/app/contacts"><ArrowLeftIcon size={16} />Cancel</LinkButton>}>
       <form className="contact-form-card" onSubmit={save}>
         <header><span className="step-pill">Meeting capture</span><h1>Who did you meet?</h1><p>Keep it lightweight. Context and the next action are more valuable than completing every field.</p></header>
-        <div className="field-row two"><TextField label="First name" value={form.firstName} onChange={(e) => update("firstName", e.target.value)} error={error} /><TextField label="Last name" value={form.lastName} onChange={(e) => update("lastName", e.target.value)} /></div>
+        <TextField label="Full name" value={form.fullName} onChange={(e) => update("fullName", e.target.value)} autoComplete="name" error={error} />
         <div className="field-row two"><TextField label="Email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} /><TextField label="Phone" type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} /></div>
         <TextField label="LinkedIn profile" value={form.linkedinUrl} onChange={(e) => update("linkedinUrl", e.target.value)} placeholder="https://www.linkedin.com/in/username" />
         <ActiveCampaignField value={campaignId} onChange={setCampaignId} />

@@ -428,7 +428,7 @@ export default function NewEncounterPage() {
   function continueFromContext() {
     setError("");
     if (!form.personName.trim()) {
-      setError("Start with who you met — add their name.");
+      setError("Enter their full name.");
       personNameRef.current?.focus();
       return;
     }
@@ -637,7 +637,7 @@ export default function NewEncounterPage() {
       return;
     }
     if (!form.personName.trim()) {
-      setError("Add who you met before saving.");
+      setError("Enter their full name before saving.");
       return;
     }
     if (!form.title.trim() && !form.sharedSummary.trim() && !form.privateNotes.trim()) {
@@ -930,17 +930,18 @@ export default function NewEncounterPage() {
             )}
             <TextField
               ref={personNameRef}
-              label="Who did you meet?"
+              label="Full name"
               value={form.personName}
               onChange={(event) => {
                 clearContactLink();
                 update("personName", event.target.value);
               }}
               placeholder="e.g. Sarah Chen"
+              autoComplete="name"
               autoFocus
             />
             <ActiveCampaignField value={campaignId} onChange={setCampaignId} />
-            <TextField label="Meeting title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Coffee after ProductCon" hint="Optional if the person name is enough" />
+            <TextField label="Meeting title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Coffee after ProductCon" hint="Optional if the full name is enough" />
             <TextAreaField label="Private notes" hint="Only you — what they said that matters" rows={4} value={form.privateNotes} onChange={(event) => update("privateNotes", event.target.value)} placeholder="Key points from the other person: their priorities, constraints, commitments, and anything you'd want to remember later." />
             <TextAreaField label="Shared meeting summary" hint="Review before sharing" rows={4} value={form.sharedSummary} onChange={(event) => update("sharedSummary", event.target.value)} placeholder="What you both discussed and agreed — neutral enough to share with them." />
             {form.transcript.trim() && <Button type="button" variant="secondary" loading={draftLoading} onClick={() => void generateMeetingContext()}><MagicWandIcon size={15} weight="bold" />{draftLoading ? "Generating draft…" : "Regenerate draft"}</Button>}

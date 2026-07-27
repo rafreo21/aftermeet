@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   };
 
   if (!payload.contact.firstName.trim()) {
-    return NextResponse.json({ error: "Add at least a first name before syncing." }, { status: 400 });
+    return NextResponse.json({ error: "Add a full name before syncing." }, { status: 400 });
   }
 
   try {

@@ -299,7 +299,7 @@ export default function DiscoveryPage() {
           <h3>Add participant</h3>
           <div className="form-grid">
             <label>Reference ID<input required value={participantDraft.referenceId} onChange={(event) => setParticipantDraft({ ...participantDraft, referenceId: event.target.value })} /></label>
-            <label>First name or pseudonym<input value={participantDraft.name} onChange={(event) => setParticipantDraft({ ...participantDraft, name: event.target.value })} /></label>
+            <label>Full name or pseudonym<input value={participantDraft.name} onChange={(event) => setParticipantDraft({ ...participantDraft, name: event.target.value })} autoComplete="name" /></label>
             <label>Professional category<select value={participantDraft.professionalCategory} onChange={(event) => setParticipantDraft({ ...participantDraft, professionalCategory: event.target.value as ProfessionalCategory })}>
               {["product_design", "marketing_growth", "technology_engineering", "strategy_operations", "small_agency_owner", "other"].map((value) => <option key={value} value={value}>{labelFor(value)}</option>)}
             </select></label>

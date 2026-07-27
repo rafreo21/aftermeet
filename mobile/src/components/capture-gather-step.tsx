@@ -48,7 +48,7 @@ function PersonFields({
       <TextInput
         value={draft.personName}
         onChangeText={(value) => onDraftChange({ personName: value, personAcknowledged: false })}
-        placeholder="Their name"
+        placeholder="Full name"
         placeholderTextColor={colors.muted}
         autoComplete="name"
         style={styles.input}

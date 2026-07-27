@@ -16,8 +16,7 @@ export function PublicExchangeForm({
 }) {
   const [showRole, setShowRole] = useState(false);
   const [showCompany, setShowCompany] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [visitorEmail, setVisitorEmail] = useState("");
   const [visitorPhone, setVisitorPhone] = useState("");
   const [visitorCompany, setVisitorCompany] = useState("");
@@ -29,9 +28,9 @@ export function PublicExchangeForm({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    const visitorName = `${firstName} ${lastName}`.trim();
+    const visitorName = fullName.trim();
     if (visitorName.length < 2) {
-      setError("Enter your name.");
+      setError("Enter your full name.");
       return;
     }
     if (!visitorEmail.trim() || !visitorEmail.includes("@")) {
@@ -82,23 +81,14 @@ export function PublicExchangeForm({
 
   return (
     <form className="public-exchange-form" onSubmit={submit} noValidate>
-      <div className="public-exchange-grid public-exchange-grid-names">
-        <TextField
-          id="exchange-first-name"
-          label="First name"
-          value={firstName}
-          onChange={(event) => setFirstName(event.target.value)}
-          autoComplete="given-name"
-          required
-        />
-        <TextField
-          id="exchange-last-name"
-          label="Last name"
-          value={lastName}
-          onChange={(event) => setLastName(event.target.value)}
-          autoComplete="family-name"
-        />
-      </div>
+      <TextField
+        id="exchange-full-name"
+        label="Full name"
+        value={fullName}
+        onChange={(event) => setFullName(event.target.value)}
+        autoComplete="name"
+        required
+      />
       <TextField
         id="exchange-email"
         label="Email"

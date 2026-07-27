@@ -34,7 +34,7 @@ export function CaptureContextStep({
       <TextInput
         value={draft.personName}
         onChangeText={(value) => onDraftChange({ personName: value })}
-        placeholder="Who did you meet?"
+        placeholder="Full name"
         placeholderTextColor={colors.muted}
         style={styles.input}
       />
