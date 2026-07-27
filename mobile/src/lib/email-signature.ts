@@ -29,27 +29,29 @@ function initialsFor(name: string) {
     .toUpperCase();
 }
 
-function subtitleFor(profile: SignatureProfile) {
-  return [
-    profile.role.trim(),
-    profile.showCompany !== false ? profile.company.trim() : '',
-  ].filter(Boolean).join(' · ');
-}
-
-function contactLines(profile: SignatureProfile) {
-  const lines: string[] = [];
-  if (profile.email?.trim()) lines.push(profile.email.trim());
-  if (profile.phone?.trim()) lines.push(profile.phone.trim());
-  return lines;
+function contactRows(profile: SignatureProfile) {
+  const rows: string[] = [];
+  if (profile.phone?.trim()) {
+    rows.push(
+      '<tr><td style="padding:0 8px 0 0;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#53634D;">&#9742;</td>',
+      `<td style="padding:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#163300;"><a href="tel:${escapeHtml(profile.phone.trim())}" style="color:#163300;text-decoration:none;">${escapeHtml(profile.phone.trim())}</a></td></tr>`,
+    );
+  }
+  if (profile.email?.trim()) {
+    rows.push(
+      '<tr><td style="padding:0 8px 0 0;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#53634D;">&#9993;</td>',
+      `<td style="padding:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#163300;"><a href="mailto:${escapeHtml(profile.email.trim())}" style="color:#163300;text-decoration:none;">${escapeHtml(profile.email.trim())}</a></td></tr>`,
+    );
+  }
+  return rows.join('');
 }
 
 export function buildPlainSignature(profile: SignatureProfile) {
   const lines = [profile.name.trim()];
-  const subtitle = subtitleFor(profile);
-  if (subtitle) lines.push(subtitle);
-
-  contactLines(profile).forEach((line) => lines.push(line));
-
+  if (profile.role.trim()) lines.push(profile.role.trim());
+  if (profile.showCompany !== false && profile.company.trim()) lines.push(profile.company.trim());
+  if (profile.phone?.trim()) lines.push(profile.phone.trim());
+  if (profile.email?.trim()) lines.push(profile.email.trim());
   lines.push('');
   lines.push(`View my card: ${profile.cardUrl.trim()}`);
   lines.push('');
@@ -60,45 +62,40 @@ export function buildPlainSignature(profile: SignatureProfile) {
 
 export function buildHtmlSignature(profile: SignatureProfile) {
   const name = escapeHtml(profile.name.trim());
-  const subtitle = subtitleFor(profile);
-  const accent = escapeHtml(profile.themeColor?.trim() || '#9FE870');
+  const role = escapeHtml(profile.role.trim());
+  const company = profile.showCompany !== false ? escapeHtml(profile.company.trim()) : '';
   const cardUrl = escapeHtml(profile.cardUrl.trim());
   const initials = escapeHtml(initialsFor(profile.name));
-  const contacts = contactLines(profile);
 
   const avatarCell = profile.photoUrl?.trim()
-    ? `<img src="${escapeHtml(profile.photoUrl.trim())}" alt="${name}" width="52" height="52" style="display:block;width:52px;height:52px;border-radius:999px;object-fit:cover;border:2px solid #E9F7DF;" />`
-    : `<div style="width:52px;height:52px;border-radius:999px;background:#163300;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;line-height:52px;text-align:center;">${initials}</div>`;
+    ? `<img src="${escapeHtml(profile.photoUrl.trim())}" alt="${name}" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:10px;object-fit:cover;" />`
+    : `<div style="width:64px;height:64px;border-radius:10px;background:#163300;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:700;line-height:64px;text-align:center;">${initials}</div>`;
 
-  const contactHtml = contacts.length
-    ? `<tr><td colspan="2" style="padding:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#53634D;">${contacts.map((line) => escapeHtml(line)).join('<br />')}</td></tr>`
-    : '';
+  const contactHtml = contactRows(profile);
 
   return [
     '<!-- AfterMeet email signature -->',
-    '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:460px;">',
+    '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;max-width:420px;">',
     '<tr>',
-    `<td width="5" style="width:5px;background:${accent};border-radius:4px;font-size:0;line-height:0;">&nbsp;</td>`,
-    '<td style="padding:0 0 0 16px;">',
-    '<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;">',
-    '<tr>',
-    `<td valign="top" style="padding:0 14px 0 0;">${avatarCell}</td>`,
+    `<td valign="top" style="padding:0 16px 0 0;">${avatarCell}</td>`,
     '<td valign="top">',
-    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:22px;font-weight:700;color:#163300;">${name}</div>`,
-    subtitle
-      ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#53634D;padding-top:2px;">${escapeHtml(subtitle)}</div>`
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:22px;font-weight:700;color:#163300;">${name}</div>`,
+    role
+      ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#53634D;padding-top:2px;">${role}</div>`
       : '',
-    '<div style="padding-top:12px;">',
-    `<a href="${cardUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#163300;color:#FFFFFF;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;padding:10px 16px;border-radius:8px;">View my card</a>`,
+    company
+      ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#53634D;padding-top:2px;">${company}</div>`
+      : '',
+    contactHtml
+      ? `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;margin-top:10px;">${contactHtml}</table>`
+      : '',
+    '<div style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;">',
+    `<a href="${cardUrl}" target="_blank" rel="noopener noreferrer" style="color:#2F5711;text-decoration:none;font-weight:700;">View my card</a>`,
     '</div>',
     '</td>',
     '</tr>',
-    contactHtml,
-    '</table>',
-    '</td>',
-    '</tr>',
     '<tr>',
-    '<td colspan="2" style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#71806B;">',
+    '<td colspan="2" style="padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#71806B;">',
     'Shared with <span style="color:#2F5711;font-weight:700;">AfterMeet</span>',
     '</td>',
     '</tr>',

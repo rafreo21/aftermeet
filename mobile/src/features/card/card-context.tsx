@@ -15,7 +15,8 @@ import {
 import { CARD_THEMES, normalizeThemeColor } from '@/features/card/theme-colors';
 import { defaultCard } from '@/features/card/default-card';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
-import { updateQuickShareWidget } from '@/features/card/widget-sync';
+import { syncCardToolsForCard } from '@/features/card/card-tools-sync';
+import { uploadCardImagesForPublish } from '@/features/card/card-image-upload';
 import { readEnv } from '@/lib/env';
 import { mobileFetch } from '@/lib/mobile-api';
 import { getSupabase } from '@/lib/supabase';
@@ -42,7 +43,7 @@ type CardValue = {
   removeMethod: (id: string) => Promise<void>;
   sync: () => Promise<void>;
   publish: () => Promise<boolean>;
-  publishCard: (id?: string) => Promise<boolean>;
+  publishCard: (id?: string, cardOverride?: MobileCard) => Promise<boolean>;
   deleteCard: (id: string) => Promise<boolean>;
 };
 
@@ -118,20 +119,36 @@ export function CardProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(normalized));
     await AsyncStorage.setItem(ACTIVE_CARD_KEY, resolvedActiveId);
     const active = normalized.find((item) => item.id === resolvedActiveId) || normalized[0];
-    if (active) await updateQuickShareWidget(active);
-  }, []);
+    if (active) await syncCardToolsForCard(active, undefined, session?.access_token);
+  }, [session?.access_token]);
 
-  const saveRemoteCard = useCallback(async (card: MobileCard) => {
-    if (!session?.access_token) return;
+  const saveRemoteCard = useCallback(async (card: MobileCard, options?: { strictImages?: boolean }) => {
+    if (!session?.access_token) return card;
+    let payload = card;
+    if (card.id) {
+      try {
+        const uploaded = await uploadCardImagesForPublish(session.access_token, card.id, {
+          photo: card.photo || '',
+          coverPhoto: card.coverPhoto || '',
+          companyLogo: card.showCompanyDetails !== false ? (card.companyLogo || '') : '',
+        });
+        payload = { ...card, ...uploaded };
+      } catch (error) {
+        if (options?.strictImages) {
+          throw error instanceof Error ? error : new Error('Could not upload card images.');
+        }
+      }
+    }
     const response = await mobileFetch('/api/cards', session.access_token, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mobileCardToLibraryPayload(card)),
+      body: JSON.stringify(mobileCardToLibraryPayload(payload)),
     });
     if (!response.ok) {
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      throw new Error(payload?.error || 'We couldn’t save this card.');
+      const responsePayload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(responsePayload?.error || 'We couldn’t save this card.');
     }
+    return payload;
   }, [session?.access_token]);
 
   const sync = useCallback(async () => {
@@ -200,38 +217,67 @@ export function CardProvider({ children }: PropsWithChildren) {
     await persistCards(nextCards);
     if (session?.access_token) {
       try {
-        await saveRemoteCard(nextCard);
+        const saved = await saveRemoteCard(nextCard);
+        if (saved) {
+          const merged = { ...nextCard, photo: saved.photo, coverPhoto: saved.coverPhoto, companyLogo: saved.companyLogo };
+          if (merged.photo !== nextCard.photo || merged.coverPhoto !== nextCard.coverPhoto || merged.companyLogo !== nextCard.companyLogo) {
+            const syncedCards = cardsRef.current.map((item) => (item.id === id ? merged : item));
+            await persistCards(syncedCards);
+          }
+        }
       } catch {
         // Local edits remain available offline.
+      }
+      if (nextCard.status === 'published') {
+        const synced = cardsRef.current.find((item) => item.id === id) || nextCard;
+        await syncCardToolsForCard(synced, undefined, session.access_token);
       }
     }
   }, [persistCards, saveRemoteCard, session?.access_token]);
 
-  const publishCard = useCallback(async (id = activeCardId) => {
+  const publishCard = useCallback(async (id = activeCardId, cardOverride?: MobileCard) => {
     const supabase = getSupabase();
-    const target = cards.find((item) => item.id === id) || activeCard;
+    const target = cardOverride
+      ?? cardsRef.current.find((item) => item.id === id)
+      ?? cardsRef.current.find((item) => item.id === activeCardIdRef.current)
+      ?? activeCard;
     if (!supabase || !session) {
       setPublishError('Sign in to publish this card.');
+      return false;
+    }
+    if (!target.id) {
+      setPublishError('Save this card before publishing.');
       return false;
     }
     setPublishing(true);
     setPublishError('');
     try {
+      let publishTarget = target;
+      if (session.access_token) {
+        publishTarget = await saveRemoteCard(target, { strictImages: true }) || target;
+      }
+
       const { data, error } = await supabase.rpc('publish_my_card', {
-        p_slug: target.slug,
-        p_full_name: target.name,
-        p_job_title: target.role,
-        p_company: target.company,
-        p_bio: target.bio,
-        p_theme_color: normalizeThemeColor(target.theme),
-        p_profile_image_url: target.photo,
-        p_company_logo_url: target.showCompanyDetails !== false ? target.companyLogo : '',
-        p_cover_image_url: target.coverPhoto,
-        p_show_company_details: target.showCompanyDetails !== false,
-        p_methods: target.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
+        p_slug: publishTarget.slug,
+        p_full_name: publishTarget.name,
+        p_job_title: publishTarget.role,
+        p_company: publishTarget.company,
+        p_bio: publishTarget.bio,
+        p_theme_color: normalizeThemeColor(publishTarget.theme),
+        p_profile_image_url: publishTarget.photo || '',
+        p_company_logo_url: publishTarget.showCompanyDetails !== false ? (publishTarget.companyLogo || '') : '',
+        p_cover_image_url: publishTarget.coverPhoto || '',
+        p_show_company_details: publishTarget.showCompanyDetails !== false,
+        p_methods: publishTarget.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
       });
       if (error) throw error;
-      await updateCardById(target.id!, { id: String(data), status: 'published' });
+      await updateCardById(target.id, {
+        id: String(data),
+        status: 'published',
+        photo: publishTarget.photo,
+        coverPhoto: publishTarget.coverPhoto,
+        companyLogo: publishTarget.companyLogo,
+      });
       return true;
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : 'Card publishing failed.');
@@ -239,7 +285,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     } finally {
       setPublishing(false);
     }
-  }, [activeCard, activeCardId, cards, session, updateCardById]);
+  }, [activeCard, activeCardId, saveRemoteCard, session, updateCardById]);
 
   const deleteCard = useCallback(async (id: string) => {
     const currentCards = cardsRef.current;

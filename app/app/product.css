@@ -121,7 +121,7 @@
 .theme-panel h2 { margin: 0 0 4px; font-size: 18px; }
 .theme-panel > p { margin: 0; color: var(--p-muted); font-size: 12px; }
 .theme-swatches { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 11px; }
-.theme-swatches button { width: 38px; height: 38px; border: 3px solid white; border-radius: 7px; box-shadow: 0 0 0 1px var(--p-line); cursor: pointer; }
+.theme-swatches button { width: 38px; height: 38px; border: 3px solid white; border-radius: 7px; box-shadow: 0 0 0 1px var(--p-line); cursor: pointer; display: grid; place-items: center; }
 .theme-swatches button.selected { box-shadow: 0 0 0 3px var(--p-navy); }
 .layout-choice { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-radius: 9px; background: white; box-shadow: inset 0 0 0 2px var(--p-blue); }
 .layout-choice p { margin: 5px 0 0; color: var(--p-muted); font-size: 12px; }

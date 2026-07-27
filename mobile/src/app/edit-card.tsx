@@ -10,7 +10,7 @@ import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader } from '@/components/ui';
 import { useAppInsets } from '@/lib/safe-area';
 import { useCard } from '@/features/card/card-context';
-import { CARD_THEMES, normalizeThemeColor, themeMatches } from '@/features/card/theme-colors';
+import { CARD_THEMES, normalizeThemeColor, themeForegroundColor, themeMatches } from '@/features/card/theme-colors';
 import type { MobileCard } from '@/features/card/types';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -135,7 +135,7 @@ export default function EditCardScreen() {
     setSaveError('');
     try {
       await persist(draft);
-      const ok = await publishCard(draft.id);
+      const ok = await publishCard(draft.id, draft);
       if (!ok) setSaveError('We couldn’t publish this card.');
       else router.back();
     } catch (error) {
@@ -290,7 +290,7 @@ export default function EditCardScreen() {
                         themeMatches(draft.theme, theme) && styles.swatchSelected,
                       ]}>
                       {themeMatches(draft.theme, theme) ? (
-                        <Check size={18} color={theme === '#163300' ? colors.white : colors.ink} weight="bold" />
+                        <Check size={18} color={themeForegroundColor(theme)} weight="bold" />
                       ) : null}
                     </Pressable>
                   ))}

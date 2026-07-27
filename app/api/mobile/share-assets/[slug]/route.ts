@@ -1,0 +1,91 @@
+import { NextResponse } from "next/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+
+import {
+  buildVirtualBackgroundSvg,
+  buildWatchFaceSvg,
+  shareAssetFilename,
+  type ShareAssetProfile,
+} from "../../../../../lib/share-assets";
+import { getAppUserFromRequest } from "../../../../../lib/auth/mobile-api-auth";
+import { readPublicSupabaseConfig } from "../../../../../lib/supabase/env";
+
+function cardUrlForSlug(slug: string, request: Request) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const origin = configured || new URL(request.url).origin;
+  return `${origin.replace(/\/+$/, "")}/c/${slug}`;
+}
+
+async function loadShareAssetProfile(
+  slug: string,
+  request: Request,
+  workspaceId: string,
+  accessToken: string,
+): Promise<ShareAssetProfile | null> {
+  const config = readPublicSupabaseConfig().config;
+  if (!config) return null;
+  const supabase = createSupabaseClient(config.url, config.anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+  const { data, error } = await supabase
+    .from("cards")
+    .select("slug, full_name, job_title, company, theme_color, profile_image_url, company_logo_url, show_company_details, status")
+    .eq("slug", slug.toLowerCase())
+    .eq("workspace_id", workspaceId)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    name: data.full_name,
+    role: data.job_title ?? "",
+    company: data.company ?? "",
+    cardUrl: cardUrlForSlug(data.slug, request),
+    themeColor: data.theme_color ?? "#9fe870",
+    photoUrl: data.profile_image_url ?? "",
+    companyLogoUrl: data.company_logo_url ?? "",
+    showCompany: data.show_company_details ?? true,
+  };
+}
+
+export async function GET(request: Request, context: { params: Promise<{ slug: string }> }) {
+  const authHeader = request.headers.get("Authorization");
+  const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const user = await getAppUserFromRequest(request);
+  if (!user || !accessToken) {
+    return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  }
+
+  const { slug } = await context.params;
+  const normalized = slug?.trim().toLowerCase();
+  if (!normalized) {
+    return NextResponse.json({ error: "A card slug is required." }, { status: 400 });
+  }
+
+  const url = new URL(request.url);
+  const type = url.searchParams.get("type")?.trim().toLowerCase();
+  if (type !== "virtual-background" && type !== "watch-face") {
+    return NextResponse.json({
+      error: "Pass type=virtual-background or type=watch-face.",
+    }, { status: 400 });
+  }
+
+  const profile = await loadShareAssetProfile(normalized, request, user.workspaceId, accessToken);
+  if (!profile) {
+    return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
+  }
+
+  const svg = type === "virtual-background"
+    ? await buildVirtualBackgroundSvg(profile)
+    : await buildWatchFaceSvg(profile);
+
+  return new NextResponse(svg, {
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${shareAssetFilename(type, normalized)}"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
+}

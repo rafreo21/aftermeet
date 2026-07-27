@@ -6,6 +6,9 @@ export type WalletCardPayload = {
   bio: string;
   themeColor: string;
   cardUrl: string;
+  profileImageUrl?: string;
+  companyLogoUrl?: string;
+  showCompany?: boolean;
 };
 
 export type AppleWalletCerts = {

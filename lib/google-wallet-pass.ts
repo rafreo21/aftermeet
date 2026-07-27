@@ -18,6 +18,50 @@ function signJwt(payload: Record<string, unknown>, config: GoogleWalletConfig) {
 export function buildGoogleWalletSaveUrl(card: WalletCardPayload, config: GoogleWalletConfig) {
   const classId = `${config.issuerId}.${config.classSuffix}`;
   const objectId = `${config.issuerId}.${card.slug}`;
+  const companyVisible = card.showCompany !== false && card.company.trim();
+  const companyLabel = companyVisible || " ";
+  const genericObject: Record<string, unknown> = {
+    id: objectId,
+    classId,
+    state: "ACTIVE",
+    hexBackgroundColor: card.themeColor.startsWith("#") ? card.themeColor : `#${card.themeColor}`,
+    cardTitle: {
+      defaultValue: { language: "en-US", value: card.fullName },
+    },
+    header: {
+      defaultValue: { language: "en-US", value: "AfterMeet Card" },
+    },
+    subheader: {
+      defaultValue: { language: "en-US", value: card.role || companyLabel.trim() || "Digital card" },
+    },
+    barcode: {
+      type: "QR_CODE",
+      value: card.cardUrl,
+      alternateText: "Scan to connect",
+    },
+    textModulesData: [
+      { id: "name", header: "NAME", body: card.fullName },
+      { id: "role", header: "JOB TITLE", body: card.role || " " },
+      { id: "company", header: "COMPANY", body: companyLabel },
+      { id: "bio", header: "About", body: card.bio || "Tap to open my AfterMeet card." },
+    ],
+    linksModuleData: {
+      uris: [
+        {
+          uri: card.cardUrl,
+          description: "Open AfterMeet card",
+          id: "card_link",
+        },
+      ],
+    },
+  };
+
+  if (card.profileImageUrl?.trim()) {
+    genericObject.heroImage = {
+      sourceUri: { uri: card.profileImageUrl.trim() },
+    };
+  }
+
   const payload = {
     iss: config.serviceAccountEmail,
     aud: "google",
@@ -50,42 +94,7 @@ export function buildGoogleWalletSaveUrl(card: WalletCardPayload, config: Google
           },
         },
       ],
-      genericObjects: [
-        {
-          id: objectId,
-          classId,
-          state: "ACTIVE",
-          hexBackgroundColor: card.themeColor.startsWith("#") ? card.themeColor : `#${card.themeColor}`,
-          cardTitle: {
-            defaultValue: { language: "en-US", value: card.fullName },
-          },
-          header: {
-            defaultValue: { language: "en-US", value: "AfterMeet" },
-          },
-          subheader: {
-            defaultValue: { language: "en-US", value: card.role || card.company || "Digital card" },
-          },
-          barcode: {
-            type: "QR_CODE",
-            value: card.cardUrl,
-            alternateText: card.fullName,
-          },
-          textModulesData: [
-            { id: "role", header: "Role", body: card.role || " " },
-            { id: "company", header: "Company", body: card.company || " " },
-            { id: "bio", header: "About", body: card.bio || "Tap to open my AfterMeet card." },
-          ],
-          linksModuleData: {
-            uris: [
-              {
-                uri: card.cardUrl,
-                description: "Open AfterMeet card",
-                id: "card_link",
-              },
-            ],
-          },
-        },
-      ],
+      genericObjects: [genericObject],
     },
   };
 

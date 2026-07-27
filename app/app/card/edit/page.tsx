@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
@@ -39,7 +39,9 @@ import { YoutubeLogoIcon } from "@phosphor-icons/react/dist/csr/YoutubeLogo";
 import { AppShell } from "../../../components/AppShell";
 import { Button, IconButton, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
+import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from "../../../../lib/theme-contrast";
 import {
   createLibraryCard,
   getActiveCardId,
@@ -224,6 +226,8 @@ export default function CardEditor() {
   }, []);
 
   const initials = draft.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const previewTheme = useMemo(() => themeSurfaceStyle(draft.theme), [draft.theme]);
+  const coverBadgeStyle = useMemo(() => themeCoverBadgeStyle(draft.theme), [draft.theme]);
   const EditingMethodIcon = editing ? methodMeta[editing.type].Icon : PlusIcon;
   const addedMethodTypes = new Set(draft.methods.map((method) => method.type));
   const stepCompletion = [
@@ -384,7 +388,16 @@ export default function CardEditor() {
                 <TextField label="Company" value={draft.company} onChange={(e) => update("company", e.target.value)} />
                 <TextAreaField label="Short introduction" hint={`${draft.bio.length}/180`} maxLength={180} rows={4} value={draft.bio} onChange={(e) => update("bio", e.target.value)} />
                 <div className="theme-panel"><h2>Card colour</h2><p>Used for the cover and primary actions.</p>
-                  <div className="theme-swatches">{themes.map((theme) => <button key={theme} aria-label={`Use ${theme}`} className={draft.theme === theme ? "selected" : ""} style={{ background: theme }} onClick={() => update("theme", theme)} />)}</div>
+                  <div className="theme-swatches">{themes.map((theme) => (
+                    <button
+                      key={theme}
+                      aria-label={`Use ${theme}`}
+                      className={draft.theme === theme ? "selected" : ""}
+                      style={{ background: theme }}
+                      onClick={() => update("theme", theme)}>
+                      {draft.theme === theme ? <CheckIcon size={16} weight="bold" color={themeForegroundColor(theme)} /> : null}
+                    </button>
+                  ))}</div>
                 </div>
                 <div className="layout-choice selected"><div><strong>Focused</strong><p>Photo, identity, introduction, then contact methods.</p></div><CheckCircleIcon size={24} weight="fill" /></div>
                 <div className="creator-note"><PaletteIcon weight="bold" /><p>More layouts can come later. The MVP uses one responsive layout that remains readable on every phone.</p></div>
@@ -469,8 +482,15 @@ export default function CardEditor() {
           <aside className="creator-preview">
             <div className="creator-preview-head"><span>Live preview</span><small>Updates instantly</small></div>
             <article className="public-card">
-              <div className={`card-cover ${draft.coverPhoto ? "has-cover-photo" : ""}`} style={draft.coverPhoto ? { backgroundImage: `linear-gradient(rgba(22,51,0,.18), rgba(22,51,0,.18)), url(${draft.coverPhoto})` } : { background: draft.theme }}>
-                <div className="card-logo">{draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : draft.company[0] || "A"}</div><span>{draft.company || "Your company"}</span>
+              <div
+                className={`card-cover ${draft.coverPhoto ? "has-cover-photo" : ""}`}
+                style={draft.coverPhoto
+                  ? { backgroundImage: `linear-gradient(rgba(22,51,0,.18), rgba(22,51,0,.18)), url(${draft.coverPhoto})`, color: "#FFFFFF" }
+                  : { background: draft.theme, color: previewTheme.color }}>
+                <div className="card-logo" style={draft.coverPhoto ? undefined : coverBadgeStyle}>
+                  {draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : draft.company[0] || "A"}
+                </div>
+                <span style={draft.coverPhoto ? undefined : { color: previewTheme.color }}>{draft.company || "Your company"}</span>
               </div>
               <div className="card-body">
                 <div className="card-avatar">{draft.photo ? <img src={draft.photo} alt="" /> : initials}</div>
@@ -480,7 +500,14 @@ export default function CardEditor() {
                 <div className="preview-methods">{draft.methods.map((method) => {
                   const meta = methodMeta[method.type];
                   const href = contactMethodHref(method);
-                  const content = <><span style={{ background: draft.theme }}><meta.Icon weight="bold" /></span><p><strong>{method.label}</strong><small>{method.value}</small></p></>;
+                  const content = (
+                    <>
+                      <span style={{ background: draft.theme, color: previewTheme.color }}>
+                        <meta.Icon weight="bold" color={previewTheme.color} />
+                      </span>
+                      <p><strong>{method.label}</strong><small>{method.value}</small></p>
+                    </>
+                  );
                   return href
                     ? <a key={method.id} href={href} target={contactMethodOpensNewTab(href) ? "_blank" : undefined} rel={contactMethodOpensNewTab(href) ? "noreferrer" : undefined} aria-label={`${method.label}: ${meta.name}`}>{content}</a>
                     : <div key={method.id}>{content}</div>;

@@ -9,6 +9,8 @@ import {
   type CardRow,
 } from "../../../lib/cards-server";
 import type { LibraryCard } from "../../../lib/card-library";
+import { resolveCardImagesForPublish } from "../../../lib/card-publish-images";
+import { createServiceSupabaseClient } from "../../../lib/supabase/service";
 
 const slugPattern = /^card-[a-f0-9]{16}$|^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const themePattern = /^#[0-9A-Fa-f]{6}$/;
@@ -110,8 +112,29 @@ export async function POST(request: Request) {
   const supabase = await createApiSupabaseClient(request);
   const existing = await findExistingCard(supabase, user.workspaceId, body);
   const status = existing?.status === "published" ? "published" : "draft";
+
+  let photo = body.photo || "";
+  let coverPhoto = body.coverPhoto || "";
+  let companyLogo = body.companyLogo || "";
+  const cardId = existing?.id || body.id;
+  const service = createServiceSupabaseClient();
+  if (service && cardId) {
+    try {
+      const resolved = await resolveCardImagesForPublish(service, user.workspaceId, cardId, {
+        photo,
+        coverPhoto,
+        companyLogo,
+      });
+      photo = resolved.photo;
+      coverPhoto = resolved.coverPhoto;
+      companyLogo = resolved.companyLogo;
+    } catch {
+      return NextResponse.json({ error: "We couldn’t upload your card images." }, { status: 500 });
+    }
+  }
+
   const row = {
-    ...libraryCardToRow(body, user.workspaceId, status, existing?.id),
+    ...libraryCardToRow({ ...body, photo, coverPhoto, companyLogo }, user.workspaceId, status, existing?.id),
     owner_user_id: user.id,
   };
 

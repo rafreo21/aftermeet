@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { PublicAppDownloadPrompt } from "../../components/PublicAppDownloadPrompt";
 import { contactMethodHref } from "@/lib/contact-methods";
+import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from "@/lib/theme-contrast";
 import { PublicExchangeForm } from "./PublicExchangeForm";
 
 type CardMethod = {
@@ -32,6 +33,7 @@ function PublicCardView({
   bio,
   coverImageUrl,
   profileImageUrl,
+  themeColor,
   methods,
   onSaveContact,
   onContinueWithoutSaving,
@@ -44,22 +46,32 @@ function PublicCardView({
   bio: string | null;
   coverImageUrl: string | null;
   profileImageUrl: string | null;
+  themeColor: string;
   methods: CardMethod[];
   onSaveContact: () => void;
   onContinueWithoutSaving: () => void;
 }) {
+  const theme = themeSurfaceStyle(themeColor);
+  const coverBadge = themeCoverBadgeStyle(themeColor);
+
   return (
     <>
-      <div className="public-card-cover">
+      <div
+        className="public-card-cover"
+        style={{ background: coverImageUrl ? undefined : theme.backgroundColor }}>
         {coverImageUrl ? <img src={coverImageUrl} alt="" className="public-card-cover-photo" /> : null}
         {showCompanyDetails && (companyLogoUrl || company) ? (
           <div className="public-card-company-row">
             {companyLogoUrl ? (
               <img src={companyLogoUrl} alt="" className="public-card-company-logo" />
             ) : company ? (
-              <span className="public-card-company-mark">{company[0]}</span>
+              <span className="public-card-company-mark" style={coverBadge}>{company[0]}</span>
             ) : null}
-            {company ? <span className="public-card-company-name">{company}</span> : null}
+            {company ? (
+              <span className="public-card-company-name" style={{ color: coverImageUrl ? undefined : theme.color }}>
+                {company}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -97,8 +109,14 @@ function PublicCardView({
                   href={href}
                   target={href.startsWith("http") ? "_blank" : undefined}
                   rel="noreferrer"
+                  className="public-card-method-link"
                 >
-                  <ContactMethodIcon type={method.method_type} />
+                  <span
+                    className="public-card-method-icon"
+                    style={{ background: theme.backgroundColor, color: theme.color }}
+                  >
+                    <ContactMethodIcon type={method.method_type} color={theme.color} />
+                  </span>
                   <span>
                     <strong>{method.label || method.method_type}</strong>
                     <small>{displayValue}</small>
@@ -108,7 +126,12 @@ function PublicCardView({
             })}
           </div>
 
-          <button type="button" className="public-card-return" onClick={onSaveContact}>
+          <button
+            type="button"
+            className="public-card-return"
+            style={{ background: theme.backgroundColor, color: theme.color }}
+            onClick={onSaveContact}
+          >
             Save contact
           </button>
           <button type="button" className="public-card-skip-save" onClick={onContinueWithoutSaving}>
@@ -201,9 +224,14 @@ export function PublicCardClient({
     setShowAppDownload(true);
   }
 
+  const themeStyle = {
+    "--card-accent": themeColor,
+    "--card-on-accent": themeForegroundColor(themeColor),
+  } as CSSProperties;
+
   if (showAppDownload) {
     return (
-      <main className="public-card-page" style={{ "--card-accent": themeColor } as CSSProperties}>
+      <main className="public-card-page" style={themeStyle}>
         <PublicAppDownloadPrompt
           ownerName={ownerName}
           visitorEmail={visitorEmail}
@@ -216,7 +244,7 @@ export function PublicCardClient({
 
   if (step === "share") {
     return (
-      <main className="public-card-page" style={{ "--card-accent": themeColor } as CSSProperties}>
+      <main className="public-card-page" style={themeStyle}>
         <section className="public-card-shell public-card-shell-share">
           <div className="public-card-share-page">
             <div className="public-card-share-top">
@@ -228,7 +256,7 @@ export function PublicCardClient({
               <h1>Share your contact</h1>
               <p>Send your details to {ownerName} so they remember who you are.</p>
             </div>
-            <PublicExchangeForm slug={slug} ownerName={ownerName} onSent={handleExchangeSent} />
+            <PublicExchangeForm slug={slug} ownerName={ownerName} themeColor={themeColor} onSent={handleExchangeSent} />
           </div>
         </section>
       </main>
@@ -236,7 +264,7 @@ export function PublicCardClient({
   }
 
   return (
-    <main className="public-card-page" style={{ "--card-accent": themeColor } as CSSProperties}>
+    <main className="public-card-page" style={themeStyle}>
       <section className="public-card-shell">
         <PublicCardView
           ownerName={ownerName}
@@ -247,6 +275,7 @@ export function PublicCardClient({
           bio={bio}
           coverImageUrl={coverImageUrl}
           profileImageUrl={profileImageUrl}
+          themeColor={themeColor}
           methods={methods}
           onSaveContact={handleSaveClick}
           onContinueWithoutSaving={goToShareStep}

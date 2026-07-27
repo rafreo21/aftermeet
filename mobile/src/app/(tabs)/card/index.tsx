@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Title } from '@/components/ui';
 import { MAX_CARDS } from '@/features/card/card-library';
 import { useCard } from '@/features/card/card-context';
+import { themeForegroundColor } from '@/features/card/theme-colors';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -52,7 +53,7 @@ export default function CardLibraryScreen() {
                   }}
                   style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
                   <View style={[styles.cover, { backgroundColor: item.theme }]}>
-                    <Text style={styles.coverLetter}>{item.company[0] || item.name[0] || 'A'}</Text>
+                    <Text style={[styles.coverLetter, { color: themeForegroundColor(item.theme) }]}>{item.company[0] || item.name[0] || 'A'}</Text>
                   </View>
                   <View style={styles.tileBody}>
                     <Text style={styles.cardNumber}>Card {index + 1}</Text>
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  coverLetter: { color: colors.ink, fontSize: 28, fontWeight: '900' },
+  coverLetter: { fontSize: 28, fontWeight: '900' },
   tileBody: { padding: spacing.x4, gap: 4 },
   cardNumber: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
   cardLabel: { color: colors.ink, fontSize: 18, fontWeight: '800' },

@@ -12,6 +12,18 @@ function sha1(content: Buffer | string) {
   return createHash("sha1").update(content).digest("hex");
 }
 
+async function fetchImageBuffer(url: string) {
+  if (!url.trim()) return null;
+  try {
+    const response = await fetch(url.trim());
+    if (!response.ok) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return buffer.length > 0 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
 function signManifest(manifestContent: string, certs: AppleWalletCerts) {
   const dir = mkdtempSync(join(tmpdir(), "aftermeet-pass-"));
   try {
@@ -60,6 +72,13 @@ export async function buildAppleWalletPass(card: WalletCardPayload, certs: Apple
     "pass.json": Buffer.from(passJson, "utf8"),
     ...walletIconBuffers(),
   };
+
+  const profileImage = await fetchImageBuffer(card.profileImageUrl || "");
+  if (profileImage) {
+    files["thumbnail.png"] = profileImage;
+    files["thumbnail@2x.png"] = profileImage;
+  }
+
   const manifest = Object.fromEntries(
     Object.entries(files).map(([name, content]) => [name, sha1(content)]),
   );
@@ -67,12 +86,11 @@ export async function buildAppleWalletPass(card: WalletCardPayload, certs: Apple
   const signature = signManifest(manifestContent, certs);
 
   const zip = new JSZip();
-  zip.file("pass.json", files["pass.json"]);
-  zip.file("manifest.json", manifestContent);
-  zip.file("signature", signature);
-  for (const [name, content] of Object.entries(walletIconBuffers())) {
+  for (const [name, content] of Object.entries(files)) {
     zip.file(name, content);
   }
+  zip.file("manifest.json", manifestContent);
+  zip.file("signature", signature);
 
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }

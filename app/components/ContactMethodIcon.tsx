@@ -53,7 +53,7 @@ const METHOD_ICONS: Record<string, ComponentType<IconProps>> = {
   cashapp: CurrencyDollarIcon,
 };
 
-export function ContactMethodIcon({ type, size = 21 }: { type: string; size?: number }) {
+export function ContactMethodIcon({ type, size = 21, color }: { type: string; size?: number; color?: string }) {
   const Icon = METHOD_ICONS[type] || LinkSimpleIcon;
-  return <Icon aria-hidden size={size} weight="bold" />;
+  return <Icon aria-hidden size={size} weight="bold" color={color} />;
 }

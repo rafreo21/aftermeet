@@ -29,7 +29,10 @@ export function buildApplePassJson(card: {
   bio: string;
   themeColor: string;
   cardUrl: string;
+  companyLogoUrl?: string;
+  showCompany?: boolean;
 }, certs: { passTypeId: string; teamId: string }) {
+  const companyVisible = card.showCompany !== false && card.company.trim();
   return {
     formatVersion: 1,
     passTypeIdentifier: certs.passTypeId,
@@ -37,20 +40,27 @@ export function buildApplePassJson(card: {
     organizationName: "AfterMeet",
     description: `${card.fullName} · AfterMeet card`,
     serialNumber: `${card.slug}-${Date.now()}`,
-    logoText: "AfterMeet",
+    logoText: companyVisible ? card.company : "AfterMeet",
     foregroundColor: "rgb(255, 255, 255)",
     backgroundColor: hexToRgb(card.themeColor || "#9fe870"),
     labelColor: "rgb(22, 51, 0)",
     generic: {
-      primaryFields: [{ key: "name", label: "Name", value: card.fullName }],
+      headerFields: [
+        {
+          key: "card_type",
+          label: "CARD",
+          value: "AfterMeet",
+        },
+      ],
+      primaryFields: [{ key: "name", label: "NAME", value: card.fullName }],
       secondaryFields: card.role
-        ? [{ key: "role", label: "Role", value: card.role }]
+        ? [{ key: "role", label: "JOB TITLE", value: card.role }]
         : [],
-      auxiliaryFields: card.company
-        ? [{ key: "company", label: "Company", value: card.company }]
+      auxiliaryFields: companyVisible
+        ? [{ key: "company", label: "COMPANY", value: card.company }]
         : [],
       backFields: [
-        { key: "bio", label: "About", value: card.bio || "Tap the QR code to open my AfterMeet card." },
+        { key: "bio", label: "About", value: card.bio || "Scan the QR code to open my AfterMeet card." },
         { key: "link", label: "Card link", value: card.cardUrl },
       ],
     },
@@ -59,7 +69,7 @@ export function buildApplePassJson(card: {
         format: "PKBarcodeFormatQR",
         message: card.cardUrl,
         messageEncoding: "iso-8859-1",
-        altText: card.cardUrl,
+        altText: "Scan to connect",
       },
     ],
   };

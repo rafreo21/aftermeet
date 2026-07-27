@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
+import { MonitorIcon } from "@phosphor-icons/react/dist/csr/Monitor";
+import { WatchIcon } from "@phosphor-icons/react/dist/csr/Watch";
 import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
@@ -28,10 +30,12 @@ import {
   getActiveCardId,
   type LibraryCard,
   MAX_CARDS,
+  readCardLibrary,
   removeLibraryCard,
   setActiveCardId,
   upsertLibraryCard,
 } from "../../../lib/card-library";
+import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from "../../../lib/theme-contrast";
 import { hydrateCardLibraryFromServer, queueCardSync } from "../../../lib/card-library-sync";
 import { applyCardTemplate } from "../../../lib/card-templates";
 import type { CardTemplate } from "../../../lib/workspace/types";
@@ -71,6 +75,36 @@ export default function CardsPage() {
   const [qrError, setQrError] = useState("");
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const cardTheme = useMemo(() => themeSurfaceStyle(profile.theme), [profile.theme]);
+
+  function toProfile(card: LibraryCard): Profile {
+    return {
+      ...card,
+      email: card.methods.find((item) => item.type === "email")?.value || "",
+      website: card.methods.find((item) => item.type === "website")?.value || "",
+    };
+  }
+
+  function applyLibrary(library: LibraryCard[], preferredId = activeId) {
+    if (!library.length) {
+      setCards([]);
+      setViewingCard(false);
+      return;
+    }
+    const requestedId = new URLSearchParams(window.location.search).get("id");
+    const selected = library.find((card) => card.id === requestedId)
+      || library.find((card) => card.id === preferredId)
+      || library.find((card) => card.id === getActiveCardId(localStorage, library))
+      || library[0];
+    setCards(library);
+    setActiveId(selected.id);
+    setProfile(toProfile(selected));
+    setPhoto(selected.photo || "");
+    setShareUrl(`${window.location.origin}/c/${selected.slug}`);
+    if (requestedId && library.some((card) => card.id === requestedId)) {
+      setViewingCard(true);
+    }
+  }
 
   useEffect(() => {
     void fetch("/api/workspace")
@@ -86,31 +120,37 @@ export default function CardsPage() {
       .catch(() => undefined);
 
     void hydrateCardLibraryFromServer().then((library) => {
-      let nextProfile = fallback;
       if (!library.length) {
         setCards([]);
         setViewingCard(false);
         setHydrated(true);
         return;
       }
-      const selectedId = getActiveCardId(localStorage, library);
-      const requestedId = new URLSearchParams(window.location.search).get("id");
-      const selected = library.find((card) => card.id === requestedId)
-        || library.find((card) => card.id === selectedId)
-        || library[0];
-      nextProfile = toProfile(selected);
-      setCards(library);
-      setActiveId(selected.id);
-      setProfile(nextProfile);
-      setPhoto(selected.photo || "");
-      setViewingCard(Boolean(requestedId && library.some((card) => card.id === requestedId)));
-      setShareUrl(`${window.location.origin}/c/${nextProfile.slug}`);
+      applyLibrary(library);
       setHydrated(true);
     }).catch(() => {
       setQrError("We couldn’t load your saved cards. Refresh the page to try again.");
       setHydrated(true);
     });
   }, []);
+
+  useEffect(() => {
+    function refreshFromStorage() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        applyLibrary(readCardLibrary(localStorage));
+      } catch {
+        // Ignore malformed local storage while editing elsewhere.
+      }
+    }
+
+    window.addEventListener("focus", refreshFromStorage);
+    document.addEventListener("visibilitychange", refreshFromStorage);
+    return () => {
+      window.removeEventListener("focus", refreshFromStorage);
+      document.removeEventListener("visibilitychange", refreshFromStorage);
+    };
+  }, [activeId]);
 
   useEffect(() => {
     const options = {
@@ -130,14 +170,6 @@ export default function CardsPage() {
       setQrSvg(svg);
     }).catch(() => setQrError("We couldn’t generate this QR code. Check the card link and try again."));
   }, [shareUrl]);
-
-  function toProfile(card: LibraryCard): Profile {
-    return {
-      ...card,
-      email: card.methods.find((item) => item.type === "email")?.value || "",
-      website: card.methods.find((item) => item.type === "website")?.value || "",
-    };
-  }
 
   function selectCard(card: LibraryCard) {
     setActiveCardId(localStorage, card.id);
@@ -192,6 +224,22 @@ export default function CardsPage() {
     setViewingCard(false);
     window.history.replaceState(null, "", "/app/cards");
     if (next[0]) selectCard(next[0]);
+  }
+
+  async function downloadShareAsset(type: "virtual-background" | "watch-face") {
+    const response = await fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=${type}`);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || "We couldn’t download this asset.");
+    }
+    const svg = await response.text();
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `aftermeet-${type}-${profile.slug}.svg`;
+    link.click();
+    URL.revokeObjectURL(href);
   }
 
   async function copyLink() {
@@ -278,7 +326,10 @@ export default function CardsPage() {
                 {cards.map((card, index) => (
                   <article key={card.id} className="card-overview-item">
                     <button onClick={() => openCard(card)} type="button">
-                      <div className="card-overview-cover" style={{ background: card.theme }}><span>{card.company[0] || card.name[0] || "A"}</span><QrCodeIcon size={22} weight="bold" /></div>
+                      <div className="card-overview-cover" style={{ background: themeSurfaceStyle(card.theme).backgroundColor, color: themeSurfaceStyle(card.theme).color }}>
+                        <span style={themeCoverBadgeStyle(card.theme)}>{card.company[0] || card.name[0] || "A"}</span>
+                        <QrCodeIcon size={22} weight="bold" color={themeSurfaceStyle(card.theme).color} />
+                      </div>
                       <div className="card-overview-copy"><small>Card {index + 1}</small><h3>{card.label || `Card ${index + 1}`}</h3><p>{card.name || "Finish setting up this card"}</p><strong>View card <ArrowSquareOutIcon size={15} weight="bold" /></strong></div>
                     </button>
                   </article>
@@ -308,7 +359,10 @@ export default function CardsPage() {
             </div>
             <div className="card-share-layout" id="share">
           <article className="share-card-preview">
-            <div className="share-card-cover" style={{ background: profile.theme }}><span>{profile.company[0] || "A"}</span><strong>{profile.company || "Your company"}</strong></div>
+            <div className="share-card-cover" style={{ background: cardTheme.backgroundColor, color: cardTheme.color }}>
+              <span style={themeCoverBadgeStyle(profile.theme)}>{profile.company[0] || "A"}</span>
+              <strong style={{ color: cardTheme.color }}>{profile.company || "Your company"}</strong>
+            </div>
             <div className="share-card-body">
               <div className="share-avatar">{photo ? <img src={photo} alt="" /> : initials}</div>
               <h2>{profile.name}</h2>
@@ -351,27 +405,98 @@ export default function CardsPage() {
             </div>
             <Button fullWidth size="small" variant="ghost" disabled={!qrSvg} onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : qrSvg ? "Copy QR as SVG" : "Generating QR…"}</Button>
             <section className="signature-panel">
-              <div className="inline-qr-head"><span><EnvelopeSimpleIcon size={22} weight="bold" /></span><div><h2>Email signature</h2><p>Paste this into Gmail, Outlook, or Apple Mail so every email links back to your card.</p></div></div>
-              <pre className="signature-preview">{buildPlainSignature({ name: profile.name, role: profile.role, company: profile.company, cardUrl: shareUrl })}</pre>
+              <div className="inline-qr-head"><span><EnvelopeSimpleIcon size={22} weight="bold" /></span><div><h2>Email signature</h2><p>Square photo, name, title, and contact details — ready for Gmail or Outlook.</p></div></div>
+              <div className="signature-preview-card">
+                <div className="signature-preview-photo">{photo ? <img src={photo} alt="" /> : initials}</div>
+                <div className="signature-preview-copy">
+                  <strong>{profile.name}</strong>
+                  {profile.role ? <span>{profile.role}</span> : null}
+                  {profile.company ? <span>{profile.company}</span> : null}
+                  {profile.methods.find((method) => method.type === "phone")?.value ? (
+                    <small>☎ {profile.methods.find((method) => method.type === "phone")?.value}</small>
+                  ) : null}
+                  {profile.methods.find((method) => method.type === "email")?.value || profile.email ? (
+                    <small>✉ {profile.methods.find((method) => method.type === "email")?.value || profile.email}</small>
+                  ) : null}
+                  <em>View my card</em>
+                </div>
+              </div>
               <div className="inline-qr-actions">
                 <Button variant="secondary" onClick={() => void copySignature("plain")}><CopyIcon size={18} weight="bold" />{signatureCopied === "plain" ? "Plain copied" : "Copy plain text"}</Button>
                 <Button variant="secondary" onClick={() => void copySignature("html")}><CopyIcon size={18} weight="bold" />{signatureCopied === "html" ? "HTML copied" : "Copy HTML"}</Button>
               </div>
-              <small className="signature-note">Use plain text for most clients. HTML keeps the card link clickable in Gmail and Outlook.</small>
+              <small className="signature-note">Use plain text for most clients. HTML keeps phone, email, and card link clickable.</small>
             </section>
-            <WalletSharePanel slug={profile.slug} shareUrl={shareUrl} />
+            <section className="share-surface-panel">
+              <div className="inline-qr-head"><span><MonitorIcon size={22} weight="bold" /></span><div><h2>Virtual background</h2><p>Meeting background with your name and a scannable QR in the corner.</p></div></div>
+              <div className="share-surface-preview virtual-background-preview" style={{ background: profile.theme }}>
+                <div className="share-surface-overlay">
+                  <strong>{profile.name}</strong>
+                  <span>{profile.role}{profile.company ? ` · ${profile.company}` : ""}</span>
+                  <div className="share-surface-qr">QR</div>
+                </div>
+              </div>
+              <Button variant="secondary" onClick={() => void downloadShareAsset("virtual-background")}><DownloadSimpleIcon size={18} weight="bold" />Download background</Button>
+            </section>
+            <section className="share-surface-panel">
+              <div className="inline-qr-head"><span><WatchIcon size={22} weight="bold" /></span><div><h2>Smart watch</h2><p>High-contrast QR for Apple Watch or Wear OS watch faces.</p></div></div>
+              <div className="share-surface-preview watch-preview">
+                <span>Personal card</span>
+                <div className="watch-qr">QR</div>
+              </div>
+              <Button variant="secondary" onClick={() => void downloadShareAsset("watch-face")}><DownloadSimpleIcon size={18} weight="bold" />Download watch QR</Button>
+            </section>
             <section className="phone-widget-panel">
-              <div className="phone-widget-head"><span><DeviceMobileIcon size={22} weight="bold" /></span><div><h3>Use this card from your phone</h3><p>Open it instantly from the AfterMeet app or your Home Screen widget.</p></div></div>
+              <div className="phone-widget-head"><span><DeviceMobileIcon size={22} weight="bold" /></span><div><h3>Home-screen widgets</h3><p>Choose QR Scan, Business Card, or Recent Connections when adding a widget.</p></div></div>
+              <div className="widget-gallery">
+                <article className="widget-gallery-card">
+                  <header><span>AfterMeet</span><strong>2 × 2</strong></header>
+                  <div className="widget-gallery-preview widget-gallery-qr">
+                    <div className="widget-gallery-qr-frame">QR</div>
+                  </div>
+                  <h4>QR Scan</h4>
+                  <p>Large scannable QR for quick sharing.</p>
+                </article>
+                <article className="widget-gallery-card">
+                  <header><span>AfterMeet</span><strong>4 × 2</strong></header>
+                  <div className="widget-gallery-preview widget-gallery-card-layout">
+                    <div className="widget-gallery-card-qr">QR</div>
+                    <div>
+                      <div className="widget-layout-avatar">{initials}</div>
+                      <strong>{profile.name}</strong>
+                      {profile.role ? <span>{profile.role}</span> : null}
+                      {profile.company ? <small>{profile.company}</small> : null}
+                    </div>
+                  </div>
+                  <h4>Business Card</h4>
+                  <p>QR plus your name, role, and company.</p>
+                </article>
+                <article className="widget-gallery-card">
+                  <header><span>AfterMeet</span><strong>4 × 2</strong></header>
+                  <div className="widget-gallery-preview widget-gallery-connections">
+                    <small>RECENT CONNECTIONS</small>
+                    <div className="widget-gallery-connection-row">
+                      <div className="widget-layout-avatar">C</div>
+                      <div><strong>Recent connection</strong><span>Shared via your card</span></div>
+                      <span className="widget-gallery-action">☎</span>
+                      <span className="widget-gallery-action">✉</span>
+                    </div>
+                  </div>
+                  <h4>Recent Connections</h4>
+                  <p>Call or message people who shared their details back.</p>
+                </article>
+              </div>
               <div className="phone-widget-actions">
                 <Button onClick={openInApp}><DeviceMobileIcon size={17} weight="bold" /> Open in app</Button>
                 <Button variant="secondary" aria-expanded={showWidgetHelp} onClick={() => setShowWidgetHelp((current) => !current)}>Add a widget {showWidgetHelp ? <CaretUpIcon /> : <CaretDownIcon />}</Button>
               </div>
               {showWidgetHelp && <div className="widget-instructions">
-                <article><strong>iPhone or iPad</strong><p>Install and open AfterMeet once. Touch and hold the Home Screen, tap <b>Edit</b>, then <b>Add Widget</b>. Search for AfterMeet and choose Quick Share.</p></article>
-                <article><strong>Android</strong><p>Install and open AfterMeet once. Touch and hold an empty part of the Home Screen, tap <b>Widgets</b>, then choose AfterMeet Quick Share.</p></article>
-                <small>Apple and Android require widgets to be added from the device’s widget picker.</small>
+                <article><strong>iPhone or iPad</strong><p>Install and open AfterMeet once. Touch and hold the Home Screen, tap <b>Edit</b>, then <b>Add Widget</b>. Search for AfterMeet and pick QR Scan, Business Card, or Recent Connections.</p></article>
+                <article><strong>Android</strong><p>Install and open AfterMeet once. Touch and hold an empty part of the Home Screen, tap <b>Widgets</b>, then choose one of the three AfterMeet widgets.</p></article>
+                <small>Refresh widgets from Card Tools in the app after publishing changes or receiving new connections.</small>
               </div>}
             </section>
+            <WalletSharePanel slug={profile.slug} shareUrl={shareUrl} />
           </section>
             </div>
             <ShareCardModal

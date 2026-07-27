@@ -91,13 +91,27 @@
           "groupIdentifier": "group.com.aftermeet.app",
           "widgets": [
             {
-              "name": "QuickShareWidget",
-              "displayName": "AfterMeet Quick Share",
-              "description": "Open your contact card and QR code from the Home Screen.",
+              "name": "QrScanWidget",
+              "displayName": "AfterMeet QR Scan",
+              "description": "Large scannable QR code for your card.",
               "supportedFamilies": [
-                "systemSmall",
-                "systemMedium",
-                "accessoryRectangular"
+                "systemSmall"
+              ]
+            },
+            {
+              "name": "BusinessCardWidget",
+              "displayName": "AfterMeet Business Card",
+              "description": "QR code plus your name, role, and company.",
+              "supportedFamilies": [
+                "systemMedium"
+              ]
+            },
+            {
+              "name": "RecentConnectionsWidget",
+              "displayName": "AfterMeet Recent Connections",
+              "description": "Recent people who shared their details with you.",
+              "supportedFamilies": [
+                "systemMedium"
               ]
             }
           ]

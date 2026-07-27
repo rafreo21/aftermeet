@@ -1,21 +1,8 @@
-export const CARD_THEMES = [
-  '#9FE870',
-  '#FF6B5E',
-  '#FF9F43',
-  '#FFC107',
-  '#14B8A6',
-  '#2495E8',
-  '#5146E5',
-  '#A83DF0',
-  '#163300',
-  '#AEB8AA',
-] as const;
-
-const INK = '#163300';
-const WHITE = '#FFFFFF';
+export const INK = "#163300";
+export const WHITE = "#FFFFFF";
 
 function parseHex(hex: string) {
-  const normalized = hex.replace('#', '').trim();
+  const normalized = hex.replace("#", "").trim();
   if (normalized.length !== 6) return null;
   return {
     r: Number.parseInt(normalized.slice(0, 2), 16),
@@ -24,9 +11,9 @@ function parseHex(hex: string) {
   };
 }
 
-export function normalizeThemeColor(value: string) {
-  const trimmed = value.trim();
-  if (!/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return CARD_THEMES[0];
+export function normalizeThemeColor(value: string, fallback = "#9FE870") {
+  const trimmed = value?.trim() || fallback;
+  if (!/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return fallback.toUpperCase();
   return trimmed.toUpperCase();
 }
 
@@ -49,11 +36,11 @@ export function themeForegroundColor(hex: string) {
 }
 
 export function themeMutedForegroundColor(hex: string) {
-  return isDarkThemeColor(hex) ? 'rgba(255,255,255,0.78)' : '#53634D';
+  return isDarkThemeColor(hex) ? "rgba(255,255,255,0.78)" : "#53634D";
 }
 
 export function themeSoftForegroundColor(hex: string) {
-  return isDarkThemeColor(hex) ? 'rgba(255,255,255,0.62)' : '#667363';
+  return isDarkThemeColor(hex) ? "rgba(255,255,255,0.62)" : "#667363";
 }
 
 export type ThemeSurfaceStyle = {
@@ -76,11 +63,7 @@ export function themeSurfaceStyle(hex: string): ThemeSurfaceStyle {
 export function themeCoverBadgeStyle(hex: string) {
   const surface = themeSurfaceStyle(hex);
   return {
-    backgroundColor: surface.color === WHITE ? 'rgba(255,255,255,0.18)' : INK,
+    background: surface.color === WHITE ? "rgba(255,255,255,0.18)" : INK,
     color: WHITE,
   };
-}
-
-export function themeMatches(left: string, right: string) {
-  return normalizeThemeColor(left) === normalizeThemeColor(right);
 }

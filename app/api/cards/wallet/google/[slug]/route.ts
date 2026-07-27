@@ -3,35 +3,21 @@ import { NextResponse } from "next/server";
 import { getAppUser } from "../../../../../../lib/auth/context";
 import { buildGoogleWalletSaveUrl } from "../../../../../../lib/google-wallet-pass";
 import { createClient } from "../../../../../../lib/supabase/server";
+import { cardUrlForSlug, WALLET_CARD_SELECT, walletCardFromRow } from "../../../../../../lib/wallet-card-loader";
 import { isGoogleWalletConfigured, readGoogleWalletConfig, type WalletCardPayload } from "../../../../../../lib/wallet-config";
-
-function cardUrlForSlug(slug: string, request: Request) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  const origin = configured || new URL(request.url).origin;
-  return `${origin.replace(/\/+$/, "")}/c/${slug}`;
-}
 
 async function loadWalletCard(slug: string, request: Request, workspaceId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("cards")
-    .select("slug, full_name, job_title, company, bio, theme_color, status")
+    .select(WALLET_CARD_SELECT)
     .eq("slug", slug.toLowerCase())
     .eq("workspace_id", workspaceId)
     .eq("status", "published")
     .maybeSingle();
 
   if (error || !data) return null;
-
-  return {
-    slug: data.slug,
-    fullName: data.full_name,
-    role: data.job_title ?? "",
-    company: data.company ?? "",
-    bio: data.bio ?? "",
-    themeColor: data.theme_color ?? "#9fe870",
-    cardUrl: cardUrlForSlug(data.slug, request),
-  } satisfies WalletCardPayload;
+  return walletCardFromRow(data, request);
 }
 
 export async function GET(request: Request, context: { params: Promise<{ slug: string }> }) {

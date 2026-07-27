@@ -7,8 +7,12 @@ import {
   publicCompanyField,
   publicCompanyLogoUrl,
 } from "@/lib/card-company-display";
+import { publicCardImageUrl } from "@/lib/card-assets";
 import { PublicCardClient } from "./PublicCardClient";
 import "./public-card.css";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Params = Promise<{ slug: string }>;
 
@@ -25,7 +29,7 @@ async function getCard(slug: string) {
   const { data } = await supabase
     .from("cards")
     .select("*, card_methods(*)")
-    .eq("slug", slug)
+    .eq("slug", slug.toLowerCase())
     .eq("status", "published")
     .maybeSingle();
   return data;
@@ -56,11 +60,11 @@ export default async function PublicCardPage({ params }: { params: Params }) {
       ownerName={card.full_name}
       jobTitle={card.job_title}
       company={publicCompanyField(card.company, showCompanyDetails)}
-      companyLogoUrl={publicCompanyLogoUrl(card.company_logo_url, showCompanyDetails)}
+      companyLogoUrl={publicCardImageUrl(publicCompanyLogoUrl(card.company_logo_url, showCompanyDetails))}
       showCompanyDetails={showCompanyDetails}
       bio={card.bio}
-      coverImageUrl={card.cover_image_url}
-      profileImageUrl={card.profile_image_url}
+      coverImageUrl={publicCardImageUrl(card.cover_image_url)}
+      profileImageUrl={publicCardImageUrl(card.profile_image_url)}
       themeColor={card.theme_color}
       methods={filterMethodsForCompanyVisibility(methods, showCompanyDetails)}
     />
