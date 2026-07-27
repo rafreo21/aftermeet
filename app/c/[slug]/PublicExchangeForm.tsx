@@ -5,6 +5,24 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Button } from "../../components/Button";
 import { TextField } from "../../components/FormField";
 
+type OptionalField = "x" | "instagram" | "tiktok" | "role" | "company";
+
+const OPTIONAL_PILLS: { id: OptionalField; label: string; fieldLabel: string; placeholder: string }[] = [
+  { id: "x", label: "X", fieldLabel: "X handle (optional)", placeholder: "@username" },
+  { id: "instagram", label: "Instagram", fieldLabel: "Instagram handle (optional)", placeholder: "@username" },
+  { id: "tiktok", label: "TikTok", fieldLabel: "TikTok handle (optional)", placeholder: "@username" },
+  { id: "role", label: "Job title", fieldLabel: "Job title (optional)", placeholder: "Product designer" },
+  { id: "company", label: "Company name", fieldLabel: "Company name (optional)", placeholder: "Acme Inc." },
+];
+
+function buildNote(ownerName: string, social: Record<"x" | "instagram" | "tiktok", string>) {
+  const lines = [`Shared back from ${ownerName}'s AfterMeet card.`];
+  if (social.x.trim()) lines.push(`X: ${social.x.trim()}`);
+  if (social.instagram.trim()) lines.push(`Instagram: ${social.instagram.trim()}`);
+  if (social.tiktok.trim()) lines.push(`TikTok: ${social.tiktok.trim()}`);
+  return lines.join("\n");
+}
+
 export function PublicExchangeForm({
   slug,
   ownerName,
@@ -14,15 +32,37 @@ export function PublicExchangeForm({
   ownerName: string;
   onSent?: (visitorEmail: string) => void;
 }) {
-  const [showRole, setShowRole] = useState(false);
-  const [showCompany, setShowCompany] = useState(false);
+  const [activeFields, setActiveFields] = useState<Set<OptionalField>>(new Set());
   const [fullName, setFullName] = useState("");
   const [visitorEmail, setVisitorEmail] = useState("");
   const [visitorPhone, setVisitorPhone] = useState("");
   const [visitorCompany, setVisitorCompany] = useState("");
   const [visitorRole, setVisitorRole] = useState("");
+  const [visitorX, setVisitorX] = useState("");
+  const [visitorInstagram, setVisitorInstagram] = useState("");
+  const [visitorTiktok, setVisitorTiktok] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function showField(field: OptionalField) {
+    setActiveFields((current) => new Set(current).add(field));
+  }
+
+  function fieldValue(field: OptionalField) {
+    if (field === "x") return visitorX;
+    if (field === "instagram") return visitorInstagram;
+    if (field === "tiktok") return visitorTiktok;
+    if (field === "role") return visitorRole;
+    return visitorCompany;
+  }
+
+  function setFieldValue(field: OptionalField, value: string) {
+    if (field === "x") setVisitorX(value);
+    else if (field === "instagram") setVisitorInstagram(value);
+    else if (field === "tiktok") setVisitorTiktok(value);
+    else if (field === "role") setVisitorRole(value);
+    else setVisitorCompany(value);
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -48,7 +88,11 @@ export function PublicExchangeForm({
           visitorPhone: visitorPhone.trim(),
           visitorCompany: visitorCompany.trim(),
           visitorRole: visitorRole.trim(),
-          note: `Shared back from ${ownerName}'s AfterMeet card.`,
+          note: buildNote(ownerName, {
+            x: visitorX,
+            instagram: visitorInstagram,
+            tiktok: visitorTiktok,
+          }),
           consentGiven: true,
         }),
       });
@@ -95,28 +139,27 @@ export function PublicExchangeForm({
       />
 
       <div className="public-exchange-optional">
-        {!showRole ? (
-          <button type="button" className="public-exchange-add" onClick={() => setShowRole(true)}>+ Job title</button>
-        ) : (
+        <div className="public-exchange-optional-pills">
+          {OPTIONAL_PILLS.map((pill) =>
+            activeFields.has(pill.id) ? null : (
+              <button key={pill.id} type="button" className="public-exchange-add" onClick={() => showField(pill.id)}>
+                + {pill.label}
+              </button>
+            ),
+          )}
+        </div>
+
+        {OPTIONAL_PILLS.filter((pill) => activeFields.has(pill.id)).map((pill) => (
           <TextField
-            id="exchange-role"
-            label="Job title (optional)"
-            value={visitorRole}
-            onChange={(event) => setVisitorRole(event.target.value)}
-            autoComplete="organization-title"
+            key={pill.id}
+            id={`exchange-${pill.id}`}
+            label={pill.fieldLabel}
+            value={fieldValue(pill.id)}
+            onChange={(event) => setFieldValue(pill.id, event.target.value)}
+            autoComplete={pill.id === "role" ? "organization-title" : pill.id === "company" ? "organization" : "off"}
+            placeholder={pill.placeholder}
           />
-        )}
-        {!showCompany ? (
-          <button type="button" className="public-exchange-add" onClick={() => setShowCompany(true)}>+ Company name</button>
-        ) : (
-          <TextField
-            id="exchange-company"
-            label="Company name (optional)"
-            value={visitorCompany}
-            onChange={(event) => setVisitorCompany(event.target.value)}
-            autoComplete="organization"
-          />
-        )}
+        ))}
       </div>
 
       {error ? <p className="public-exchange-error" role="alert">{error}</p> : null}

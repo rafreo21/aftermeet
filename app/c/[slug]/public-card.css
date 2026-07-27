@@ -259,8 +259,22 @@
 }
 .public-card-skip-save {
   width: 100%;
+  min-height: 48px;
   margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid #d8dfd2;
+  border-radius: 8px;
+  background: #fff;
+  color: #53634d;
+  font-size: 14px;
+  font-weight: 700;
   text-align: center;
+  cursor: pointer;
+}
+.public-card-skip-save:hover {
+  background: #f7f9f5;
+  border-color: #c5cfc0;
+  color: #163300;
 }
 .public-card-methods { margin: 18px 0 20px; display: grid; gap: 8px; }
 .public-card-methods a {
@@ -353,6 +367,11 @@
 }
 
 .public-exchange-optional {
+  display: grid;
+  gap: 10px;
+}
+
+.public-exchange-optional-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

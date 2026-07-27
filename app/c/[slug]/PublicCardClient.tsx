@@ -108,7 +108,7 @@ function PublicCardView({
           <button type="button" className="public-card-return" onClick={onSaveContact}>
             Save contact
           </button>
-          <button type="button" className="ghost-link public-card-skip-save" onClick={onContinueWithoutSaving}>
+          <button type="button" className="public-card-skip-save" onClick={onContinueWithoutSaving}>
             Continue without saving
           </button>
           <p className="public-card-private">
