@@ -1,5 +1,10 @@
-import { mobileFetch } from '@/lib/mobile-api';
+import {
+  guessRecordingFileName,
+  guessRecordingMimeType,
+  prepareAudioUpload,
+} from '@/features/encounters/audio-upload';
 import type { LocalRecordingMetadata } from '@/features/encounters/local-recordings';
+import { mobileFetch } from '@/lib/mobile-api';
 
 export type EncounterDraft = {
   title: string;
@@ -53,6 +58,7 @@ export type InboundExchange = {
   visitor_role: string;
   note: string;
   status?: string;
+  created_at?: string;
 };
 
 function createId() {
@@ -109,6 +115,7 @@ export async function extractEncounterDraft(
     personName?: string;
     personEmail?: string;
     personPhone?: string;
+    people?: Array<{ name: string; email?: string; phone?: string }>;
   },
 ) {
   const response = await mobileFetch('/api/encounters/extract', accessToken, {
@@ -119,6 +126,7 @@ export async function extractEncounterDraft(
       personName: hints?.personName?.trim() || '',
       personEmail: hints?.personEmail?.trim() || '',
       personPhone: hints?.personPhone?.trim() || '',
+      people: hints?.people ?? [],
     }),
   });
   const payload = await response.json() as {
@@ -203,19 +211,16 @@ export async function transcribeEncounterAudio(
   uri: string,
   options?: { fileName?: string; mimeType?: string; language?: string },
 ) {
-  const fileName = options?.fileName || guessRecordingFileName(uri);
-  const mimeType = options?.mimeType || guessRecordingMimeType(uri);
-  const formData = new FormData();
-  formData.append('audio', {
-    uri,
-    name: fileName,
-    type: mimeType,
-  } as unknown as Blob);
-  if (options?.language) formData.append('lang', options.language);
-
+  const prepared = await prepareAudioUpload(uri, options);
   const response = await mobileFetch('/api/encounters/transcribe', accessToken, {
     method: 'POST',
-    body: formData,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      audioBase64: prepared.base64,
+      fileName: prepared.fileName,
+      mimeType: prepared.mimeType,
+      lang: options?.language,
+    }),
   });
   const raw = await response.text();
   let payload: {
@@ -240,26 +245,6 @@ export async function transcribeEncounterAudio(
     source: payload.source || 'unavailable',
     unavailable: payload.unavailable,
   };
-}
-
-function guessRecordingFileName(uri: string) {
-  const lower = uri.toLowerCase();
-  if (lower.endsWith('.wav')) return 'recording.wav';
-  if (lower.endsWith('.mp3')) return 'recording.mp3';
-  if (lower.endsWith('.m4a')) return 'recording.m4a';
-  if (lower.endsWith('.webm')) return 'recording.webm';
-  if (lower.endsWith('.ogg')) return 'recording.ogg';
-  return 'recording.m4a';
-}
-
-function guessRecordingMimeType(uri: string) {
-  const lower = uri.toLowerCase();
-  if (lower.endsWith('.wav')) return 'audio/wav';
-  if (lower.endsWith('.mp3')) return 'audio/mpeg';
-  if (lower.endsWith('.m4a')) return 'audio/mp4';
-  if (lower.endsWith('.webm')) return 'audio/webm';
-  if (lower.endsWith('.ogg')) return 'audio/ogg';
-  return 'audio/mp4';
 }
 
 export async function uploadEncounterRecording(

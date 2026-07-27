@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { PaperPlaneTilt } from 'phosphor-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -13,13 +13,11 @@ import {
 } from 'react-native';
 
 import { CaptureContextStep } from '@/components/capture-context-step';
+import { CaptureErrorSheet } from '@/components/capture-error-sheet';
 import { CaptureGatherStep } from '@/components/capture-gather-step';
 import { CaptureLeaveSheet } from '@/components/capture-leave-sheet';
 import { CaptureRecordStep } from '@/components/capture-record-step';
 import { CaptureStepIndicator } from '@/components/capture-step-indicator';
-import {
-  type ContextGenerationStatus,
-} from '@/components/context-generation-banner';
 import { Body, Button, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -36,6 +34,14 @@ import {
   applyExtractionDraft,
 } from '@/features/encounters/extraction-helpers';
 import {
+  createGatherPerson,
+  formatPeopleNames,
+  hasValidGatherPeople,
+  personFromExchange,
+  syncLegacyPersonFields,
+  MAX_GATHER_PEOPLE,
+} from '@/features/encounters/gather-people';
+import {
   deleteLocalRecording,
   removeExpiredLocalRecordings,
   saveLocalRecording,
@@ -50,7 +56,7 @@ import {
   uploadEncounterRecording,
   type InboundExchange,
 } from '@/features/encounters/encounter-api';
-import { useCaptureRecorder } from '@/features/encounters/use-capture-recorder';
+import { useCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/use-capture-recorder';
 import { normalizeTranscriptForExtraction } from '@/lib/transcript-cleanup';
 import { useAppInsets } from '@/lib/safe-area';
 import { readEnv } from '@/lib/env';
@@ -65,6 +71,8 @@ const CHANNELS = [
   { id: 'other', label: 'Other' },
 ] as const;
 
+type GenerationStatus = 'idle' | 'generating' | 'error';
+
 export default function CaptureWizardScreen() {
   const params = useLocalSearchParams<{ exchange?: string; slug?: string; draftId?: string }>();
   const { session } = useAuth();
@@ -74,15 +82,16 @@ export default function CaptureWizardScreen() {
   const [exchanges, setExchanges] = useState<InboundExchange[]>([]);
   const [uncertainFields, setUncertainFields] = useState<string[]>([]);
   const [extracting, setExtracting] = useState(false);
-  const [generationStatus, setGenerationStatus] = useState<ContextGenerationStatus>('idle');
-  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle');
   const [generationError, setGenerationError] = useState('');
   const [loadingExchanges, setLoadingExchanges] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [message, setMessage] = useState('');
   const requestRef = useRef(0);
   const generationKickoffRef = useRef('');
+  const dismissedErrorRef = useRef('');
   const hydratedRef = useRef(false);
   const [draftReady, setDraftReady] = useState(false);
   const draftRef = useRef(draft);
@@ -106,13 +115,46 @@ export default function CaptureWizardScreen() {
     updateDraft({ durationSeconds });
   }, [updateDraft]);
 
-  const handleRecordingUriChange = useCallback((recordingUri: string, recordingSource: 'recorded' | 'imported') => {
-    updateDraft({ recordingUri, recordingSource });
+  const handleRecordingUriChange = useCallback((
+    recordingUri: string,
+    recordingSource: 'recorded' | 'imported',
+    meta?: ImportRecordingMeta,
+  ) => {
+    updateDraft({
+      recordingUri,
+      recordingSource,
+      importFileName: meta?.fileName || '',
+      importMimeType: meta?.mimeType || '',
+    });
   }, [updateDraft]);
 
-  const handleRecorderError = useCallback((recorderError: string) => {
-    setError(recorderError);
+  const showCaptureError = useCallback((message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    if (dismissedErrorRef.current === trimmed) return;
+    setError(trimmed);
+    setErrorSheetOpen(true);
   }, []);
+
+  const closeErrorSheet = useCallback(() => {
+    dismissedErrorRef.current = error.trim();
+    setErrorSheetOpen(false);
+    setError('');
+  }, [error]);
+
+  const handleImportStarted = useCallback(() => {
+    dismissedErrorRef.current = '';
+    setError('');
+    setErrorSheetOpen(false);
+  }, []);
+
+  const handleRecorderError = useCallback((recorderError: string) => {
+    if (!recorderError.trim()) {
+      setError('');
+      return;
+    }
+    showCaptureError(recorderError);
+  }, [showCaptureError]);
 
   const generateMeetingContext = useCallback(async (transcript: string, requestId?: number) => {
     const clean = normalizeTranscriptForExtraction(transcript.trim());
@@ -124,7 +166,9 @@ export default function CaptureWizardScreen() {
 
     if (!session?.access_token) {
       setGenerationStatus('error');
-      setGenerationError('Sign in to generate meeting context from your transcript.');
+      const signInMessage = 'Sign in to generate meeting context from your transcript.';
+      setGenerationError(signInMessage);
+      showCaptureError(signInMessage);
       return;
     }
 
@@ -132,7 +176,6 @@ export default function CaptureWizardScreen() {
     if (!requestId) requestRef.current = activeRequest;
     setExtracting(true);
     setGenerationStatus('generating');
-    setGenerationStartedAt(Date.now());
     setGenerationError('');
     setError('');
 
@@ -140,9 +183,14 @@ export default function CaptureWizardScreen() {
 
     try {
       const result = await extractEncounterDraft(session.access_token, clean, {
-        personName: hints.personName,
+        personName: formatPeopleNames(hints.people) || hints.personName,
         personEmail: hints.personEmail,
         personPhone: hints.personPhone,
+        people: (hints.people ?? []).map((person) => ({
+          name: person.name,
+          email: person.email,
+          phone: person.phone,
+        })),
       });
       if (activeRequest !== requestRef.current) return;
 
@@ -151,45 +199,63 @@ export default function CaptureWizardScreen() {
         return {
           ...current,
           ...extracted,
-          personName: current.personAcknowledged && current.personName.trim()
-            ? current.personName
-            : extracted.personName,
-          personEmail: current.personAcknowledged ? current.personEmail : current.personEmail,
-          personPhone: current.personPhone,
-          personLinkedIn: current.personLinkedIn,
+          privateNotes: '',
         };
       });
       setUncertainFields(result.uncertainFields ?? []);
-      setGenerationStatus('ready');
+      setGenerationStatus('idle');
     } catch (caught) {
       if (activeRequest !== requestRef.current) return;
+      const message = caught instanceof Error ? caught.message : 'Could not generate meeting context right now.';
       setGenerationStatus('error');
-      setGenerationError(
-        caught instanceof Error ? caught.message : 'Could not generate meeting context right now.',
-      );
+      setGenerationError(message);
+      showCaptureError(message);
     } finally {
       if (activeRequest === requestRef.current) setExtracting(false);
     }
+  }, [session?.access_token, showCaptureError]);
+
+  const handleTranscriptFinalized = useCallback((transcriptValue: string) => {
+    generationKickoffRef.current = '';
+    setGenerationStatus('idle');
+    const clean = normalizeTranscriptForExtraction(transcriptValue.trim());
+    if (clean.length < 20) return;
+    if (draftRef.current.step >= 1) {
+      void generateMeetingContext(clean);
+    }
+  }, [generateMeetingContext]);
+
+  const transcribeFromServer = useCallback(async (uri: string, meta?: ImportRecordingMeta) => {
+    if (!session?.access_token) {
+      throw new Error('Sign in to transcribe imported recordings.');
+    }
+    const fileName = meta?.fileName || draftRef.current.importFileName || undefined;
+    const mimeType = meta?.mimeType || draftRef.current.importMimeType || undefined;
+    const result = await transcribeEncounterAudio(session.access_token, uri, { fileName, mimeType });
+    if (result.transcript) return result.transcript;
+    if (result.unavailable === 'ai_not_configured') {
+      throw new Error('Server transcription is not configured. Paste a transcript manually for now.');
+    }
+    throw new Error('Could not transcribe this recording. Paste or type what was said.');
   }, [session?.access_token]);
 
-  const transcribeFromServer = useCallback(async (uri: string) => {
-    if (!session?.access_token) {
-      setError('Sign in to transcribe recordings and sync capture with web.');
-      return null;
+  const enterGatherStep = useCallback(() => {
+    const now = new Date().toISOString();
+    generationKickoffRef.current = '';
+    updateDraft({ step: 1, gatherSessionStartedAt: now });
+  }, [updateDraft]);
+
+  const goToStep = useCallback((step: number) => {
+    if (step === 1) {
+      enterGatherStep();
+      return;
     }
-    setError('');
-    try {
-      const result = await transcribeEncounterAudio(session.access_token, uri);
-      if (result.transcript) return result.transcript;
-      if (result.unavailable === 'ai_not_configured') {
-        setError('Server transcription is not configured. Paste a transcript manually for now.');
-      }
-      return null;
-    } catch (transcribeError) {
-      setError(transcribeError instanceof Error ? transcribeError.message : 'Could not transcribe this recording.');
-      return null;
-    }
-  }, [session?.access_token]);
+    updateDraft({ step });
+  }, [enterGatherStep, updateDraft]);
+
+  const handleImportReady = useCallback(() => {
+    enterGatherStep();
+  }, [enterGatherStep]);
 
   const recorder = useCaptureRecorder({
     transcript: draft.transcript,
@@ -197,8 +263,24 @@ export default function CaptureWizardScreen() {
     onDurationChange: handleDurationChange,
     onRecordingUriChange: handleRecordingUriChange,
     onError: handleRecorderError,
+    onImportReady: handleImportReady,
+    onImportStarted: handleImportStarted,
+    onTranscriptFinalized: handleTranscriptFinalized,
     transcribeFromServer,
   });
+
+  const recorderHydratedRef = useRef(false);
+  const isTranscribing = recorder.transcriptStatus === 'transcribing';
+
+  const sessionExchanges = useMemo(() => {
+    const started = draft.gatherSessionStartedAt;
+    if (!started) return [];
+    const startedMs = Date.parse(started) - 5000;
+    return exchanges.filter((exchange) => {
+      if (!exchange.created_at) return false;
+      return Date.parse(exchange.created_at) >= startedMs;
+    });
+  }, [draft.gatherSessionStartedAt, exchanges]);
 
   const captureHasProgress = hasCaptureDraftProgress(draft)
     || recorder.recordingState === 'recording'
@@ -216,6 +298,21 @@ export default function CaptureWizardScreen() {
     setLeaveSheetOpen(false);
     await recorder.resetRecording();
     await deleteCaptureDraft(draftRef.current.encounterId);
+    router.replace('/capture');
+  }, [recorder]);
+
+  const saveDraftAndLeave = useCallback(async () => {
+    setLeaveSheetOpen(false);
+    const current = draftRef.current;
+    const next = {
+      ...current,
+      recordingUri: current.recordingUri || recorder.recordingUri,
+      recordingSource: current.recordingSource || recorder.recordingSource || current.recordingSource,
+      transcript: current.transcript || recorder.displayTranscript.trim(),
+      durationSeconds: current.durationSeconds || recorder.seconds,
+    };
+    setDraft(next);
+    await writeCaptureDraft(next);
     router.replace('/capture');
   }, [recorder]);
 
@@ -237,10 +334,10 @@ export default function CaptureWizardScreen() {
   );
 
   useEffect(() => {
-    if (!draftReady || draft.step !== 1) return;
+    if (!draftReady || (draft.step !== 1 && draft.step !== 2)) return;
     const clean = draft.transcript.trim();
     if (clean.length < 20) return;
-    if (generationStatus === 'generating' || generationStatus === 'ready') return;
+    if (generationStatus === 'generating') return;
 
     const kickoffKey = `${draft.encounterId}:${clean.length}`;
     if (generationKickoffRef.current === kickoffKey) return;
@@ -267,7 +364,10 @@ export default function CaptureWizardScreen() {
         if (params.exchange) next.exchangeId = String(params.exchange);
         if (params.slug && readEnv()) {
           const name = await fetchPublicCardName(readEnv()!.publicCardBaseUrl, String(params.slug));
-          if (name && !next.personName) next.personName = name;
+          if (name && !(next.people ?? []).length) {
+            next.people = [createGatherPerson({ name })];
+            Object.assign(next, syncLegacyPersonFields(next.people));
+          }
         }
         if (!stored) await writeCaptureDraft(next);
         setDraft(next);
@@ -281,6 +381,38 @@ export default function CaptureWizardScreen() {
     if (!draftReady) return;
     void writeCaptureDraft(draft);
   }, [draft, draftReady]);
+
+  useEffect(() => {
+    if (!draftReady || recorderHydratedRef.current) return;
+    recorderHydratedRef.current = true;
+
+    recorder.hydrateFromDraft({
+      recordingUri: draft.recordingUri,
+      recordingSource: draft.recordingSource,
+      transcript: draft.transcript,
+      durationSeconds: draft.durationSeconds,
+    });
+
+    if (draft.recordingUri && draft.transcript.trim().length < 20 && session?.access_token) {
+      void recorder.transcribeRecordingIfNeeded(draft.recordingUri);
+    }
+  }, [draft.durationSeconds, draft.recordingSource, draft.recordingUri, draft.transcript, draftReady, recorder, session?.access_token]);
+
+  useEffect(() => {
+    if (!draftReady || !session?.access_token) return;
+    if (draft.step < 1 || draft.transcript.trim().length >= 20) return;
+    const uri = draft.recordingUri || recorder.recordingUri;
+    if (!uri || isTranscribing) return;
+    void recorder.transcribeRecordingIfNeeded(uri);
+  }, [
+    draft.recordingUri,
+    draft.step,
+    draft.transcript,
+    draftReady,
+    isTranscribing,
+    recorder,
+    session?.access_token,
+  ]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -342,50 +474,49 @@ export default function CaptureWizardScreen() {
 
   function linkExchange(exchange: InboundExchange) {
     setDraft((current) => {
-      if (current.exchangeId === exchange.id) return current;
+      const people = current.people ?? [];
+      if (people.some((person) => person.exchangeId === exchange.id)) return current;
+      if (people.length >= MAX_GATHER_PEOPLE) return current;
       return {
         ...current,
-        exchangeId: exchange.id,
-        personName: exchange.visitor_name || current.personName,
-        personEmail: exchange.visitor_email || current.personEmail,
-        personPhone: exchange.visitor_phone || current.personPhone,
-        personAcknowledged: true,
+        ...syncLegacyPersonFields([...people, personFromExchange(exchange)]),
       };
     });
   }
 
   async function finishRecordingAndGather() {
-    setError('');
     if (!draft.consent) {
-      setError('Confirm that everyone agreed before continuing.');
+      showCaptureError('Confirm that everyone agreed before continuing.');
       return;
     }
     if (recorder.recordingState === 'recording' || recorder.recordingState === 'paused') {
       await recorder.stopRecording();
     }
-    generationKickoffRef.current = '';
-    updateDraft({ step: 1 });
+    enterGatherStep();
   }
 
   function continueFromRecord(skipRecording = false) {
-    setError('');
     if (!draft.consent) {
-      setError('Confirm that everyone agreed before continuing.');
+      showCaptureError('Confirm that everyone agreed before continuing.');
       return;
     }
     if (!skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
-      setError('Tap Finish recording when you are done — there is no time limit.');
+      showCaptureError('Tap Finish recording when you are done — there is no time limit.');
       return;
     }
-    generationKickoffRef.current = '';
-    updateDraft({ step: 1 });
+    enterGatherStep();
   }
 
   function continueFromGather() {
-    setError('');
-    if (generationStatus === 'generating') return;
-    if (!draft.transcript.trim()) {
-      setError('Record or add a transcript before reviewing context.');
+    const people = draft.people ?? [];
+    if (!hasValidGatherPeople(people)) {
+      showCaptureError('Add at least one person you met.');
+      return;
+    }
+    const hasRecording = Boolean(draft.recordingUri || recorder.recordingUri);
+    const hasTranscript = Boolean(draft.transcript.trim());
+    if (!hasTranscript && !isTranscribing && !hasRecording) {
+      showCaptureError('Record or add a transcript before continuing.');
       return;
     }
     updateDraft({ step: 2 });
@@ -400,13 +531,8 @@ export default function CaptureWizardScreen() {
   }
 
   function continueFromContext() {
-    setError('');
-    if (!draft.personName.trim()) {
-      setError('Add who you met before continuing.');
-      return;
-    }
-    if (!draft.title.trim() && !draft.sharedSummary.trim() && !draft.privateNotes.trim()) {
-      setError('Add a meeting title or a short note about what you discussed.');
+    if (!draft.title.trim() && !draft.sharedSummary.trim()) {
+      showCaptureError('Add a meeting title or share summary.');
       return;
     }
     updateDraft({ step: 3 });
@@ -417,7 +543,6 @@ export default function CaptureWizardScreen() {
     if (!token) return;
 
     setSaving(true);
-    setError('');
     setMessage('');
     try {
       let recording;
@@ -439,7 +564,7 @@ export default function CaptureWizardScreen() {
         contactId: draft.contactId || undefined,
         exchangeId: draft.exchangeId || undefined,
         sharedSummary: draft.sharedSummary,
-        privateNotes: draft.privateNotes,
+        privateNotes: '',
         followUp: skipFollowUp ? '' : draft.followUp,
         followUpType: draft.followUpType,
         dueAt: draft.dueAt,
@@ -462,7 +587,7 @@ export default function CaptureWizardScreen() {
       await deleteCaptureDraft(draft.encounterId);
       router.replace(`/capture/${payload.id}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save this meeting.');
+      showCaptureError(caught instanceof Error ? caught.message : 'Could not save this meeting.');
     } finally {
       setSaving(false);
     }
@@ -482,7 +607,7 @@ export default function CaptureWizardScreen() {
         </View>
 
         <View style={styles.stepperWrap}>
-          <CaptureStepIndicator current={draft.step} onStep={(step) => updateDraft({ step })} />
+          <CaptureStepIndicator current={draft.step} onStep={goToStep} />
         </View>
 
         <ScrollView
@@ -498,6 +623,8 @@ export default function CaptureWizardScreen() {
               onConsentMethodChange={(value) => updateDraft({ consentMethod: value })}
               recorder={recorder}
               signedIn={Boolean(session?.access_token)}
+              hasRecording={Boolean(draft.recordingUri || recorder.recordingUri)}
+              hasTranscript={Boolean(draft.transcript.trim())}
             />
           ) : null}
 
@@ -505,15 +632,13 @@ export default function CaptureWizardScreen() {
             <CaptureGatherStep
               draft={draft}
               onDraftChange={updateDraft}
-              generationStatus={generationStatus}
-              generationStartedAt={generationStartedAt}
-              generationError={generationError}
-              onDismissReady={() => setGenerationStatus('idle')}
-              exchanges={exchanges}
+              exchanges={sessionExchanges}
               loadingExchanges={loadingExchanges}
               signedIn={Boolean(session?.access_token)}
               onLinkExchange={linkExchange}
               onEnsureAuth={ensureAuth}
+              isTranscribing={isTranscribing}
+              hasRecording={Boolean(draft.recordingUri || recorder.recordingUri)}
             />
           ) : null}
 
@@ -522,6 +647,8 @@ export default function CaptureWizardScreen() {
               draft={draft}
               onDraftChange={updateDraft}
               refreshing={extracting}
+              isGenerating={generationStatus === 'generating'}
+              generationError={generationError}
               onRefresh={() => {
                 generationKickoffRef.current = '';
                 setGenerationStatus('idle');
@@ -574,12 +701,11 @@ export default function CaptureWizardScreen() {
           ) : null}
 
           {message ? <Text style={styles.success}>{message}</Text> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>
 
         <View style={styles.footer}>
           {draft.step > 0 ? (
-            <Button variant="secondary" style={{ flex: 1 }} onPress={() => updateDraft({ step: draft.step - 1 })}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => goToStep(draft.step - 1)}>
               Back
             </Button>
           ) : null}
@@ -598,8 +724,11 @@ export default function CaptureWizardScreen() {
                 <Button
                   style={{ flex: 1 }}
                   onPress={() => continueFromRecord(false)}
-                  disabled={!draft.consent || (!recorder.recordingComplete && !draft.transcript.trim())}>
-                  {recorder.recordingComplete || draft.transcript.trim() ? 'Next: gather context' : 'Continue'}
+                  disabled={
+                    !draft.consent
+                    || (!recorder.recordingComplete && !draft.transcript.trim() && !draft.recordingUri)
+                  }>
+                  Next
                 </Button>
               )}
             </>
@@ -608,26 +737,22 @@ export default function CaptureWizardScreen() {
             <Button
               style={{ flex: 1 }}
               onPress={continueFromGather}
-              disabled={generationStatus === 'generating'}>
-              {generationStatus === 'ready'
-                ? 'Review context'
-                : generationStatus === 'error'
-                  ? 'Continue anyway'
-                  : 'Waiting for context…'}
+              disabled={!hasValidGatherPeople(draft.people ?? [])}>
+              Next
             </Button>
           ) : null}
           {draft.step === 2 ? (
             <Button style={{ flex: 1 }} onPress={continueFromContext}>
-              Continue
+              Next
             </Button>
           ) : null}
           {draft.step === 3 ? (
             <>
               <Button variant="secondary" style={{ flex: 1 }} loading={saving} onPress={() => void saveAndReview(true)}>
-                Save without follow-up
+                Save
               </Button>
               <Button style={{ flex: 1 }} loading={saving} onPress={() => void saveAndReview(false)}>
-                Save and review
+                Save & follow-up
               </Button>
             </>
           ) : null}
@@ -637,7 +762,13 @@ export default function CaptureWizardScreen() {
       <CaptureLeaveSheet
         visible={leaveSheetOpen}
         onStay={() => setLeaveSheetOpen(false)}
+        onSaveDraft={() => void saveDraftAndLeave()}
         onDiscard={() => void confirmLeave()}
+      />
+      <CaptureErrorSheet
+        visible={errorSheetOpen}
+        message={error}
+        onClose={closeErrorSheet}
       />
     </View>
   );

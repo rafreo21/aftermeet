@@ -2,12 +2,10 @@ import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
-import { useCard } from '@/features/card/card-context';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
   const { session, configured, signOut } = useAuth();
-  const { card, activeCardId } = useCard();
 
   return (
     <Screen>
@@ -28,16 +26,6 @@ export default function SettingsScreen() {
       ) : (
         <Button variant="secondary" onPress={signOut}>Sign out</Button>
       )}
-      <Panel>
-        <Text style={styles.label}>Card tools</Text>
-        <Text style={styles.value}>Wallet, NFC, signature, widgets</Text>
-        <Text style={styles.hint}>Open sharing tools for a specific card.</Text>
-        <Button
-          variant="secondary"
-          onPress={() => router.push(`/card-tools?id=${card.id || activeCardId}`)}>
-          Open card tools
-        </Button>
-      </Panel>
     </Screen>
   );
 }

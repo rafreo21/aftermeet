@@ -11,7 +11,12 @@ export type WidgetSnapshot = {
   company: string;
   cardUrl: string;
   shareDeepLink: string;
+  connectionsDeepLink: string;
   qrImageUri?: string;
+  qrImageBase64?: string;
+  logoImageUri?: string;
+  photoImageUri?: string;
+  photoImageBase64?: string;
   initials: string;
   connections: WidgetConnection[];
 };

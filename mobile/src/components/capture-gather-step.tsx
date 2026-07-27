@@ -1,53 +1,85 @@
+import { router } from 'expo-router';
+import { CaretRight, CheckCircle, IdentificationCard, PencilSimple, QrCode, Trash } from 'phosphor-react-native';
+import { useState, type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+
+import { BottomSheet } from '@/components/bottom-sheet';
+import { Body, Button } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
 import type { CaptureWizardDraft } from '@/features/encounters/capture-draft';
 import type { InboundExchange } from '@/features/encounters/encounter-api';
 import {
-  ContextGenerationBanner,
-  type ContextGenerationStatus,
-} from '@/components/context-generation-banner';
-import { BottomSheet } from '@/components/bottom-sheet';
-import { Body, Button } from '@/components/ui';
+  createGatherPerson,
+  MAX_GATHER_PEOPLE,
+  syncLegacyPersonFields,
+  type GatherPerson,
+} from '@/features/encounters/gather-people';
+import { QR_LOGO } from '@/lib/widget-qr';
 import { colors, radius, spacing } from '@/theme/tokens';
-import { CheckCircle, IdentificationCard, PencilSimple, QrCode } from 'phosphor-react-native';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import { router } from 'expo-router';
 
 type CaptureGatherStepProps = {
   draft: CaptureWizardDraft;
   onDraftChange: (changes: Partial<CaptureWizardDraft>) => void;
-  generationStatus: ContextGenerationStatus;
-  generationStartedAt: number | null;
-  generationError: string;
-  onDismissReady: () => void;
   exchanges: InboundExchange[];
   loadingExchanges: boolean;
   signedIn: boolean;
   onLinkExchange: (exchange: InboundExchange) => void;
   onEnsureAuth: () => Promise<string | null>;
+  isTranscribing?: boolean;
+  hasRecording?: boolean;
 };
 
-function formatContactLine(draft: CaptureWizardDraft) {
-  const parts = [draft.personEmail.trim(), draft.personPhone.trim()].filter(Boolean);
-  return parts.join(' · ');
+type OptionRowProps = {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  isLast?: boolean;
+  disabled?: boolean;
+};
+
+function OptionRow({ icon, title, subtitle, onPress, isLast, disabled }: OptionRowProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.optionRow,
+        isLast && styles.optionRowLast,
+        pressed && !disabled && styles.optionRowPressed,
+        disabled && styles.optionRowDisabled,
+      ]}>
+      <View style={styles.optionIcon}>{icon}</View>
+      <View style={styles.optionCopy}>
+        <Text style={styles.optionTitle}>{title}</Text>
+        <Text style={styles.optionSubtitle}>{subtitle}</Text>
+      </View>
+      <CaretRight size={18} color={colors.muted} weight="bold" />
+    </Pressable>
+  );
+}
+
+function formatContactLine(person: GatherPerson) {
+  return [person.email.trim(), person.phone.trim()].filter(Boolean).join(' · ');
 }
 
 function PersonFields({
-  draft,
-  onDraftChange,
+  person,
+  onChange,
   personError,
 }: {
-  draft: CaptureWizardDraft;
-  onDraftChange: (changes: Partial<CaptureWizardDraft>) => void;
+  person: GatherPerson;
+  onChange: (changes: Partial<GatherPerson>) => void;
   personError?: string;
 }) {
   return (
     <>
       <Text style={styles.label}>Full name</Text>
       <TextInput
-        value={draft.personName}
-        onChangeText={(value) => onDraftChange({ personName: value, personAcknowledged: false })}
+        value={person.name}
+        onChangeText={(value) => onChange({ name: value })}
         placeholder="Full name"
         placeholderTextColor={colors.muted}
         autoComplete="name"
@@ -55,8 +87,8 @@ function PersonFields({
       />
       <Text style={styles.label}>Email</Text>
       <TextInput
-        value={draft.personEmail}
-        onChangeText={(value) => onDraftChange({ personEmail: value, personAcknowledged: false })}
+        value={person.email}
+        onChangeText={(value) => onChange({ email: value })}
         placeholder="name@company.com"
         placeholderTextColor={colors.muted}
         keyboardType="email-address"
@@ -66,8 +98,8 @@ function PersonFields({
       />
       <Text style={styles.label}>Phone (optional)</Text>
       <TextInput
-        value={draft.personPhone}
-        onChangeText={(value) => onDraftChange({ personPhone: value })}
+        value={person.phone}
+        onChangeText={(value) => onChange({ phone: value })}
         placeholder="+44 …"
         placeholderTextColor={colors.muted}
         keyboardType="phone-pad"
@@ -76,8 +108,8 @@ function PersonFields({
       />
       <Text style={styles.label}>LinkedIn (optional)</Text>
       <TextInput
-        value={draft.personLinkedIn}
-        onChangeText={(value) => onDraftChange({ personLinkedIn: value })}
+        value={person.linkedIn}
+        onChangeText={(value) => onChange({ linkedIn: value })}
         placeholder="Profile URL or username"
         placeholderTextColor={colors.muted}
         autoCapitalize="none"
@@ -91,33 +123,46 @@ function PersonFields({
 export function CaptureGatherStep({
   draft,
   onDraftChange,
-  generationStatus,
-  generationStartedAt,
-  generationError,
-  onDismissReady,
   exchanges,
   loadingExchanges,
   signedIn,
   onLinkExchange,
   onEnsureAuth,
+  isTranscribing = false,
+  hasRecording = false,
 }: CaptureGatherStepProps) {
   const { card, publicUrl } = useCard();
-  const [showQr, setShowQr] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [personError, setPersonError] = useState('');
-  const [editOpen, setEditOpen] = useState(false);
+  const [formPerson, setFormPerson] = useState<GatherPerson>(createGatherPerson());
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
 
-  const personAcknowledged =
-    Boolean(draft.personAcknowledged)
-    || (Boolean(draft.exchangeId) && Boolean(draft.personName.trim()));
+  const people = draft.people ?? [];
+  const atCapacity = people.length >= MAX_GATHER_PEOPLE;
 
-  function validatePerson() {
-    const name = draft.personName.trim();
-    const email = draft.personEmail.trim();
-    if (name.length < 2) {
+  function updatePeople(nextPeople: GatherPerson[]) {
+    onDraftChange(syncLegacyPersonFields(nextPeople.slice(0, MAX_GATHER_PEOPLE)));
+  }
+
+  function openManualSheet(person?: GatherPerson) {
+    setPersonError('');
+    if (person) {
+      setFormPerson({ ...person });
+      setEditingPersonId(person.id);
+    } else {
+      setFormPerson(createGatherPerson());
+      setEditingPersonId(null);
+    }
+    setManualOpen(true);
+  }
+
+  function validatePerson(person: GatherPerson) {
+    if (person.name.trim().length < 2) {
       setPersonError('Enter their full name.');
       return false;
     }
-    if (!email || !email.includes('@')) {
+    if (!person.email.trim().includes('@')) {
       setPersonError('Email is required.');
       return false;
     }
@@ -125,134 +170,187 @@ export function CaptureGatherStep({
     return true;
   }
 
-  function savePersonManual() {
-    if (!validatePerson()) return;
-    onDraftChange({ personAcknowledged: true });
+  function savePerson() {
+    if (!validatePerson(formPerson)) return;
+
+    const normalized = createGatherPerson(formPerson);
+    const nextPeople = editingPersonId
+      ? people.map((person) => (person.id === editingPersonId ? { ...normalized, id: editingPersonId } : person))
+      : [...people, normalized];
+
+    updatePeople(nextPeople);
+    setManualOpen(false);
+    setEditingPersonId(null);
+    setFormPerson(createGatherPerson());
   }
 
-  function savePersonEdit() {
-    if (!validatePerson()) return;
-    onDraftChange({ personAcknowledged: true });
-    setEditOpen(false);
+  function removePerson(personId: string) {
+    updatePeople(people.filter((person) => person.id !== personId));
   }
 
   return (
     <View style={styles.stack}>
-      <ContextGenerationBanner
-        status={generationStatus}
-        startedAt={generationStartedAt}
-        errorMessage={generationError}
-        onDismissReady={onDismissReady}
-      />
-
-      {personAcknowledged ? (
-        <View style={styles.addedCard}>
-          <CheckCircle size={22} color={colors.ink} weight="fill" />
-          <View style={styles.addedCopy}>
-            <Text style={styles.addedTitle}>{draft.personName.trim()} added</Text>
-            <Text style={styles.addedMeta}>{formatContactLine(draft) || 'Contact saved'}</Text>
-            {draft.personLinkedIn.trim() ? (
-              <Text style={styles.addedMeta}>{draft.personLinkedIn.trim()}</Text>
-            ) : null}
-            {draft.exchangeId ? (
-              <Text style={styles.addedBadge}>Linked from your card scan</Text>
-            ) : null}
+      {isTranscribing || (hasRecording && !draft.transcript.trim()) ? (
+        <View style={styles.transcriptBanner}>
+          <ActivityIndicator color={colors.ink} size="small" />
+          <View style={styles.transcriptBannerCopy}>
+            <Text style={styles.transcriptBannerTitle}>Generating transcript</Text>
+            <Text style={styles.transcriptBannerBody}>
+              Your imported recording is being transcribed. This powers the meeting title and share summary.
+            </Text>
           </View>
-          <Pressable accessibilityRole="button" onPress={() => setEditOpen(true)} style={styles.editButton}>
-            <PencilSimple size={16} color={colors.ink} weight="bold" />
-            <Text style={styles.editText}>Edit</Text>
-          </Pressable>
         </View>
-      ) : (
-        <>
-          <View style={styles.block}>
-            <View style={styles.blockHead}>
-              <IdentificationCard size={18} color={colors.ink} weight="bold" />
-              <Text style={styles.blockTitle}>Who did you meet?</Text>
-            </View>
-            <Body>Use this time while context loads — add them manually or let them scan your QR.</Body>
-            <PersonFields draft={draft} onDraftChange={onDraftChange} personError={personError} />
-            <Button variant="secondary" onPress={savePersonManual}>
-              Save person
-            </Button>
-          </View>
+      ) : null}
 
-          <View style={styles.block}>
-            <View style={styles.blockHead}>
-              <QrCode size={18} color={colors.ink} weight="bold" />
-              <Text style={styles.blockTitle}>Share your card</Text>
-            </View>
-            <Body>They scan your QR and send their details — we link them automatically.</Body>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowQr((value) => !value)}
-              style={styles.qrToggle}>
-              <Text style={styles.qrToggleText}>{showQr ? 'Hide QR code' : 'Show QR code'}</Text>
-            </Pressable>
-            {showQr ? (
-              <View style={styles.qrWrap}>
-                <QRCode
-                  value={publicUrl}
-                  size={200}
-                  color={colors.ink}
-                  backgroundColor={colors.white}
-                  logo={require('../../assets/images/splash-icon.png')}
-                  logoSize={42}
-                  logoBackgroundColor={colors.white}
-                  logoMargin={3}
-                  logoBorderRadius={10}
-                  ecl="H"
-                />
-                <Text style={styles.qrHint}>{card.name}</Text>
+      <View style={styles.prompt}>
+        <View style={styles.promptHead}>
+          <IdentificationCard size={18} color={colors.ink} weight="bold" />
+          <Text style={styles.promptTitle}>Who did you meet?</Text>
+        </View>
+        <Body style={styles.promptCopy}>Add up to {MAX_GATHER_PEOPLE} people from this meeting.</Body>
+      </View>
+
+      {people.length ? (
+        <View style={styles.peopleList}>
+          {people.map((person) => (
+            <View key={person.id} style={styles.addedCard}>
+              <CheckCircle size={22} color={colors.ink} weight="fill" />
+              <View style={styles.addedCopy}>
+                <Text style={styles.addedTitle}>{person.name.trim()}</Text>
+                <Text style={styles.addedMeta}>{formatContactLine(person) || 'Contact saved'}</Text>
+                {person.linkedIn.trim() ? (
+                  <Text style={styles.addedMeta}>{person.linkedIn.trim()}</Text>
+                ) : null}
+                {person.exchangeId ? (
+                  <Text style={styles.addedBadge}>Linked from your card scan</Text>
+                ) : null}
               </View>
-            ) : null}
-            <Button variant="secondary" onPress={() => router.push('/share-card')}>
-              Open full-screen QR
-            </Button>
-          </View>
+              <View style={styles.addedActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${person.name}`}
+                  onPress={() => openManualSheet(person)}
+                  style={styles.iconButton}>
+                  <PencilSimple size={16} color={colors.ink} weight="bold" />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${person.name}`}
+                  onPress={() => removePerson(person.id)}
+                  style={styles.iconButton}>
+                  <Trash size={16} color={colors.danger} weight="bold" />
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
-          {signedIn ? (
-            <View style={styles.block}>
-              <Text style={styles.blockTitle}>Recent scans</Text>
-              {loadingExchanges ? (
-                <Text style={styles.muted}>Checking for new details…</Text>
-              ) : exchanges.length ? (
-                <View style={styles.exchangeList}>
-                  {exchanges.map((exchange) => {
-                    const selected = draft.exchangeId === exchange.id;
-                    return (
-                      <Pressable
-                        key={exchange.id}
-                        accessibilityRole="button"
-                        onPress={() => onLinkExchange(exchange)}
-                        style={[styles.exchangeCard, selected && styles.exchangeCardSelected]}>
-                        <Text style={styles.exchangeName}>{exchange.visitor_name || 'Unknown visitor'}</Text>
-                        <Text style={styles.exchangeMeta}>
-                          {[exchange.visitor_email, exchange.visitor_phone].filter(Boolean).join(' · ')
-                            || exchange.visitor_company
-                            || 'No contact yet'}
-                        </Text>
-                        {selected ? <Text style={styles.exchangeSelected}>Added</Text> : null}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : (
-                <Text style={styles.muted}>Waiting for them to scan — recent submissions appear here.</Text>
-              )}
+      <View style={styles.optionList}>
+        <OptionRow
+          icon={<PencilSimple size={22} color={colors.ink} weight="bold" />}
+          title="Enter manually"
+          subtitle={atCapacity ? 'Maximum people added' : 'Name, email, and optional details'}
+          onPress={() => openManualSheet()}
+          disabled={atCapacity}
+        />
+        <OptionRow
+          icon={<QrCode size={22} color={colors.ink} weight="bold" />}
+          title="Share your card"
+          subtitle="They scan your QR and we link them automatically"
+          onPress={() => setQrOpen(true)}
+          isLast
+        />
+      </View>
+
+      {signedIn ? (
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Recent scans</Text>
+          {loadingExchanges ? (
+            <Text style={styles.muted}>Checking for new details…</Text>
+          ) : exchanges.length ? (
+            <View style={styles.exchangeList}>
+              {exchanges.map((exchange) => {
+                const selected = people.some((person) => person.exchangeId === exchange.id);
+                const disabled = selected || atCapacity;
+                return (
+                  <Pressable
+                    key={exchange.id}
+                    accessibilityRole="button"
+                    disabled={disabled}
+                    onPress={() => onLinkExchange(exchange)}
+                    style={[
+                      styles.exchangeCard,
+                      selected && styles.exchangeCardSelected,
+                      disabled && !selected && styles.exchangeCardDisabled,
+                    ]}>
+                    <Text style={styles.exchangeName}>{exchange.visitor_name || 'Unknown visitor'}</Text>
+                    <Text style={styles.exchangeMeta}>
+                      {[exchange.visitor_email, exchange.visitor_phone].filter(Boolean).join(' · ')
+                        || exchange.visitor_company
+                        || 'No contact yet'}
+                    </Text>
+                    {selected ? <Text style={styles.exchangeSelected}>Added</Text> : null}
+                  </Pressable>
+                );
+              })}
             </View>
           ) : (
-            <Button onPress={() => void onEnsureAuth()}>Sign in to detect QR submissions</Button>
+            <Text style={styles.muted}>No recent scans yet.</Text>
           )}
-        </>
+        </View>
+      ) : (
+        <Button onPress={() => void onEnsureAuth()}>Sign in to detect QR submissions</Button>
       )}
 
       <BottomSheet
-        visible={editOpen}
-        title="Edit person"
-        onClose={() => setEditOpen(false)}
-        footer={<Button onPress={savePersonEdit}>Save changes</Button>}>
-        <PersonFields draft={draft} onDraftChange={onDraftChange} personError={personError} />
+        visible={manualOpen}
+        title={editingPersonId ? 'Edit person' : 'Enter manually'}
+        onClose={() => setManualOpen(false)}
+        footer={<Button onPress={savePerson}>{editingPersonId ? 'Save changes' : 'Add person'}</Button>}>
+        <Body>Add contact details for someone in this meeting.</Body>
+        <PersonFields
+          person={formPerson}
+          onChange={(changes) => setFormPerson((current) => createGatherPerson({ ...current, ...changes }))}
+          personError={personError}
+        />
+      </BottomSheet>
+
+      <BottomSheet
+        visible={qrOpen}
+        title="Share your card"
+        onClose={() => setQrOpen(false)}
+        footer={
+          <Button variant="secondary" onPress={() => {
+            setQrOpen(false);
+            router.push('/share-card');
+          }}>
+            Open full-screen QR
+          </Button>
+        }>
+        <Body style={styles.qrSheetCopy}>
+          Ask them to scan this code — their details link here automatically. You can add up to {MAX_GATHER_PEOPLE} people.
+        </Body>
+        <View style={styles.qrWrap}>
+          <QRCode
+            value={publicUrl}
+            size={220}
+            color={colors.ink}
+            backgroundColor={colors.white}
+            logo={QR_LOGO}
+            logoSize={48}
+            logoBackgroundColor={colors.white}
+            logoMargin={4}
+            logoBorderRadius={12}
+            ecl="H"
+          />
+          <Text style={styles.qrHint}>{card.name}</Text>
+          {card.role ? (
+            <Text style={styles.qrSubhint}>
+              {card.role}{card.company ? ` · ${card.company}` : ''}
+            </Text>
+          ) : null}
+        </View>
       </BottomSheet>
     </View>
   );
@@ -260,6 +358,54 @@ export function CaptureGatherStep({
 
 const styles = StyleSheet.create({
   stack: { gap: spacing.x4 },
+  transcriptBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.x3,
+    padding: spacing.x4,
+    borderRadius: radius.large,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  transcriptBannerCopy: { flex: 1, gap: 4 },
+  transcriptBannerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  transcriptBannerBody: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  prompt: { gap: spacing.x2 },
+  promptHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  promptTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  promptCopy: { marginTop: -spacing.x1 },
+  peopleList: { gap: spacing.x2 },
+  optionList: {
+    borderRadius: radius.large,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    paddingHorizontal: spacing.x4,
+    paddingVertical: spacing.x4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  optionRowPressed: { opacity: 0.72 },
+  optionRowDisabled: { opacity: 0.45 },
+  optionRowLast: { borderBottomWidth: 0 },
+  optionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionCopy: { flex: 1, gap: 2 },
+  optionTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  optionSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   block: {
     gap: spacing.x3,
     padding: spacing.x5,
@@ -268,7 +414,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  blockHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
   blockTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   input: {
@@ -287,7 +432,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.x3,
-    padding: spacing.x5,
+    padding: spacing.x4,
     borderRadius: radius.large,
     backgroundColor: '#EAF6E4',
     borderWidth: 1,
@@ -303,28 +448,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textTransform: 'uppercase',
   },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.x3,
-    paddingVertical: spacing.x2,
+  addedActions: { flexDirection: 'row', gap: spacing.x2 },
+  iconButton: {
+    width: 36,
+    height: 36,
     borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: '#CFE8C0',
   },
-  editText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
-  qrToggle: { alignSelf: 'flex-start' },
-  qrToggleText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
+  qrSheetCopy: { textAlign: 'center' },
   qrWrap: {
     alignItems: 'center',
-    gap: spacing.x3,
+    gap: spacing.x2,
     padding: spacing.x5,
     borderRadius: radius.medium,
     backgroundColor: colors.canvas,
   },
-  qrHint: { color: colors.muted, fontSize: 13 },
+  qrHint: { color: colors.ink, fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  qrSubhint: { color: colors.muted, fontSize: 13, textAlign: 'center' },
   exchangeList: { gap: spacing.x3 },
   exchangeCard: {
     gap: spacing.x1,
@@ -338,6 +482,7 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     backgroundColor: colors.surfaceMuted,
   },
+  exchangeCardDisabled: { opacity: 0.55 },
   exchangeName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   exchangeMeta: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   exchangeSelected: { color: colors.ink, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },

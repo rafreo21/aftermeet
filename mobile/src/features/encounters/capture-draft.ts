@@ -2,6 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { EncounterPayload } from '@/features/encounters/encounter-api';
 import type { AudioRetention } from '@/features/encounters/local-recordings';
+import {
+  migrateGatherPeople,
+  syncLegacyPersonFields,
+  type GatherPerson,
+} from '@/features/encounters/gather-people';
+
+export type { GatherPerson };
+export { MAX_GATHER_PEOPLE } from '@/features/encounters/gather-people';
 
 export type CaptureWizardDraft = {
   step: number;
@@ -12,6 +20,7 @@ export type CaptureWizardDraft = {
   recordingUri: string;
   recordingSource: 'recorded' | 'imported' | '';
   retention: AudioRetention;
+  people: GatherPerson[];
   personName: string;
   personEmail: string;
   personPhone: string;
@@ -26,6 +35,9 @@ export type CaptureWizardDraft = {
   followUp: string;
   followUpType: EncounterPayload['actions'][number]['channel'];
   dueAt: string;
+  gatherSessionStartedAt: string;
+  importFileName: string;
+  importMimeType: string;
   updatedAt: string;
 };
 
@@ -55,12 +67,18 @@ function draftStorageKey(encounterId: string) {
 }
 
 function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft {
+  const people = migrateGatherPeople(parsed);
+  const synced = syncLegacyPersonFields(people);
   return {
     ...EMPTY_CAPTURE_DRAFT,
     ...parsed,
+    ...synced,
+    people: synced.people ?? [],
     encounterId: parsed.encounterId || createEncounterId(),
     updatedAt: parsed.updatedAt || new Date().toISOString(),
+    gatherSessionStartedAt: parsed.gatherSessionStartedAt || '',
     step: typeof parsed.step === 'number' && parsed.step >= 0 && parsed.step <= 3 ? parsed.step : 0,
+    privateNotes: '',
   };
 }
 
@@ -84,6 +102,7 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   recordingUri: '',
   recordingSource: '',
   retention: '7_days',
+  people: [],
   personName: '',
   personEmail: '',
   personPhone: '',
@@ -98,14 +117,19 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   followUp: '',
   followUpType: 'email',
   dueAt: '',
+  gatherSessionStartedAt: '',
+  importFileName: '',
+  importMimeType: '',
   updatedAt: new Date().toISOString(),
 };
 
 export function createFreshCaptureDraft(): CaptureWizardDraft {
+  const now = new Date().toISOString();
   return {
     ...EMPTY_CAPTURE_DRAFT,
     encounterId: createEncounterId(),
-    updatedAt: new Date().toISOString(),
+    gatherSessionStartedAt: now,
+    updatedAt: now,
   };
 }
 
@@ -225,9 +249,8 @@ export function hasCaptureDraftProgress(draft: CaptureWizardDraft) {
     || draft.consent
     || draft.transcript.trim().length > 0
     || draft.recordingUri.trim().length > 0
-    || draft.personName.trim().length > 0
+    || draft.people.length > 0
     || draft.title.trim().length > 0
-    || draft.privateNotes.trim().length > 0
     || draft.sharedSummary.trim().length > 0
     || draft.followUp.trim().length > 0;
 }

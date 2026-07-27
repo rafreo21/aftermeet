@@ -176,7 +176,7 @@ export default function CaptureDetailScreen() {
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Review notes, listen to the recording, and edit anything before you follow up.</Body>
+      <Body>Review the share summary, listen to the recording, and edit anything before you follow up.</Body>
 
       {hasRecording ? (
         <View style={styles.recorderCard}>
@@ -216,25 +216,15 @@ export default function CaptureDetailScreen() {
       ) : null}
 
       <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Private to you</Text>
-        <Text style={styles.label}>Private notes</Text>
-        <TextInput
-          value={encounter.privateNotes}
-          onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
-          multiline
-          scrollEnabled
-          style={[styles.input, styles.notesField]}
-        />
-      </Panel>
-
-      <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Shared meeting record</Text>
-        <Text style={styles.label}>Shared summary</Text>
+        <Text style={styles.sectionTitle}>Share summary</Text>
+        <Text style={styles.label}>Meeting recap</Text>
         <TextInput
           value={encounter.sharedSummary}
-          onChangeText={(value) => setEncounter({ ...encounter, sharedSummary: value })}
+          onChangeText={(value) => setEncounter({ ...encounter, sharedSummary: value, privateNotes: '' })}
           multiline
           scrollEnabled
+          placeholder="What you discussed, decided, and who owns what next…"
+          placeholderTextColor={colors.muted}
           style={[styles.input, styles.notesField]}
         />
       </Panel>

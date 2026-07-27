@@ -15,6 +15,21 @@ export async function POST(request: Request) {
   const personName = typeof body?.personName === "string" ? body.personName.trim() : "";
   const personEmail = typeof body?.personEmail === "string" ? body.personEmail.trim() : "";
   const personPhone = typeof body?.personPhone === "string" ? body.personPhone.trim() : "";
+  const people = Array.isArray(body?.people)
+    ? body!.people
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return null;
+          const record = entry as Record<string, unknown>;
+          const name = typeof record.name === "string" ? record.name.trim() : "";
+          if (!name) return null;
+          return {
+            name,
+            email: typeof record.email === "string" ? record.email.trim() : "",
+            phone: typeof record.phone === "string" ? record.phone.trim() : "",
+          };
+        })
+        .filter(Boolean) as Array<{ name: string; email?: string; phone?: string }>
+    : [];
 
   if (transcript.length < 20) {
     return NextResponse.json({ error: "Add more transcript before generating context." }, { status: 400 });
@@ -25,6 +40,7 @@ export async function POST(request: Request) {
     const result = await extractEncounterDraft(transcript, personName, ownerContext, {
       personEmail,
       personPhone,
+      people,
     });
     return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

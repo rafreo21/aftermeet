@@ -1,4 +1,4 @@
-import { HStack, Image, Text, VStack } from '@expo/ui/swift-ui';
+import { HStack, Image, Text, VStack, ZStack } from '@expo/ui/swift-ui';
 import { font, foregroundStyle, frame, padding, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget } from 'expo-widgets';
 
@@ -9,6 +9,8 @@ export type BusinessCardWidgetProps = {
   initials?: string;
   shareDeepLink?: string;
   qrImageUri?: string;
+  logoImageUri?: string;
+  photoImageUri?: string;
 };
 
 function BusinessCardWidget(props: BusinessCardWidgetProps) {
@@ -20,15 +22,24 @@ function BusinessCardWidget(props: BusinessCardWidgetProps) {
     <HStack modifiers={[padding({ all: 10 }), widgetURL(deepLink)]}>
       <VStack modifiers={[frame({ width: 92, height: 92 }), padding({ all: 6 })]}>
         {props.qrImageUri ? (
-          <Image uiImage={props.qrImageUri} modifiers={[frame({ width: 80, height: 80 })]} />
+          <ZStack modifiers={[frame({ width: 80, height: 80 })]}>
+            <Image uiImage={props.qrImageUri} modifiers={[frame({ width: 80, height: 80 })]} />
+            {props.logoImageUri ? (
+              <Image uiImage={props.logoImageUri} modifiers={[frame({ width: 20, height: 20 })]} />
+            ) : null}
+          </ZStack>
         ) : (
           <Text modifiers={[foregroundStyle('#FFFFFF'), font({ weight: 'bold', size: 12 })]}>QR</Text>
         )}
       </VStack>
       <VStack modifiers={[padding({ leading: 10 })]}>
-        <Text modifiers={[foregroundStyle('#FFFFFF'), font({ weight: 'bold', size: 11 })]}>
-          {props.initials || 'AM'}
-        </Text>
+        {props.photoImageUri ? (
+          <Image uiImage={props.photoImageUri} modifiers={[frame({ width: 30, height: 30 })]} />
+        ) : (
+          <Text modifiers={[foregroundStyle('#FFFFFF'), font({ weight: 'bold', size: 11 })]}>
+            {props.initials || 'AM'}
+          </Text>
+        )}
         <Text modifiers={[foregroundStyle('#FFFFFF'), font({ weight: 'bold', size: 15 }), padding({ top: 6 })]}>
           {props.name || 'My card'}
         </Text>

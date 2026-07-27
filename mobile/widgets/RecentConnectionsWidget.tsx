@@ -3,6 +3,7 @@ import { font, foregroundStyle, frame, padding, widgetURL } from '@expo/ui/swift
 import { createWidget } from 'expo-widgets';
 
 export type RecentConnectionsWidgetProps = {
+  connectionsDeepLink?: string;
   shareDeepLink?: string;
   connection1Name?: string;
   connection1Subtitle?: string;
@@ -30,7 +31,7 @@ function connectionRows(props: RecentConnectionsWidgetProps) {
 function RecentConnectionsWidget(props: RecentConnectionsWidgetProps) {
   'widget';
 
-  const deepLink = props.shareDeepLink || 'aftermeet://share-card';
+  const deepLink = props.connectionsDeepLink || props.shareDeepLink || 'aftermeet://connections';
   const rows = connectionRows(props);
 
   if (!rows.length) {
@@ -40,7 +41,7 @@ function RecentConnectionsWidget(props: RecentConnectionsWidgetProps) {
           Recent connections
         </Text>
         <Text modifiers={[foregroundStyle('#B8C4B3'), font({ size: 11 }), padding({ top: 6 })]}>
-          Share your card to see new connections here.
+          Share your card or open Connections to see people here.
         </Text>
       </VStack>
     );

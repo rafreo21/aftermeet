@@ -116,7 +116,7 @@ export default function CardDetailScreen() {
           </Button>
           <Button variant="secondary" onPress={() => router.push(`/card-tools?id=${selected.id}`)}>
             <Wrench size={18} color={colors.ink} weight="bold" />
-            Wallet, NFC, signature, widget
+            Card tools
           </Button>
         </ScrollView>
       </View>

@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
+import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
+import { AppState, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -9,9 +11,27 @@ import { AuthProvider } from '@/features/auth/auth-context';
 import { CardProvider } from '@/features/card/card-context';
 import { colors } from '@/theme/tokens';
 
+function applyAndroidNavigationBar() {
+  NavigationBar.setStyle('dark');
+}
+
 export default function RootLayout() {
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.canvas);
+
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    applyAndroidNavigationBar();
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        applyAndroidNavigationBar();
+      }
+    });
+
+    return () => subscription.remove();
   }, []);
 
   return (
@@ -20,6 +40,7 @@ export default function RootLayout() {
         <AuthProvider>
           <CardProvider>
             <StatusBar style="dark" />
+            {Platform.OS === 'android' ? <NavigationBar style="dark" /> : null}
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -34,6 +55,8 @@ export default function RootLayout() {
               <Stack.Screen name="edit-card" />
               <Stack.Screen name="capture" />
               <Stack.Screen name="card-tools" />
+              <Stack.Screen name="connections" />
+              <Stack.Screen name="connections/[id]" />
             </Stack>
           </CardProvider>
         </AuthProvider>

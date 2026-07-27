@@ -16,30 +16,28 @@ export function applyExtractionDraft(
     return {
       ...current,
       title: draft.title,
-      personName: draft.personName,
-      privateNotes: draft.privateNotes,
       sharedSummary: draft.sharedSummary,
       followUp: draft.followUp,
       followUpType: draft.followUpType,
+      privateNotes: '',
     };
   }
 
   return {
     ...current,
     title: current.title || draft.title,
-    personName: current.personName || draft.personName,
-    privateNotes: current.privateNotes || draft.privateNotes,
     sharedSummary: current.sharedSummary || draft.sharedSummary,
     followUp: current.followUp || draft.followUp,
     followUpType: current.followUp ? current.followUpType : draft.followUpType,
+    privateNotes: '',
   };
 }
 
 export const EXTRACTION_DRAFT_NOTE = {
-  ai: 'AI draft from your transcript — check names and facts before saving.',
-  heuristic: 'Suggested draft from your transcript — check names and facts before saving.',
+  ai: 'AI draft from your transcript — check the title and share summary before saving.',
+  heuristic: 'Suggested draft from your transcript — check the title and share summary before saving.',
   aiNotConfigured:
-    'Draft generated from your transcript — check names and facts before saving.',
+    'Draft generated from your transcript — check the title and share summary before saving.',
   aiFallback:
-    'AI summary unavailable — using a structured draft from your transcript. Check names and facts before saving.',
+    'AI summary unavailable — using a structured draft from your transcript. Check the title and share summary before saving.',
 } as const;

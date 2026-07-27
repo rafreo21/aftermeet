@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+import { publicCardImageUrl } from "../../../../../lib/card-assets";
+import { publicCompanyLogoUrl } from "../../../../../lib/card-company-display";
+
 export async function GET(_request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params;
   const normalized = slug?.trim().toLowerCase();
@@ -20,7 +23,7 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const { data, error } = await supabase
     .from("cards")
-    .select("id, slug, full_name, job_title, company, bio, card_methods(method_type, value, label, sort_order)")
+    .select("id, slug, full_name, job_title, company, bio, theme_color, profile_image_url, company_logo_url, cover_image_url, show_company_details, card_methods(method_type, value, label, sort_order)")
     .eq("slug", normalized)
     .eq("status", "published")
     .maybeSingle();
@@ -29,12 +32,20 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
     return NextResponse.json({ error: "This card is not published." }, { status: 404 });
   }
 
-  const methods = [...(data.card_methods ?? [])].sort(
-    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
-  );
-  const email = methods.find((method) => method.method_type === "email")?.value ?? "";
-  const phone = methods.find((method) => ["phone", "whatsapp"].includes(method.method_type))?.value ?? "";
-  const linkedinUrl = methods.find((method) => method.method_type === "linkedin")?.value ?? "";
+  const showCompanyDetails = data.show_company_details ?? true;
+  const methods = [...(data.card_methods ?? [])]
+    .sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0))
+    .map((method, index) => ({
+      id: `${method.method_type}-${index}`,
+      type: method.method_type,
+      value: method.value,
+      label: method.label || method.method_type,
+      sortOrder: method.sort_order ?? index,
+    }));
+
+  const email = methods.find((method) => method.type === "email")?.value ?? "";
+  const phone = methods.find((method) => ["phone", "whatsapp"].includes(method.type))?.value ?? "";
+  const linkedinUrl = methods.find((method) => method.type === "linkedin")?.value ?? "";
 
   return NextResponse.json({
     card: {
@@ -44,9 +55,15 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
       role: data.job_title ?? "",
       company: data.company ?? "",
       bio: data.bio ?? "",
+      themeColor: data.theme_color ?? "#9fe870",
+      profileImageUrl: publicCardImageUrl(data.profile_image_url) ?? "",
+      coverImageUrl: publicCardImageUrl(data.cover_image_url) ?? "",
+      companyLogoUrl: publicCardImageUrl(publicCompanyLogoUrl(data.company_logo_url, showCompanyDetails)) ?? "",
+      showCompanyDetails,
       email,
       phone,
       linkedinUrl,
+      methods,
     },
   }, { headers: { "Cache-Control": "public, max-age=60" } });
 }

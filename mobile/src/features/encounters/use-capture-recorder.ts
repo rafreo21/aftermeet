@@ -16,20 +16,24 @@ import {
   resolveSpeechCaptureMode,
   type SpeechCaptureMode,
 } from '@/features/encounters/native-speech-transcript';
+import { isSupportedAudioImport } from '@/features/encounters/audio-upload';
 import { ensureRecordingsDirectory, formatDuration, recordingsDirectory } from '@/features/encounters/local-recordings';
 import { isExpoGo } from '@/lib/runtime';
 
 export type RecordingState = 'idle' | 'recording' | 'paused' | 'stopped';
 export type TranscriptStatus = LiveTranscriptStatus;
+export type ImportRecordingMeta = { fileName?: string; mimeType?: string };
 
 type UseCaptureRecorderOptions = {
   transcript: string;
   onTranscriptChange: (value: string) => void;
   onDurationChange: (seconds: number) => void;
-  onRecordingUriChange: (uri: string, source: 'recorded' | 'imported') => void;
+  onRecordingUriChange: (uri: string, source: 'recorded' | 'imported', meta?: ImportRecordingMeta) => void;
   onError: (message: string) => void;
+  onImportReady?: () => void;
+  onImportStarted?: () => void;
   onTranscriptFinalized?: (transcript: string) => void;
-  transcribeFromServer?: (uri: string) => Promise<string | null>;
+  transcribeFromServer?: (uri: string, meta?: ImportRecordingMeta) => Promise<string | null>;
 };
 
 const RECORDING_OPTIONS = {
@@ -43,6 +47,8 @@ export function useCaptureRecorder({
   onDurationChange,
   onRecordingUriChange,
   onError,
+  onImportReady,
+  onImportStarted,
   onTranscriptFinalized,
   transcribeFromServer,
 }: UseCaptureRecorderOptions) {
@@ -61,11 +67,15 @@ export function useCaptureRecorder({
   const liveSttReceivedRef = useRef(false);
   const speechTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onErrorRef = useRef(onError);
+  const onImportReadyRef = useRef(onImportReady);
+  const onImportStartedRef = useRef(onImportStarted);
   const onTranscriptFinalizedRef = useRef(onTranscriptFinalized);
   const transcribeFromServerRef = useRef(transcribeFromServer);
   const captureModeRef = useRef<SpeechCaptureMode>(captureMode);
 
   onErrorRef.current = onError;
+  onImportReadyRef.current = onImportReady;
+  onImportStartedRef.current = onImportStarted;
   onTranscriptFinalizedRef.current = onTranscriptFinalized;
   transcribeFromServerRef.current = transcribeFromServer;
   captureModeRef.current = captureMode;
@@ -146,7 +156,13 @@ export function useCaptureRecorder({
     }, 1000);
   }, [clearSpeechTimer, publishDuration]);
 
-  const maybeTranscribeFromServer = useCallback(async (uri: string, cleanedTranscript: string) => {
+  const transcribeErrorShownRef = useRef(false);
+
+  const maybeTranscribeFromServer = useCallback(async (
+    uri: string,
+    cleanedTranscript: string,
+    meta?: ImportRecordingMeta,
+  ) => {
     const transcribe = transcribeFromServerRef.current;
     if (!transcribe) return cleanedTranscript;
 
@@ -156,20 +172,27 @@ export function useCaptureRecorder({
       !isNativeSpeechTranscriptionAvailable();
     if (!needsServer) return cleanedTranscript;
 
+    transcribeErrorShownRef.current = false;
     liveTranscript.markTranscribing();
     setTranscriptOpen(true);
     try {
-      const serverTranscript = await transcribe(uri);
+      const serverTranscript = await transcribe(uri, meta);
       if (serverTranscript?.trim()) {
         liveTranscript.updateFromUser(serverTranscript);
         liveTranscript.markIdle();
         onTranscriptFinalizedRef.current?.(serverTranscript);
         return serverTranscript;
       }
-      onErrorRef.current('Could not transcribe this recording. Paste or type what was said.');
+      if (!transcribeErrorShownRef.current) {
+        transcribeErrorShownRef.current = true;
+        onErrorRef.current('Could not transcribe this recording. Paste or type what was said.');
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not transcribe this recording.';
-      onErrorRef.current(message);
+      if (!transcribeErrorShownRef.current) {
+        transcribeErrorShownRef.current = true;
+        const message = error instanceof Error ? error.message : 'Could not transcribe this recording.';
+        onErrorRef.current(message);
+      }
     }
 
     liveTranscript.markUnavailable();
@@ -357,6 +380,37 @@ export function useCaptureRecorder({
     usingSpeechCapture,
   ]);
 
+  const hydrateFromDraft = useCallback((draft: {
+    recordingUri?: string;
+    recordingSource?: 'recorded' | 'imported' | '';
+    transcript?: string;
+    durationSeconds?: number;
+  }) => {
+    if (draft.recordingUri?.trim()) {
+      setRecordingState('stopped');
+      setRecordingUri(draft.recordingUri);
+      setPlaybackSource(draft.recordingUri);
+      setPlaybackReady(true);
+      if (draft.recordingSource === 'imported' || draft.recordingSource === 'recorded') {
+        setRecordingSource(draft.recordingSource);
+      }
+      if (draft.durationSeconds && draft.durationSeconds > 0) {
+        publishDuration(draft.durationSeconds);
+      }
+      setTranscriptOpen(true);
+    }
+    if (draft.transcript?.trim()) {
+      liveTranscript.updateFromUser(draft.transcript);
+    }
+  }, [liveTranscript, publishDuration]);
+
+  const transcribeRecordingIfNeeded = useCallback(async (uriOverride?: string) => {
+    const uri = (uriOverride || recordingUri).trim();
+    if (!uri || transcript.trim().length >= 20) return;
+    if (liveTranscript.transcriptStatus === 'transcribing') return;
+    await maybeTranscribeFromServer(uri, transcript.trim());
+  }, [liveTranscript.transcriptStatus, maybeTranscribeFromServer, recordingUri, transcript]);
+
   const resetRecording = useCallback(async () => {
     if (usingSpeechCapture) {
       speechCaptureRef.current.abort();
@@ -390,33 +444,40 @@ export function useCaptureRecorder({
     }
 
     const result = await DocumentPicker.getDocumentAsync({
-      type: 'audio/*',
+      type: '*/*',
       copyToCacheDirectory: true,
     });
     if (result.canceled || !result.assets[0]) return;
 
     const asset = result.assets[0];
+    onImportStartedRef.current?.();
+    if (!isSupportedAudioImport(asset.name ?? undefined, asset.mimeType ?? undefined, asset.uri)) {
+      onErrorRef.current('Unsupported format. Choose an audio file such as M4A, MP3, or WAV.');
+      return;
+    }
     if (asset.size && asset.size > 250 * 1024 * 1024) {
       onErrorRef.current('That recording is larger than 250 MB. Choose a shorter or compressed recording.');
       return;
     }
 
+    const importMeta: ImportRecordingMeta = {
+      fileName: asset.name ?? undefined,
+      mimeType: asset.mimeType ?? undefined,
+    };
+
     speechCaptureRef.current.abort();
+    liveTranscript.resetForRecording();
     setRecordingState('stopped');
     setRecordingSource('imported');
     setRecordingUri(asset.uri);
     setPlaybackSource(asset.uri);
-    onRecordingUriChange(asset.uri, 'imported');
+    onRecordingUriChange(asset.uri, 'imported', importMeta);
     setTranscriptOpen(true);
     setPlaybackReady(true);
     publishDuration(Math.max(0, Math.round(player.duration || 0)));
-    const cleaned = await maybeTranscribeFromServer(asset.uri, transcript.trim());
-    if (cleaned && cleaned !== transcript.trim()) {
-      liveTranscript.updateFromUser(cleaned);
-    } else {
-      liveTranscript.markIdle();
-    }
-  }, [liveTranscript, maybeTranscribeFromServer, onRecordingUriChange, player.duration, publishDuration, transcript]);
+    onImportReadyRef.current?.();
+    void maybeTranscribeFromServer(asset.uri, '', importMeta);
+  }, [liveTranscript, maybeTranscribeFromServer, onRecordingUriChange, player.duration, publishDuration]);
 
   const playRecording = useCallback(async () => {
     if (!recordingUri) return;
@@ -473,6 +534,8 @@ export function useCaptureRecorder({
     importRecording,
     playRecording,
     updateTranscriptFromUser: liveTranscript.updateFromUser,
+    hydrateFromDraft,
+    transcribeRecordingIfNeeded,
   };
 }
 

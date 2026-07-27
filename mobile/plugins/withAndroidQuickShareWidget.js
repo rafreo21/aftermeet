@@ -15,7 +15,10 @@ const PREFS = {
   company: 'company',
   cardUrl: 'cardUrl',
   shareDeepLink: 'shareDeepLink',
+  connectionsDeepLink: 'connectionsDeepLink',
   initials: 'initials',
+  qrImageBase64: 'qrImageBase64',
+  photoImageBase64: 'photoImageBase64',
   recentConnectionsJson: 'recentConnectionsJson',
 };
 
@@ -156,7 +159,10 @@ class QuickShareWidgetBridge(private val reactContext: ReactApplicationContext) 
         .putString("${PREFS.company}", payload.getString("company") ?: "")
         .putString("${PREFS.cardUrl}", payload.getString("cardUrl") ?: "")
         .putString("${PREFS.shareDeepLink}", payload.getString("shareDeepLink") ?: "aftermeet://share-card")
+        .putString("${PREFS.connectionsDeepLink}", payload.getString("connectionsDeepLink") ?: "aftermeet://connections")
         .putString("${PREFS.initials}", payload.getString("initials") ?: "AM")
+        .putString("${PREFS.qrImageBase64}", payload.getString("qrImageBase64") ?: "")
+        .putString("${PREFS.photoImageBase64}", payload.getString("photoImageBase64") ?: "")
         .putString("${PREFS.recentConnectionsJson}", payload.getString("recentConnectionsJson") ?: "[]")
 
       for (slot in 1..3) {
@@ -195,8 +201,10 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import android.util.Base64
 import android.view.View
 import android.widget.RemoteViews
 import com.google.zxing.BarcodeFormat
@@ -208,6 +216,21 @@ import ${packageName}.R
 object WidgetRenderer {
   private fun prefs(context: Context) =
     context.getSharedPreferences("${PREFS_NAME}", Context.MODE_PRIVATE)
+
+  private fun decodeBitmap(base64: String?): Bitmap? {
+    if (base64.isNullOrBlank()) return null
+    return try {
+      val bytes = Base64.decode(base64, Base64.DEFAULT)
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  private fun qrBitmap(store: android.content.SharedPreferences, cardUrl: String, size: Int, dark: String, light: String): Bitmap? {
+    decodeBitmap(store.getString("${PREFS.qrImageBase64}", ""))?.let { return it }
+    return generateQrBitmap(cardUrl, size, dark, light)
+  }
 
   private fun generateQrBitmap(content: String, size: Int, dark: String, light: String): Bitmap? {
     if (content.isBlank()) return null
@@ -282,7 +305,7 @@ object WidgetRenderer {
     val cardUrl = store.getString("${PREFS.cardUrl}", "") ?: ""
     val deepLink = store.getString("${PREFS.shareDeepLink}", "aftermeet://share-card") ?: "aftermeet://share-card"
     val views = RemoteViews(context.packageName, R.layout.aftermeet_widget_qr_scan)
-    generateQrBitmap(cardUrl, 280, "#163300", "#FFFFFF")?.let {
+    qrBitmap(store, cardUrl, 280, "#163300", "#FFFFFF")?.let {
       views.setImageViewBitmap(R.id.aftermeet_qr_scan_image, it)
     }
     views.setOnClickPendingIntent(R.id.aftermeet_qr_scan_root, openAppIntent(context, id, deepLink))
@@ -302,8 +325,16 @@ object WidgetRenderer {
     views.setTextViewText(R.id.aftermeet_card_name, name)
     views.setTextViewText(R.id.aftermeet_card_role, role)
     views.setTextViewText(R.id.aftermeet_card_company, company)
-    generateQrBitmap(cardUrl, 240, "#FFFFFF", "#000000")?.let {
+    qrBitmap(store, cardUrl, 240, "#163300", "#FFFFFF")?.let {
       views.setImageViewBitmap(R.id.aftermeet_card_qr, it)
+    }
+    decodeBitmap(store.getString("${PREFS.photoImageBase64}", ""))?.let {
+      views.setViewVisibility(R.id.aftermeet_card_initials, View.GONE)
+      views.setViewVisibility(R.id.aftermeet_card_photo, View.VISIBLE)
+      views.setImageViewBitmap(R.id.aftermeet_card_photo, it)
+    } ?: run {
+      views.setViewVisibility(R.id.aftermeet_card_initials, View.VISIBLE)
+      views.setViewVisibility(R.id.aftermeet_card_photo, View.GONE)
     }
     views.setOnClickPendingIntent(R.id.aftermeet_card_root, openAppIntent(context, id, deepLink))
     manager.updateAppWidget(id, views)
@@ -311,7 +342,7 @@ object WidgetRenderer {
 
   private fun renderConnections(context: Context, manager: AppWidgetManager, id: Int) {
     val store = prefs(context)
-    val deepLink = store.getString("${PREFS.shareDeepLink}", "aftermeet://share-card") ?: "aftermeet://share-card"
+    val deepLink = store.getString("${PREFS.connectionsDeepLink}", "aftermeet://connections") ?: "aftermeet://connections"
     val views = RemoteViews(context.packageName, R.layout.aftermeet_widget_connections)
     var visibleRows = 0
 
@@ -412,6 +443,14 @@ function layoutQrScan() {
       android:contentDescription="Scan QR code"
       android:padding="10dp"
       android:scaleType="fitCenter" />
+    <ImageView
+      android:id="@+id/aftermeet_qr_scan_logo"
+      android:layout_width="28dp"
+      android:layout_height="28dp"
+      android:layout_gravity="center"
+      android:contentDescription="AfterMeet logo"
+      android:src="@mipmap/ic_launcher"
+      android:scaleType="fitCenter" />
   </FrameLayout>
 </FrameLayout>`;
 }
@@ -437,6 +476,14 @@ function layoutBusinessCard() {
       android:layout_gravity="center"
       android:contentDescription="Scan QR code"
       android:scaleType="fitCenter" />
+    <ImageView
+      android:id="@+id/aftermeet_card_qr_logo"
+      android:layout_width="20dp"
+      android:layout_height="20dp"
+      android:layout_gravity="center"
+      android:contentDescription="AfterMeet logo"
+      android:src="@mipmap/ic_launcher"
+      android:scaleType="fitCenter" />
   </FrameLayout>
   <LinearLayout
     android:layout_width="0dp"
@@ -454,6 +501,14 @@ function layoutBusinessCard() {
       android:textColor="#9FE870"
       android:textSize="11sp"
       android:textStyle="bold" />
+    <ImageView
+      android:id="@+id/aftermeet_card_photo"
+      android:layout_width="30dp"
+      android:layout_height="30dp"
+      android:layout_marginTop="0dp"
+      android:contentDescription="Profile photo"
+      android:scaleType="centerCrop"
+      android:visibility="gone" />
     <TextView
       android:id="@+id/aftermeet_card_name"
       android:layout_width="wrap_content"

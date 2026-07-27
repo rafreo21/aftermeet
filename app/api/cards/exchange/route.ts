@@ -61,6 +61,10 @@ export async function POST(request: Request) {
       email: visitorEmail,
       displayName: visitorName,
       exchangeId: String(data),
+      visitorCompany,
+      visitorRole,
+      visitorPhone,
+      note,
     });
   }
 

@@ -12,10 +12,10 @@ import { isAiGatewayConfigured, refreshAiGatewayAuth } from "./ai-gateway-auth";
 import { normalizeTranscriptForExtraction } from "./transcript-cleanup";
 
 const extractionSchema = z.object({
-  title: z.string().describe("Short meeting title, max 120 characters"),
-  personName: z.string().describe("The other person's name from the conversation — never the recording owner"),
-  sharedSummary: z.string().describe("2-4 neutral sentences describing what both people discussed and agreed, safe to share"),
-  privateNotes: z.string().describe("Owner-only bullets about what the other person said that matters — prefix each line with •"),
+  title: z.string().describe("Short meeting title, max 120 characters. For group meetings, describe the meeting not one person."),
+  personName: z.string().describe("Primary attendee name if one person, or a short group label like 'Alex, Jordan, and Sam'"),
+  sharedSummary: z.string().describe("3-6 intelligent sentences summarizing what was discussed, decided, and who owns what next. Safe to share with everyone in the meeting."),
+  privateNotes: z.string().describe("Leave empty."),
   followUp: z.string().describe("One concrete next action sentence, or empty if none"),
   followUpType: z.enum(["email", "linkedin", "call", "meeting", "send", "other"]),
   uncertainFields: z.array(z.string()).describe("Field names where the transcript is ambiguous"),
@@ -55,31 +55,34 @@ function buildExtractionSystemPrompt(context?: ExtractionOwnerContext) {
     "The transcript is from a live conversation recorded by the owner (me). There is no speaker diarization — infer who said what from introductions, names, and first-person cues.",
     `Treat I/me/my as ${ownerLabel} unless the transcript clearly indicates otherwise.`,
     "",
-    "PRIVATE NOTES (owner-only — never share with the other person):",
-    "- Capture what the OTHER PERSON said that is worth remembering: their priorities, constraints, commitments, concerns, numbers, deadlines, preferences, and direct quotes when useful.",
-    "- Do not restate the owner's own plans unless the other person explicitly asked for them.",
-    "- Use concise bullet points prefixed with • (3-6 bullets).",
+    "The owner already captured attendees separately. Focus on a strong meeting title and an intelligent share summary.",
     "",
-    "SHARED SUMMARY (safe to send to the other person):",
-    "- A neutral, factual account of what BOTH people discussed and agreed.",
-    "- Use we for joint decisions. Attribute individual commitments clearly (e.g. \"Alex will…\", \"I will…\").",
-    "- 2-4 sentences. No private judgments or impressions.",
+    "MEETING TITLE:",
+    "- Short, specific, and useful in a meeting list.",
+    "- For group meetings, name the meeting topic or group — not just one attendee.",
     "",
-    "PERSON NAME:",
-    "- personName must be the other person — never the recording owner.",
-    "- Extract their name from the conversation when stated (e.g. introductions, \"I'm here with…\", \"meeting with…\").",
-    "- Use the person name hint only when it matches transcript evidence.",
-    "- When email or phone hints are provided, use them only for personName disambiguation — never copy them into notes unless spoken in the transcript.",
+    "SHARE SUMMARY (the main output):",
+    "- A clear, shareable recap of what was discussed, decided, blocked, and agreed.",
+    "- Attribute commitments clearly when multiple people are involved.",
+    "- Use we for joint decisions. Name people when they took ownership.",
+    "- 3-6 sentences. Write like a sharp human assistant, not a transcript dump.",
+    "- Safe to send to everyone who was in the room.",
+    "",
+    "GROUP MEETINGS:",
+    "- When multiple attendees are provided, reflect the group dynamic in title and summary.",
+    "- Do not collapse a multi-person meeting into a 1:1 summary.",
+    "",
+    "PERSON NAME FIELD:",
+    "- Return a short attendee label for legacy storage.",
+    "- Prefer the confirmed attendee list when provided; otherwise infer from the transcript.",
+    "- Never use the recording owner as personName.",
+    "",
+    "PRIVATE NOTES:",
+    "- Always return an empty string.",
     "",
     "TRANSCRIPT QUALITY:",
     "- Input is raw speech-to-text: missing punctuation, false starts, homophones, and repeated fragments are common.",
-    "- Reconstruct intended meaning before writing outputs. Turn fragments into clear, sensible sentences.",
-    "- Never copy gibberish or obvious STT errors verbatim — infer the most likely intended words from context.",
-    "",
-    "SEPARATION (critical):",
-    "- privateNotes and sharedSummary must not overlap. If a fact belongs in one, it must not appear in the other.",
-    "- privateNotes = ONLY what the other person said or committed to (their side).",
-    "- sharedSummary = ONLY what both parties discussed or agreed (neutral, mutual record).",
+    "- Reconstruct intended meaning before writing outputs. Never copy gibberish verbatim.",
     "",
     "QUALITY:",
     "- Ignore filler, repeated words, and speech-to-text errors.",
@@ -93,12 +96,23 @@ function buildExtractionPrompt(
   normalizedTranscript: string,
   personName: string,
   context?: ExtractionOwnerContext,
-  personHints?: { personEmail?: string; personPhone?: string },
+  personHints?: {
+    personEmail?: string;
+    personPhone?: string;
+    people?: Array<{ name: string; email?: string; phone?: string }>;
+  },
 ) {
+  const attendeeLines = personHints?.people?.length
+    ? personHints.people.map((person, index) => {
+        const details = [person.email, person.phone].filter(Boolean).join(" · ");
+        return `${index + 1}. ${person.name}${details ? ` (${details})` : ""}`;
+      })
+    : [];
+
   const hintLines = [
-    `Other person name hint: ${personName || "unknown — detect from transcript"}`,
-    personHints?.personEmail ? `Other person email (confirmed by owner): ${personHints.personEmail}` : "",
-    personHints?.personPhone ? `Other person phone (confirmed by owner): ${personHints.personPhone}` : "",
+    attendeeLines.length ? `Confirmed attendees:\n${attendeeLines.join("\n")}` : `Attendee hint: ${personName || "unknown — detect from transcript"}`,
+    personHints?.personEmail ? `Primary email hint: ${personHints.personEmail}` : "",
+    personHints?.personPhone ? `Primary phone hint: ${personHints.personPhone}` : "",
   ].filter(Boolean);
 
   return [
@@ -119,7 +133,11 @@ export async function extractEncounterDraft(
   transcript: string,
   personName: string,
   ownerContext?: ExtractionOwnerContext,
-  personHints?: { personEmail?: string; personPhone?: string },
+  personHints?: {
+    personEmail?: string;
+    personPhone?: string;
+    people?: Array<{ name: string; email?: string; phone?: string }>;
+  },
 ): Promise<{
   draft: EncounterExtractionDraft;
   source: "ai" | "heuristic";
@@ -165,7 +183,7 @@ export async function extractEncounterDraft(
         title: output.title.trim().slice(0, 160) || heuristic.title,
         personName: resolvedPersonName,
         sharedSummary: output.sharedSummary.trim() || heuristic.sharedSummary,
-        privateNotes: output.privateNotes.trim() || heuristic.privateNotes,
+        privateNotes: "",
         followUp: output.followUp.trim(),
         followUpType: output.followUpType,
       },

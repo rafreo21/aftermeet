@@ -26,6 +26,8 @@ type CaptureRecordStepProps = {
   onConsentMethodChange: (value: 'verbal' | 'written') => void;
   recorder: CaptureRecorder;
   signedIn: boolean;
+  hasRecording?: boolean;
+  hasTranscript?: boolean;
 };
 
 export function CaptureRecordStep({
@@ -35,11 +37,17 @@ export function CaptureRecordStep({
   onConsentMethodChange,
   recorder,
   signedIn,
+  hasRecording = false,
+  hasTranscript = false,
 }: CaptureRecordStepProps) {
   const [consentSheetOpen, setConsentSheetOpen] = useState(false);
 
   const showTranscript =
-    recorder.recordingState !== 'idle' || recorder.recordingComplete;
+    recorder.recordingState !== 'idle'
+    || recorder.recordingComplete
+    || hasRecording
+    || hasTranscript
+    || recorder.transcriptStatus === 'transcribing';
 
   const methodLabel = consentMethod === 'verbal' ? 'Verbal consent' : 'Written consent';
 
@@ -141,13 +149,15 @@ export function CaptureRecordStep({
             </View>
             <View style={styles.recorderMeta}>
               <Text style={styles.recorderTitle}>
-                {recorder.recordingState === 'recording'
-                  ? 'Recording'
-                  : recorder.recordingState === 'paused'
-                    ? 'Paused'
-                    : recorder.recordingState === 'stopped'
-                      ? 'Recording complete'
-                      : 'Ready to record'}
+                {recorder.transcriptStatus === 'transcribing'
+                  ? 'Generating transcript'
+                  : recorder.recordingState === 'recording'
+                    ? 'Recording'
+                    : recorder.recordingState === 'paused'
+                      ? 'Paused'
+                      : recorder.recordingState === 'stopped'
+                        ? 'Recording complete'
+                        : 'Ready to record'}
               </Text>
               <Text style={styles.recorderHint}>
                 Microphone is {recorder.recordingState === 'recording' ? 'on' : 'off'}

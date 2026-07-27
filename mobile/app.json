@@ -30,7 +30,7 @@
       "translucent": false
     },
     "androidNavigationBar": {
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#F5F7F3",
       "barStyle": "dark-content"
     },
     "web": {
@@ -39,6 +39,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-navigation-bar",
+        {
+          "style": "dark",
+          "enforceContrast": true
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -118,6 +125,7 @@
         }
       ],
       "./plugins/withAndroidQuickShareWidget",
+      "./plugins/withAndroidSystemBars",
       [
         "react-native-nfc-manager",
         {

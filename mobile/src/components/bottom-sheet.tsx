@@ -79,10 +79,12 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
+    zIndex: 0,
   },
   keyboard: {
     width: '100%',
     justifyContent: 'flex-end',
+    zIndex: 1,
   },
   sheet: {
     width: '100%',
