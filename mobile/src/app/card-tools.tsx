@@ -7,18 +7,25 @@ import {
   Copy,
   EnvelopeSimple,
   GoogleLogo,
+  LinkSimple,
   SquaresFour,
   Wallet,
 } from 'phosphor-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BackButton, Body, Button, Eyebrow, Panel } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { showsCompanyDetails } from '@/features/card/company-display';
-import { copyNfcManufacturerPayload, isNativeNfcSupported, programNfcTag } from '@/features/card/nfc-actions';
-import { updateQuickShareWidget } from '@/features/card/widget-sync';
+import {
+  copyNfcCardLink,
+  copyNfcManufacturerPayload,
+  isNativeNfcSupported,
+  openNfcSettings,
+  programNfcTag,
+} from '@/features/card/nfc-actions';
+import { updateQuickShareWidget, widgetSetupInstructions } from '@/features/card/widget-sync';
 import {
   addAppleWalletPass,
   addGoogleWalletPass,
@@ -45,6 +52,17 @@ export default function CardToolsScreen() {
   const [walletNote, setWalletNote] = useState('');
 
   const subtitle = [card.role, showCompany ? card.company : ''].filter(Boolean).join(' · ');
+  const signatureProfile = useMemo(() => ({
+    name: card.name,
+    role: card.role,
+    company: card.company,
+    cardUrl: publicUrl,
+    showCompany,
+    photoUrl: card.photo,
+    email: card.methods.find((method) => method.type === 'email')?.value,
+    phone: card.methods.find((method) => method.type === 'phone')?.value,
+    themeColor: card.theme,
+  }), [card, publicUrl, showCompany]);
 
   useEffect(() => {
     if (!session?.access_token || card.status !== 'published' || !card.slug) {
@@ -80,14 +98,9 @@ export default function CardToolsScreen() {
   }
 
   async function copySignature(kind: 'plain' | 'html') {
-    const profile = {
-      name: card.name,
-      role: card.role,
-      company: card.company,
-      cardUrl: publicUrl,
-      showCompany,
-    };
-    const value = kind === 'plain' ? buildPlainSignature(profile) : buildHtmlSignature(profile);
+    const value = kind === 'plain'
+      ? buildPlainSignature(signatureProfile)
+      : buildHtmlSignature(signatureProfile);
     await Clipboard.setStringAsync(value);
     setCopied(kind);
     setTimeout(() => setCopied(''), 1500);
@@ -142,7 +155,7 @@ export default function CardToolsScreen() {
                   Add to Apple Wallet
                 </Button>
                 {walletAvailable === false && walletNote ? (
-                  <Text style={styles.note}>{walletNote}</Text>
+                  <Text style={styles.note}>{walletNote} Ask your admin to add Apple Wallet signing keys on the server.</Text>
                 ) : null}
               </>
             ) : null}
@@ -160,39 +173,65 @@ export default function CardToolsScreen() {
                   Add to Google Wallet
                 </Button>
                 {walletAvailable === false && walletNote ? (
-                  <Text style={styles.note}>{walletNote}</Text>
+                  <Text style={styles.note}>{walletNote} Ask your admin to add GOOGLE_WALLET_ISSUER_ID and GOOGLE_WALLET_SERVICE_ACCOUNT_JSON on Vercel.</Text>
                 ) : null}
               </>
             ) : null}
             {isNativeNfcSupported() ? (
-              <Button
-                variant="secondary"
-                loading={busy === 'nfc'}
-                onPress={() => void run('nfc', async () => {
-                  await programNfcTag(publicUrl);
-                  setMessage('NFC tag programmed. Tap it with a phone to open your card.');
-                })}>
-                <ContactlessPayment size={18} color={colors.ink} weight="bold" />
-                Program NFC tag
-              </Button>
-            ) : null}
+              <>
+                <Button
+                  variant="secondary"
+                  loading={busy === 'nfc'}
+                  onPress={() => void run('nfc', async () => {
+                    await programNfcTag(publicUrl);
+                    setMessage('NFC tag programmed. Tap it with a phone to open your card.');
+                  })}>
+                  <ContactlessPayment size={18} color={colors.ink} weight="bold" />
+                  Program NFC tag
+                </Button>
+                <Button variant="ghost" onPress={() => void openNfcSettings()}>
+                  Open NFC settings
+                </Button>
+              </>
+            ) : (
+              <Text style={styles.note}>NFC writing works on Android. iPhone can read tags but cannot write them from the app.</Text>
+            )}
+            <Button
+              variant="secondary"
+              loading={busy === 'nfc-link'}
+              onPress={() => void run('nfc-link', async () => {
+                const value = await copyNfcCardLink(publicUrl);
+                setMessage(`Card link copied: ${value}`);
+              })}>
+              <LinkSimple size={16} color={colors.ink} weight="bold" />
+              Copy card link for NFC
+            </Button>
             <Button
               variant="ghost"
+              loading={busy === 'nfc-copy'}
               onPress={() => void run('nfc-copy', async () => {
                 await copyNfcManufacturerPayload(publicUrl);
-                setMessage('Manufacturer payload copied.');
+                setMessage('Programming JSON copied for manufacturer tools.');
               })}>
               <Copy size={16} color={colors.ink} weight="bold" />
-              Copy NFC payload
+              Copy NFC programming JSON
             </Button>
-            {!isNativeNfcSupported() ? (
-              <Text style={styles.note}>NFC writing works on Android. iPhone can read tags but cannot write them from the app.</Text>
-            ) : null}
           </Panel>
 
           <Panel style={styles.section}>
             <Text style={styles.panelTitle}>Email signature</Text>
-            <Body>Paste this into Gmail, Outlook, or Apple Mail.</Body>
+            <Body>Paste the HTML version into Gmail, Outlook, or Apple Mail signature settings.</Body>
+            <View style={styles.signaturePreview}>
+              <View style={[styles.signatureAccent, { backgroundColor: card.theme || colors.accent }]} />
+              <View style={styles.signatureBody}>
+                <Text style={styles.signatureName}>{card.name || 'Your name'}</Text>
+                {subtitle ? <Text style={styles.signatureSubtitle}>{subtitle}</Text> : null}
+                <View style={styles.signatureButtonPreview}>
+                  <Text style={styles.signatureButtonText}>View my card</Text>
+                </View>
+                <Text style={styles.signatureFooter}>Shared with AfterMeet</Text>
+              </View>
+            </View>
             <Button variant="secondary" onPress={() => void copySignature('plain')}>
               <EnvelopeSimple size={18} color={colors.ink} weight="bold" />
               {copied === 'plain' ? 'Plain copied' : 'Copy plain signature'}
@@ -205,7 +244,7 @@ export default function CardToolsScreen() {
 
           <Panel style={styles.section}>
             <Text style={styles.panelTitle}>Use this card from your phone</Text>
-            <Body>Add the Quick Share widget to your home screen for one-tap QR sharing.</Body>
+            <Body>{widgetSetupInstructions(Platform.OS === 'android' ? 'android' : 'ios')}</Body>
             <View style={styles.widgetPreview}>
               <Text style={styles.widgetEyebrow}>AfterMeet</Text>
               <Text style={styles.widgetName}>{card.name}</Text>
@@ -217,18 +256,11 @@ export default function CardToolsScreen() {
               loading={busy === 'widget'}
               onPress={() => void run('widget', async () => {
                 await updateQuickShareWidget(card, publicUrl);
-                setMessage(Platform.OS === 'android'
-                  ? 'Widget updated. Add it from your Android home screen if you have not already.'
-                  : 'Widget updated. Add Quick Share from the iOS widget gallery.');
+                setMessage('Widget updated. Add or refresh it on your home screen, then tap Open QR.');
               })}>
               <SquaresFour size={18} color={colors.ink} weight="bold" />
               Refresh home-screen widget
             </Button>
-            <Text style={styles.note}>
-              {Platform.OS === 'android'
-                ? 'Long-press your home screen → Widgets → AfterMeet Quick Share.'
-                : 'Long-press your home screen → Edit → search AfterMeet Quick Share.'}
-            </Text>
           </Panel>
 
           {message ? <Text style={styles.success}>{message}</Text> : null}
@@ -263,6 +295,26 @@ const styles = StyleSheet.create({
   section: { gap: spacing.x3 },
   panelTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+  signaturePreview: {
+    flexDirection: 'row',
+    borderRadius: radius.medium,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceMuted,
+  },
+  signatureAccent: { width: 5 },
+  signatureBody: { flex: 1, padding: spacing.x4, gap: 4 },
+  signatureName: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  signatureSubtitle: { color: colors.muted, fontSize: 13 },
+  signatureButtonPreview: {
+    marginTop: spacing.x2,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.ink,
+  },
+  signatureButtonText: { color: colors.white, fontSize: 12, fontWeight: '800' },
+  signatureFooter: { marginTop: spacing.x2, color: colors.muted, fontSize: 11 },
   widgetPreview: {
     padding: spacing.x4,
     borderRadius: radius.medium,

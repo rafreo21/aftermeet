@@ -13,6 +13,7 @@ const PREFS_KEY_NAME = 'name';
 const PREFS_KEY_ROLE = 'role';
 const PREFS_KEY_COMPANY = 'company';
 const PREFS_KEY_CARD_URL = 'cardUrl';
+const PREFS_KEY_SHARE_DEEP_LINK = 'shareDeepLink';
 
 function withWidgetManifest(config) {
   return withAndroidManifest(config, (mod) => {
@@ -151,6 +152,7 @@ class QuickShareWidgetBridge(private val reactContext: ReactApplicationContext) 
         .putString("${PREFS_KEY_ROLE}", payload.getString("role") ?: "")
         .putString("${PREFS_KEY_COMPANY}", payload.getString("company") ?: "")
         .putString("${PREFS_KEY_CARD_URL}", payload.getString("cardUrl") ?: "")
+        .putString("${PREFS_KEY_SHARE_DEEP_LINK}", payload.getString("shareDeepLink") ?: "aftermeet://share-card")
         .apply()
 
       val manager = AppWidgetManager.getInstance(reactContext)
@@ -216,7 +218,8 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
       val subtitle = listOf(role, company).filter { it.isNotBlank() }.joinToString(" · ")
 
       val cardUrl = prefs.getString("${PREFS_KEY_CARD_URL}", "") ?: ""
-      val targetUrl = if (cardUrl.isNotBlank()) cardUrl else "aftermeet://share-card"
+      val shareDeepLink = prefs.getString("${PREFS_KEY_SHARE_DEEP_LINK}", "aftermeet://share-card") ?: "aftermeet://share-card"
+      val targetUrl = if (shareDeepLink.isNotBlank()) shareDeepLink else "aftermeet://share-card"
       val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
       }

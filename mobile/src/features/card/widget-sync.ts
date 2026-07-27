@@ -1,7 +1,8 @@
 import { NativeModules, Platform } from 'react-native';
 
-import type { MobileCard } from '@/features/card/types';
 import { showsCompanyDetails } from '@/features/card/company-display';
+import { shareCardDeepLink } from '@/features/card/share-deep-link';
+import type { MobileCard } from '@/features/card/types';
 import { readEnv } from '@/lib/env';
 
 type WidgetBridge = {
@@ -10,6 +11,7 @@ type WidgetBridge = {
     role: string;
     company: string;
     cardUrl: string;
+    shareDeepLink: string;
   }) => Promise<void>;
 };
 
@@ -22,6 +24,7 @@ export async function updateQuickShareWidget(card: MobileCard, cardUrl?: string)
     role: card.role.trim(),
     company: showCompany ? card.company.trim() : '',
     cardUrl: resolvedUrl,
+    shareDeepLink: shareCardDeepLink(card),
   };
 
   if (Platform.OS === 'ios') {
@@ -44,4 +47,11 @@ export async function updateQuickShareWidget(card: MobileCard, cardUrl?: string)
   }
 
   throw new Error('Home-screen widgets are only available on iPhone and Android.');
+}
+
+export function widgetSetupInstructions(platform: 'ios' | 'android') {
+  if (platform === 'android') {
+    return 'Long-press your home screen → Widgets → AfterMeet Quick Share → Add. Then tap Open QR to launch your card.';
+  }
+  return 'Long-press your home screen → Edit → search AfterMeet Quick Share → Add widget. Tap it to open your QR code.';
 }

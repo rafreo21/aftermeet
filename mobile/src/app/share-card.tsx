@@ -12,9 +12,11 @@ import { useCard } from '@/features/card/card-context';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function ShareCardScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const { card: activeCard, getCardById, cardPublicUrl } = useCard();
-  const card = (id ? getCardById(id) : undefined) || activeCard;
+  const { id, slug } = useLocalSearchParams<{ id?: string; slug?: string }>();
+  const { card: activeCard, cards, getCardById, cardPublicUrl } = useCard();
+  const card = (id ? getCardById(id) : undefined)
+    || (slug ? cards.find((item) => item.slug === slug) : undefined)
+    || activeCard;
   const publicUrl = cardPublicUrl(card);
   const [copied, setCopied] = useState(false);
 

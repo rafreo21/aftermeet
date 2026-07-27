@@ -9,6 +9,8 @@ type WalletJson = {
   configured?: boolean;
   saveUrl?: string;
   error?: string;
+  apple?: { configured: boolean; message?: string };
+  google?: { configured: boolean; message?: string };
 };
 
 async function readWalletError(response: Response, fallback: string) {
@@ -26,23 +28,25 @@ export async function fetchWalletAvailability(slug: string, accessToken: string)
     return { available: false, message: 'Wallet passes are only available on iPhone and Android.' };
   }
 
-  const response = await mobileFetch(`/api/mobile/wallet/${platform}/${encodeURIComponent(slug)}`, accessToken, {
-    method: 'GET',
-  });
-
-  if (response.ok) {
-    return { available: true, message: '' };
+  const statusResponse = await mobileFetch('/api/mobile/wallet/status', accessToken);
+  if (!statusResponse.ok) {
+    return { available: false, message: 'Could not check Wallet availability right now.' };
   }
 
-  return {
-    available: false,
-    message: await readWalletError(
-      response,
-      platform === 'apple'
-        ? 'Apple Wallet is not available right now.'
-        : 'Google Wallet is not available right now.',
-    ),
-  };
+  const status = await statusResponse.json() as WalletJson;
+  const platformStatus = status[platform];
+  if (!platformStatus?.configured) {
+    return {
+      available: false,
+      message: platformStatus?.message || `${platform === 'apple' ? 'Apple' : 'Google'} Wallet is not configured on the server yet.`,
+    };
+  }
+
+  if (!slug) {
+    return { available: false, message: 'Publish your card before creating a Wallet pass.' };
+  }
+
+  return { available: true, message: '' };
 }
 
 export async function addGoogleWalletPass(slug: string, accessToken: string) {

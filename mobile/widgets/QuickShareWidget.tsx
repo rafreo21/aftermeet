@@ -1,11 +1,12 @@
 import { HStack, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundStyle, padding } from '@expo/ui/swift-ui/modifiers';
+import { font, foregroundStyle, padding, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 export type QuickShareWidgetProps = {
   name: string;
   role: string;
   company: string;
+  shareDeepLink?: string;
 };
 
 function QuickShareWidget(
@@ -14,9 +15,11 @@ function QuickShareWidget(
 ) {
   'widget';
 
+  const deepLink = props.shareDeepLink || 'aftermeet://share-card';
+
   if (environment.widgetFamily === 'accessoryRectangular') {
     return (
-      <HStack modifiers={[padding({ all: 6 })]}>
+      <HStack modifiers={[padding({ all: 6 }), widgetURL(deepLink)]}>
         <Text modifiers={[font({ weight: 'bold', size: 13 })]}>
           {props.name || 'My card'}
         </Text>
@@ -28,7 +31,7 @@ function QuickShareWidget(
   }
 
   return (
-    <VStack modifiers={[padding({ all: 16 })]}>
+    <VStack modifiers={[padding({ all: 16 }), widgetURL(deepLink)]}>
       <Text modifiers={[foregroundStyle('#2F5711'), font({ weight: 'bold', size: 11 })]}>
         AFTERMEET
       </Text>

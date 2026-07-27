@@ -25,3 +25,18 @@ test("wallet config flags are false without env vars", () => {
   assert.equal(isAppleWalletConfigured(), false);
   assert.equal(isGoogleWalletConfigured(), false);
 });
+
+test("html email signature includes structured layout and card link", async () => {
+  const { buildHtmlSignature } = await import("../lib/email-signature.ts");
+  const html = buildHtmlSignature({
+    name: "Alex Morgan",
+    role: "Product designer",
+    company: "AfterMeet",
+    cardUrl: "https://aftermeet.app/c/alex-morgan",
+    email: "alex@aftermeet.app",
+    themeColor: "#9FE870",
+  });
+  assert.match(html, /View my card/);
+  assert.match(html, /alex@aftermeet.app/);
+  assert.match(html, /AfterMeet email signature/);
+});

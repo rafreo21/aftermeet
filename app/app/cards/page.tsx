@@ -207,9 +207,22 @@ export default function CardsPage() {
   }
 
   async function copySignature(format: "plain" | "html") {
+    const email = profile.methods.find((method) => method.type === "email")?.value || profile.email;
+    const phone = profile.methods.find((method) => method.type === "phone")?.value;
+    const signatureProfile = {
+      name: profile.name,
+      role: profile.role,
+      company: profile.company,
+      cardUrl: shareUrl,
+      showCompany: profile.showCompanyDetails !== false,
+      photoUrl: profile.photo,
+      email,
+      phone,
+      themeColor: profile.theme,
+    };
     const payload = format === "plain"
-      ? buildPlainSignature({ name: profile.name, role: profile.role, company: profile.company, cardUrl: shareUrl })
-      : buildHtmlSignature({ name: profile.name, role: profile.role, company: profile.company, cardUrl: shareUrl });
+      ? buildPlainSignature(signatureProfile)
+      : buildHtmlSignature(signatureProfile);
     await navigator.clipboard.writeText(payload);
     setSignatureCopied(format);
     window.setTimeout(() => setSignatureCopied(""), 1400);

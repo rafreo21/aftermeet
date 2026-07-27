@@ -55,7 +55,8 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   if (!isGoogleWalletConfigured()) {
     return NextResponse.json({
       configured: false,
-      error: "Google Wallet is not configured for this environment.",
+      error: "Google Wallet is not configured for this environment. Add GOOGLE_WALLET_ISSUER_ID and GOOGLE_WALLET_SERVICE_ACCOUNT_JSON on the server.",
+      setup: ["GOOGLE_WALLET_ISSUER_ID", "GOOGLE_WALLET_SERVICE_ACCOUNT_JSON"],
     }, { status: 503 });
   }
 
