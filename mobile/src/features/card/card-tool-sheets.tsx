@@ -10,8 +10,10 @@ import {
   Wallet,
   Watch,
 } from 'phosphor-react-native';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Image, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
 
+import { BrandedQrPreview } from '@/components/branded-qr-preview';
 import { Body, Button } from '@/components/ui';
 import { showsCompanyDetails } from '@/features/card/company-display';
 import type { themeSurfaceStyle } from '@/features/card/theme-colors';
@@ -27,7 +29,9 @@ import {
   virtualBackgroundInstructions,
   watchSetupInstructions,
 } from '@/features/card/share-assets';
-import { updateQuickShareWidget, widgetSetupInstructions } from '@/features/card/widget-sync';
+import { updateQuickShareWidget, widgetSetupInstructions, buildWidgetSnapshot } from '@/features/card/widget-sync';
+import { WIDGET_OPTIONS } from '@/features/card/widget-types';
+import type { WidgetSnapshot } from '@/features/card/widget-types';
 import {
   addAppleWalletPass,
   addGoogleWalletPass,
@@ -50,6 +54,8 @@ type SharedSheetProps = {
   theme: CardToolTheme;
   actions: SheetActions;
   accessToken?: string;
+  allCards?: MobileCard[];
+  cardPublicUrl?: (card: MobileCard) => string;
 };
 
 function SheetMessage({ message, error }: { message?: string; error?: string }) {
@@ -63,6 +69,7 @@ function SheetMessage({ message, error }: { message?: string; error?: string }) 
 
 export function WalletToolSheetContent({
   card,
+  publicUrl,
   theme,
   actions,
   accessToken,
@@ -82,7 +89,7 @@ export function WalletToolSheetContent({
 
   return (
     <View style={styles.sheetBody}>
-      <Body>Your card appears in Wallet with name, role, company, and a scannable QR code.</Body>
+      <Body>Your card appears in Wallet with name, role, company, and a scannable QR code. Apple and Google render the pass scan code themselves; your AfterMeet mark appears on the pass header.</Body>
       <View style={[styles.walletPreview, { backgroundColor: theme.backgroundColor }]}>
         <Text style={[styles.walletHeader, { color: theme.softColor }]}>AfterMeet Card</Text>
         <View style={styles.walletFields}>
@@ -102,6 +109,9 @@ export function WalletToolSheetContent({
               <Text style={[styles.walletValue, { color: theme.color }]}>{card.company}</Text>
             </View>
           ) : null}
+        </View>
+        <View style={styles.walletQrPreview}>
+          <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={112} />
         </View>
       </View>
       {Platform.OS === 'ios' ? (
@@ -146,16 +156,22 @@ export function WalletToolSheetContent({
 }
 
 export function NfcToolSheetContent({
+  card,
   publicUrl,
   actions,
+  accessToken,
   message,
   error,
-}: Pick<SharedSheetProps, 'publicUrl' | 'actions'> & { message: string; error: string }) {
+}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'> & { message: string; error: string }) {
   const { busy, run, setMessage } = actions;
 
   return (
     <View style={styles.sheetBody}>
       <Body>Program a physical NFC tag or copy the link for manufacturer tools.</Body>
+      <View style={styles.nfcQrPreview}>
+        <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={132} />
+        <Text style={styles.note}>This is the card link written to the tag.</Text>
+      </View>
       {isNativeNfcSupported() ? (
         <>
           <Button
@@ -205,6 +221,8 @@ export function WidgetToolSheetContent({
   theme,
   actions,
   accessToken,
+  allCards = [card],
+  cardPublicUrl,
   showCompany,
   initials,
   message,
@@ -216,74 +234,131 @@ export function WidgetToolSheetContent({
   error: string;
 }) {
   const { busy, run, setMessage } = actions;
+  const [snapshot, setSnapshot] = useState<WidgetSnapshot | null>(null);
+  const resolveCardUrl = cardPublicUrl || (() => publicUrl);
+
+  useEffect(() => {
+    let cancelled = false;
+    void buildWidgetSnapshot(allCards, resolveCardUrl, accessToken, card).then((next) => {
+      if (!cancelled) setSnapshot(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, allCards, card, publicUrl, cardPublicUrl]);
+
+  const connections = snapshot?.connections ?? [];
+  const firstConnection = connections[0];
+  const cardCount = snapshot?.cards.length ?? 0;
 
   return (
     <View style={styles.sheetBody}>
       <Body>{widgetSetupInstructions(Platform.OS === 'android' ? 'android' : 'ios')}</Body>
-      <Body style={styles.note}>QR Scan is 2×2 with the AfterMeet logo. Business Card shows your photo when published.</Body>
+      <Body style={styles.note}>
+        Widgets sync all published cards. Use ‹ › on the Business Card widget to switch cards.
+        {cardCount > 1 ? ` ${cardCount} cards ready.` : ''}
+      </Body>
       <View style={styles.widgetGallery}>
-        <View style={styles.widgetOptionCard}>
-          <View style={styles.widgetOptionHeader}>
-            <Text style={styles.widgetOptionBrand}>AfterMeet</Text>
-            <Text style={styles.widgetOptionSize}>2 × 2</Text>
-          </View>
-          <View style={styles.widgetQrOnlyPreview}>
-            <View style={[styles.widgetQrOnlyFrame, { borderColor: theme.backgroundColor }]}>
-              <Text style={styles.widgetQrLabel}>QR</Text>
-            </View>
-          </View>
-          <Text style={styles.widgetOptionTitle}>QR Scan</Text>
-          <Text style={styles.widgetOptionCopy}>Large scannable QR for quick sharing.</Text>
-        </View>
-
-        <View style={styles.widgetOptionCard}>
-          <View style={styles.widgetOptionHeader}>
-            <Text style={styles.widgetOptionBrand}>AfterMeet</Text>
-            <Text style={styles.widgetOptionSize}>4 × 2</Text>
-          </View>
-          <View style={styles.widgetBusinessPreview}>
-            <View style={styles.widgetBusinessQr}>
-              <Text style={styles.widgetQrLabelLight}>QR</Text>
-            </View>
-            <View style={styles.widgetBusinessCopy}>
-              <View style={styles.widgetAvatarSmall}>
-                <Text style={styles.widgetAvatarText}>{initials}</Text>
+        {WIDGET_OPTIONS.map((option) => {
+          if (option.id === 'qr-scan') {
+            return (
+              <View key={option.id} style={styles.widgetOptionCard}>
+                <View style={styles.widgetOptionHeader}>
+                  <Text style={styles.widgetOptionBrand}>AfterMeet</Text>
+                  <Text style={styles.widgetOptionSize}>{option.size}</Text>
+                </View>
+                <View style={styles.widgetQrOnlyPreview}>
+                  <View style={[styles.widgetQrOnlyFrame, { borderColor: theme.backgroundColor }]}>
+                    <BrandedQrPreview
+                      cardUrl={publicUrl}
+                      slug={card.slug}
+                      accessToken={accessToken}
+                      size={90}
+                    />
+                  </View>
+                </View>
+                <Text style={styles.widgetOptionTitle}>{option.title}</Text>
+                <Text style={styles.widgetOptionCopy}>{option.description}</Text>
               </View>
-              <Text style={styles.widgetNameLight}>{card.name}</Text>
-              {card.role ? <Text style={styles.widgetRoleLight}>{card.role}</Text> : null}
-              {showCompany && card.company ? <Text style={styles.widgetCompanyLight}>{card.company}</Text> : null}
-            </View>
-          </View>
-          <Text style={styles.widgetOptionTitle}>Business Card</Text>
-          <Text style={styles.widgetOptionCopy}>QR plus your name, role, and company.</Text>
-        </View>
+            );
+          }
 
-        <View style={styles.widgetOptionCard}>
-          <View style={styles.widgetOptionHeader}>
-            <Text style={styles.widgetOptionBrand}>AfterMeet</Text>
-            <Text style={styles.widgetOptionSize}>4 × 2</Text>
-          </View>
-          <View style={styles.widgetConnectionsPreview}>
-            <Text style={[styles.widgetConnectionsEyebrow, { color: theme.backgroundColor }]}>RECENT CONNECTIONS</Text>
-            <View style={styles.widgetConnectionRow}>
-              <View style={styles.widgetAvatarSmall}><Text style={styles.widgetAvatarText}>C</Text></View>
-              <View style={styles.widgetConnectionCopy}>
-                <Text style={styles.widgetNameLight}>Recent connection</Text>
-                <Text style={styles.widgetRoleLight}>Shared via your card</Text>
+          if (option.id === 'business-card') {
+            return (
+              <View key={option.id} style={styles.widgetOptionCard}>
+                <View style={styles.widgetOptionHeader}>
+                  <Text style={styles.widgetOptionBrand}>AfterMeet</Text>
+                  <Text style={styles.widgetOptionSize}>{option.size}</Text>
+                </View>
+                <View style={styles.widgetBusinessPreview}>
+                  <View style={styles.widgetBusinessQr}>
+                    <BrandedQrPreview
+                      cardUrl={publicUrl}
+                      slug={card.slug}
+                      accessToken={accessToken}
+                      size={68}
+                    />
+                  </View>
+                  <View style={styles.widgetBusinessCopy}>
+                    {card.photo?.trim() ? (
+                      <Image source={{ uri: card.photo }} style={styles.widgetPhotoSmall} />
+                    ) : (
+                      <View style={styles.widgetAvatarSmall}>
+                        <Text style={styles.widgetAvatarText}>{initials}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.widgetNameLight}>{card.name}</Text>
+                    {card.role ? <Text style={styles.widgetRoleLight}>{card.role}</Text> : null}
+                    {showCompany && card.company ? <Text style={styles.widgetCompanyLight}>{card.company}</Text> : null}
+                  </View>
+                </View>
+                <Text style={styles.widgetOptionTitle}>{option.title}</Text>
+                <Text style={styles.widgetOptionCopy}>{option.description}</Text>
               </View>
-              <Text style={styles.widgetActionChip}>☎</Text>
-              <Text style={styles.widgetActionChip}>✉</Text>
+            );
+          }
+
+          return (
+            <View key={option.id} style={styles.widgetOptionCard}>
+              <View style={styles.widgetOptionHeader}>
+                <Text style={styles.widgetOptionBrand}>AfterMeet</Text>
+                <Text style={styles.widgetOptionSize}>{option.size}</Text>
+              </View>
+              <View style={styles.widgetConnectionsPreview}>
+                <Text style={[styles.widgetConnectionsEyebrow, { color: theme.backgroundColor }]}>RECENT CONNECTIONS</Text>
+                {firstConnection ? (
+                  <View style={styles.widgetConnectionRow}>
+                    <View style={styles.widgetAvatarSmall}>
+                      <Text style={styles.widgetAvatarText}>
+                        {firstConnection.name.trim().charAt(0).toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                    <View style={styles.widgetConnectionCopy}>
+                      <Text style={styles.widgetNameLight}>{firstConnection.name}</Text>
+                      <Text style={styles.widgetRoleLight}>
+                        {firstConnection.subtitle || 'Shared via your card'}
+                      </Text>
+                    </View>
+                    <Text style={styles.widgetActionChip}>☎</Text>
+                    <Text style={styles.widgetActionChip}>✉</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.widgetConnectionsEmpty}>Share your card to see new connections here.</Text>
+                )}
+              </View>
+              <Text style={styles.widgetOptionTitle}>{option.title}</Text>
+              <Text style={styles.widgetOptionCopy}>{option.description}</Text>
             </View>
-          </View>
-          <Text style={styles.widgetOptionTitle}>Recent Connections</Text>
-          <Text style={styles.widgetOptionCopy}>Quick call or message people who shared back.</Text>
-        </View>
+          );
+        })}
       </View>
       <Button
         loading={busy === 'widget'}
         onPress={() => void run('widget', async () => {
-          await updateQuickShareWidget(card, publicUrl, accessToken);
-          setMessage('All three widgets updated. Add or refresh them from your widget picker.');
+          await updateQuickShareWidget(card, publicUrl, accessToken, allCards, resolveCardUrl);
+          const next = await buildWidgetSnapshot(allCards, resolveCardUrl, accessToken, card);
+          setSnapshot(next);
+          setMessage('Widget data refreshed. Add or update AfterMeet from your widget picker.');
         })}>
         <SquaresFour size={18} color={colors.ink} weight="bold" />
         Refresh home-screen widgets
@@ -295,6 +370,8 @@ export function WidgetToolSheetContent({
 
 export function SignatureToolSheetContent({
   card,
+  publicUrl,
+  accessToken,
   signatureProfile,
   initials,
   showCompany,
@@ -304,6 +381,8 @@ export function SignatureToolSheetContent({
   error,
 }: {
   card: MobileCard;
+  publicUrl: string;
+  accessToken?: string;
   signatureProfile: SignatureProfile;
   initials: string;
   showCompany: boolean;
@@ -327,6 +406,9 @@ export function SignatureToolSheetContent({
           {signatureProfile.email ? <Text style={styles.signatureContact}>✉ {signatureProfile.email}</Text> : null}
           <Text style={styles.signatureLink}>View my card</Text>
         </View>
+        <View style={styles.signatureQr}>
+          <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={72} />
+        </View>
       </View>
       <Button variant="secondary" onPress={() => void copySignature('plain')}>
         <EnvelopeSimple size={18} color={colors.ink} weight="bold" />
@@ -343,6 +425,7 @@ export function SignatureToolSheetContent({
 
 export function WatchToolSheetContent({
   card,
+  publicUrl,
   actions,
   accessToken,
   published,
@@ -357,7 +440,7 @@ export function WatchToolSheetContent({
       <View style={styles.watchPreview}>
         <Text style={styles.watchLabel}>Personal card</Text>
         <View style={styles.watchQr}>
-          <Text style={styles.widgetQrLabel}>QR</Text>
+          <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={120} />
         </View>
       </View>
       <Button
@@ -378,6 +461,7 @@ export function WatchToolSheetContent({
 
 export function BackgroundToolSheetContent({
   card,
+  publicUrl,
   theme,
   actions,
   accessToken,
@@ -395,9 +479,16 @@ export function BackgroundToolSheetContent({
         <View style={styles.backgroundOverlay}>
           <Text style={styles.backgroundName}>{card.name}</Text>
           {subtitle ? <Text style={styles.backgroundSubtitle}>{subtitle}</Text> : null}
-          <View style={styles.backgroundQr}>
-            <Text style={styles.widgetQrLabel}>QR</Text>
+          <View style={styles.backgroundQrRow}>
+            <BrandedQrPreview
+              cardUrl={publicUrl}
+              slug={card.slug}
+              accessToken={accessToken}
+              size={88}
+              style={styles.backgroundQrImage}
+            />
           </View>
+          <Text style={styles.backgroundScanLabel}>Scan to save my contact</Text>
         </View>
       </View>
       <Button
@@ -439,6 +530,21 @@ const styles = StyleSheet.create({
   walletField: { gap: 2 },
   walletLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   walletValue: { fontSize: 18, fontWeight: '800' },
+  walletQrPreview: {
+    alignSelf: 'flex-start',
+    padding: spacing.x2,
+    borderRadius: radius.medium,
+    backgroundColor: colors.white,
+  },
+  nfcQrPreview: {
+    alignItems: 'center',
+    gap: spacing.x2,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
   signaturePreview: {
     flexDirection: 'row',
     borderRadius: radius.medium,
@@ -458,6 +564,11 @@ const styles = StyleSheet.create({
   },
   signaturePhotoText: { color: colors.white, fontSize: 20, fontWeight: '800' },
   signatureBody: { flex: 1, gap: 2 },
+  signatureQr: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
   signatureName: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   signatureLine: { color: colors.muted, fontSize: 13 },
   signatureContact: { color: colors.ink, fontSize: 13, marginTop: 4 },
@@ -496,6 +607,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   widgetBusinessPreview: {
     flexDirection: 'row',
@@ -509,9 +621,15 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 12,
-    backgroundColor: '#000000',
+    backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  widgetPhotoSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
   widgetBusinessCopy: { flex: 1, gap: 2 },
   widgetConnectionsPreview: {
@@ -521,6 +639,7 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
   },
   widgetConnectionsEyebrow: { fontSize: 10, fontWeight: '800' },
+  widgetConnectionsEmpty: { color: '#B8C4B3', fontSize: 11, lineHeight: 16 },
   widgetConnectionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   widgetConnectionCopy: { flex: 1, gap: 1 },
   widgetActionChip: {
@@ -563,30 +682,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backgroundPreview: {
-    height: 120,
+    minHeight: 148,
     borderRadius: radius.medium,
     padding: spacing.x4,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
   },
   backgroundOverlay: {
-    width: 180,
+    width: 220,
     padding: spacing.x3,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.94)',
-    gap: 2,
+    gap: spacing.x2,
   },
   backgroundName: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   backgroundSubtitle: { color: colors.muted, fontSize: 11 },
-  backgroundQr: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#E9F7DF',
+  backgroundQrRow: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: spacing.x1,
+    paddingBottom: spacing.x1,
+  },
+  backgroundQrImage: {
+    borderRadius: 10,
+  },
+  backgroundScanLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

@@ -5,20 +5,40 @@ export type WidgetConnection = {
   email?: string;
 };
 
-export type WidgetSnapshot = {
+export type WidgetCardPayload = {
   name: string;
   role: string;
   company: string;
   cardUrl: string;
   shareDeepLink: string;
-  connectionsDeepLink: string;
-  qrImageUri?: string;
   qrImageBase64?: string;
-  logoImageUri?: string;
-  photoImageUri?: string;
   photoImageBase64?: string;
+  qrImageUri?: string;
+  photoImageUri?: string;
   initials: string;
+};
+
+export const WIDGET_DEMO_CARD: WidgetCardPayload = {
+  name: 'Alex Morgan',
+  role: 'Product Designer',
+  company: 'AfterMeet',
+  cardUrl: 'https://aftermeet.app/c/demo',
+  shareDeepLink: 'aftermeet://share-card',
+  initials: 'AM',
+};
+
+export const WIDGET_DEMO_CONNECTIONS: WidgetConnection[] = [
+  { name: 'Jordan Lee', subtitle: 'Shared via your card' },
+  { name: 'Cameron Williamson', subtitle: 'Shared via your card' },
+];
+
+export type WidgetSnapshot = {
+  cards: WidgetCardPayload[];
+  connectionsDeepLink: string;
   connections: WidgetConnection[];
+  logoImageUri?: string;
+  logoImageBase64?: string;
+  qrImageUri?: string;
 };
 
 export const WIDGET_OPTIONS = [

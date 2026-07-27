@@ -1,14 +1,16 @@
 import type { MobileCard } from '@/features/card/types';
-import { updateQuickShareWidget } from '@/features/card/widget-sync';
+import { syncAllWidgets } from '@/features/card/widget-sync';
 
 export async function syncCardToolsForCard(
-  card: MobileCard | undefined,
-  cardUrl?: string,
+  cards: MobileCard[],
+  cardPublicUrl: (card: MobileCard) => string,
   accessToken?: string,
+  preferredCard?: MobileCard,
 ) {
-  if (!card || card.status !== 'published' || !card.slug) return;
+  if (!cards.length) return;
+
   try {
-    await updateQuickShareWidget(card, cardUrl, accessToken);
+    await syncAllWidgets(cards, cardPublicUrl, accessToken, preferredCard);
   } catch {
     // Widget sync is best-effort and surfaces in Card Tools when it fails.
   }

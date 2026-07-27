@@ -153,6 +153,12 @@ export default function CardsPage() {
   }, [activeId]);
 
   useEffect(() => {
+    if (!profile.slug) {
+      setQr("");
+      setQrSvg("");
+      return;
+    }
+
     const options = {
       width: 900,
       margin: 2,
@@ -163,13 +169,19 @@ export default function CardsPage() {
     setQrSvg("");
     setQrError("");
     Promise.all([
-      QRCode.toDataURL(shareUrl, options),
+      fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=900`)
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Branded QR unavailable");
+          const payload = await response.json() as { dataUri?: string };
+          if (!payload.dataUri) throw new Error("Branded QR unavailable");
+          return payload.dataUri;
+        }),
       QRCode.toString(shareUrl, { ...options, type: "svg" }),
     ]).then(([image, svg]) => {
       setQr(image);
       setQrSvg(svg);
     }).catch(() => setQrError("We couldn’t generate this QR code. Check the card link and try again."));
-  }, [shareUrl]);
+  }, [profile.slug, shareUrl]);
 
   function selectCard(card: LibraryCard) {
     setActiveCardId(localStorage, card.id);
@@ -232,12 +244,16 @@ export default function CardsPage() {
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       throw new Error(payload?.error || "We couldn’t download this asset.");
     }
-    const svg = await response.text();
-    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.startsWith("image/")) {
+      throw new Error("The server returned an invalid image file.");
+    }
+    const blob = await response.blob();
+    const extension = type === "virtual-background" ? "jpg" : "png";
     const href = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = href;
-    link.download = `aftermeet-${type}-${profile.slug}.svg`;
+    link.download = `aftermeet-${type}-${profile.slug}.${extension}`;
     link.click();
     URL.revokeObjectURL(href);
   }
@@ -268,9 +284,21 @@ export default function CardsPage() {
       phone,
       themeColor: profile.theme,
     };
+    let qrDataUri: string | undefined;
+    if (format === "html" && profile.slug) {
+      try {
+        const response = await fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=512`);
+        if (response.ok) {
+          const payload = await response.json() as { dataUri?: string };
+          qrDataUri = payload.dataUri;
+        }
+      } catch {
+        qrDataUri = undefined;
+      }
+    }
     const payload = format === "plain"
       ? buildPlainSignature(signatureProfile)
-      : buildHtmlSignature(signatureProfile);
+      : buildHtmlSignature({ ...signatureProfile, qrDataUri });
     await navigator.clipboard.writeText(payload);
     setSignatureCopied(format);
     window.setTimeout(() => setSignatureCopied(""), 1400);
@@ -391,7 +419,6 @@ export default function CardsPage() {
             {qr ? (
               <div className="inline-qr-frame">
                 <img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} />
-                <img className="inline-qr-logo" src="/aftermeet-logo.svg?v=2" alt="" />
               </div>
             ) : !qrError && (
               <div className="inline-qr-frame" aria-label="Generating QR code" aria-busy="true">

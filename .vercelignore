@@ -1,0 +1,14 @@
+mobile/node_modules
+mobile/android
+mobile/ios
+mobile/.expo
+mobile/plugins/.preview-cache
+node_modules
+.next
+.vinext
+out
+dist
+coverage
+outputs
+work
+.wrangler

@@ -1,16 +1,4 @@
-const MIN_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
-
-export function walletIconBuffers() {
-  return {
-    "icon.png": MIN_PNG,
-    "icon@2x.png": MIN_PNG,
-    "logo.png": MIN_PNG,
-    "logo@2x.png": MIN_PNG,
-  };
-}
+import { buildWalletLogoBuffers } from "./branded-qr.ts";
 
 function hexToRgb(hex: string) {
   const normalized = hex.replace("#", "");
@@ -19,6 +7,10 @@ function hexToRgb(hex: string) {
   const g = Number.parseInt(normalized.slice(2, 4), 16);
   const b = Number.parseInt(normalized.slice(4, 6), 16);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+export async function walletIconBuffers() {
+  return buildWalletLogoBuffers();
 }
 
 export function buildApplePassJson(card: {

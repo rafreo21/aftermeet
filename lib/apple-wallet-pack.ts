@@ -70,7 +70,7 @@ export async function buildAppleWalletPass(card: WalletCardPayload, certs: Apple
   );
   const files: Record<string, Buffer> = {
     "pass.json": Buffer.from(passJson, "utf8"),
-    ...walletIconBuffers(),
+    ...(await walletIconBuffers()),
   };
 
   const profileImage = await fetchImageBuffer(card.profileImageUrl || "");

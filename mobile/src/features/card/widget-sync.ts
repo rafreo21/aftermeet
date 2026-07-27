@@ -4,7 +4,8 @@ import { fetchAllConnections } from '@/features/connections/connections-api';
 import { showsCompanyDetails } from '@/features/card/company-display';
 import { shareCardDeepLink } from '@/features/card/share-deep-link';
 import type { MobileCard } from '@/features/card/types';
-import type { WidgetConnection, WidgetSnapshot } from '@/features/card/widget-types';
+import type { WidgetCardPayload, WidgetConnection, WidgetSnapshot } from '@/features/card/widget-types';
+import { WIDGET_DEMO_CARD } from '@/features/card/widget-types';
 import { cacheWidgetPhotoUri, ensureWidgetLogoUri, readUriAsBase64 } from '@/lib/widget-assets';
 import { readEnv } from '@/lib/env';
 import { buildWidgetQrFileUri } from '@/lib/widget-qr';
@@ -15,6 +16,8 @@ type WidgetBridge = {
   updateWidget?: (payload: Record<string, string | undefined>) => Promise<void>;
 };
 
+type IosWidgetPayload = Record<string, string | number | undefined>;
+
 function initialsFor(name: string) {
   return name
     .trim()
@@ -23,6 +26,10 @@ function initialsFor(name: string) {
     .join('')
     .slice(0, 2)
     .toUpperCase() || 'AM';
+}
+
+function widgetAssetKey(card: MobileCard, index: number) {
+  return card.id || card.slug || `card-${index}`;
 }
 
 async function loadRecentConnections(accessToken?: string): Promise<WidgetConnection[]> {
@@ -40,38 +47,41 @@ async function loadRecentConnections(accessToken?: string): Promise<WidgetConnec
   }
 }
 
-export async function buildWidgetSnapshot(
+async function buildWidgetCardPayload(
   card: MobileCard,
-  cardUrl?: string,
-  accessToken?: string,
-): Promise<WidgetSnapshot> {
-  const env = readEnv();
-  const resolvedUrl = cardUrl || `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${card.slug}`;
+  cardUrl: string,
+  assetKey: string,
+): Promise<WidgetCardPayload> {
   const showCompany = showsCompanyDetails(card);
-  let qrImageUri: string | undefined;
   let qrImageBase64: string | undefined;
-  let logoImageUri: string | undefined;
-  let photoImageUri: string | undefined;
   let photoImageBase64: string | undefined;
+  let qrImageUri: string | undefined;
+  let photoImageUri: string | undefined;
 
   try {
-    qrImageUri = await buildWidgetQrFileUri(resolvedUrl);
-    if (qrImageUri) qrImageBase64 = await readUriAsBase64(qrImageUri);
+    const qrImageUriValue = await buildWidgetQrFileUri(cardUrl, assetKey);
+    if (qrImageUriValue) {
+      qrImageUri = qrImageUriValue;
+      if (Platform.OS === 'android') {
+        qrImageBase64 = await readUriAsBase64(qrImageUriValue);
+      }
+    }
   } catch {
+    qrImageBase64 = undefined;
     qrImageUri = undefined;
-  }
-
-  try {
-    logoImageUri = await ensureWidgetLogoUri();
-  } catch {
-    logoImageUri = undefined;
   }
 
   if (card.photo?.trim()) {
     try {
-      photoImageUri = await cacheWidgetPhotoUri(card.photo);
-      if (photoImageUri) photoImageBase64 = await readUriAsBase64(photoImageUri);
+      const cachedPhotoUri = await cacheWidgetPhotoUri(card.photo, assetKey);
+      if (cachedPhotoUri) {
+        photoImageUri = cachedPhotoUri;
+        if (Platform.OS === 'android') {
+          photoImageBase64 = await readUriAsBase64(cachedPhotoUri);
+        }
+      }
     } catch {
+      photoImageBase64 = undefined;
       photoImageUri = undefined;
     }
   }
@@ -80,33 +90,72 @@ export async function buildWidgetSnapshot(
     name: card.name.trim() || 'My card',
     role: card.role.trim(),
     company: showCompany ? card.company.trim() : '',
-    cardUrl: resolvedUrl,
+    cardUrl,
     shareDeepLink: shareCardDeepLink(card),
-    connectionsDeepLink: CONNECTIONS_DEEP_LINK,
-    qrImageUri,
     qrImageBase64,
-    logoImageUri,
-    photoImageUri,
     photoImageBase64,
+    qrImageUri,
+    photoImageUri,
     initials: initialsFor(card.name),
+  };
+}
+
+export async function buildWidgetSnapshot(
+  cards: MobileCard[],
+  cardPublicUrl: (card: MobileCard) => string,
+  accessToken?: string,
+  preferredCard?: MobileCard,
+): Promise<WidgetSnapshot> {
+  const env = readEnv();
+  const published = cards.filter((card) => card.status === 'published' && card.slug);
+  const cardTargets = published.length
+    ? published
+    : preferredCard
+      ? [preferredCard]
+      : cards.slice(0, 1);
+
+  let logoImageUri: string | undefined;
+  let logoImageBase64: string | undefined;
+  try {
+    logoImageUri = await ensureWidgetLogoUri();
+    if (logoImageUri) logoImageBase64 = await readUriAsBase64(logoImageUri);
+  } catch {
+    logoImageUri = undefined;
+  }
+
+  const widgetCards = await Promise.all(
+    cardTargets.map(async (card, index) => {
+      const resolvedUrl = cardPublicUrl(card)
+        || `${env?.publicCardBaseUrl || 'https://aftermeet.app'}/c/${card.slug || 'demo'}`;
+      return buildWidgetCardPayload(card, resolvedUrl, widgetAssetKey(card, index));
+    }),
+  );
+
+  const primary = widgetCards[0];
+  let qrImageUri: string | undefined = primary?.qrImageUri;
+  if (!qrImageUri && primary?.cardUrl) {
+    try {
+      qrImageUri = await buildWidgetQrFileUri(primary.cardUrl, 'primary');
+    } catch {
+      qrImageUri = undefined;
+    }
+  }
+
+  return {
+    cards: widgetCards,
+    connectionsDeepLink: CONNECTIONS_DEEP_LINK,
     connections: await loadRecentConnections(accessToken),
+    logoImageUri,
+    logoImageBase64,
+    qrImageUri,
   };
 }
 
 function bridgePayload(snapshot: WidgetSnapshot): Record<string, string | undefined> {
   const payload: Record<string, string | undefined> = {
-    name: snapshot.name,
-    role: snapshot.role,
-    company: snapshot.company,
-    cardUrl: snapshot.cardUrl,
-    shareDeepLink: snapshot.shareDeepLink,
+    cardsJson: JSON.stringify(snapshot.cards),
+    logoImageBase64: snapshot.logoImageBase64,
     connectionsDeepLink: snapshot.connectionsDeepLink,
-    qrImageUri: snapshot.qrImageUri,
-    qrImageBase64: snapshot.qrImageBase64,
-    logoImageUri: snapshot.logoImageUri,
-    photoImageUri: snapshot.photoImageUri,
-    photoImageBase64: snapshot.photoImageBase64,
-    initials: snapshot.initials,
     recentConnectionsJson: JSON.stringify(snapshot.connections),
   };
 
@@ -121,30 +170,48 @@ function bridgePayload(snapshot: WidgetSnapshot): Record<string, string | undefi
   return payload;
 }
 
-async function updateIosWidgets(snapshot: WidgetSnapshot) {
-  const payload = {
-    name: snapshot.name,
-    role: snapshot.role,
-    company: snapshot.company,
-    shareDeepLink: snapshot.shareDeepLink,
-    connectionsDeepLink: snapshot.connectionsDeepLink,
-    qrImageUri: snapshot.qrImageUri,
+async function ensureDemoCardQr(cards: WidgetCardPayload[]) {
+  if (cards.length) return cards;
+  try {
+    const demoQrUri = await buildWidgetQrFileUri(WIDGET_DEMO_CARD.cardUrl, 'demo');
+    return [{ ...WIDGET_DEMO_CARD, qrImageUri: demoQrUri }];
+  } catch {
+    return [WIDGET_DEMO_CARD];
+  }
+}
+
+function iosWidgetPayload(snapshot: WidgetSnapshot): IosWidgetPayload {
+  const cards = snapshot.cards.length ? snapshot.cards : [WIDGET_DEMO_CARD];
+  const primary = cards[0];
+
+  const payload: IosWidgetPayload = {
+    cardsJson: JSON.stringify(cards),
+    cardIndex: 0,
     logoImageUri: snapshot.logoImageUri,
-    photoImageUri: snapshot.photoImageUri,
-    initials: snapshot.initials,
-    connection1Name: snapshot.connections[0]?.name || '',
-    connection1Subtitle: snapshot.connections[0]?.subtitle || '',
-    connection1Phone: snapshot.connections[0]?.phone || '',
-    connection1Email: snapshot.connections[0]?.email || '',
-    connection2Name: snapshot.connections[1]?.name || '',
-    connection2Subtitle: snapshot.connections[1]?.subtitle || '',
-    connection2Phone: snapshot.connections[1]?.phone || '',
-    connection2Email: snapshot.connections[1]?.email || '',
-    connection3Name: snapshot.connections[2]?.name || '',
-    connection3Subtitle: snapshot.connections[2]?.subtitle || '',
-    connection3Phone: snapshot.connections[2]?.phone || '',
-    connection3Email: snapshot.connections[2]?.email || '',
+    connectionsDeepLink: snapshot.connectionsDeepLink,
+    shareDeepLink: primary?.shareDeepLink || WIDGET_DEMO_CARD.shareDeepLink,
+    qrImageUri: primary?.qrImageUri || snapshot.qrImageUri,
+    name: primary?.name || WIDGET_DEMO_CARD.name,
+    role: primary?.role || WIDGET_DEMO_CARD.role,
+    company: primary?.company || WIDGET_DEMO_CARD.company,
+    initials: primary?.initials || WIDGET_DEMO_CARD.initials,
+    photoImageUri: primary?.photoImageUri,
   };
+
+  snapshot.connections.slice(0, 3).forEach((connection, index) => {
+    const slot = index + 1;
+    payload[`connection${slot}Name`] = connection.name;
+    payload[`connection${slot}Subtitle`] = connection.subtitle;
+    payload[`connection${slot}Phone`] = connection.phone || '';
+    payload[`connection${slot}Email`] = connection.email || '';
+  });
+
+  return payload;
+}
+
+async function updateIosWidgets(snapshot: WidgetSnapshot) {
+  const cards = await ensureDemoCardQr(snapshot.cards);
+  const payload = iosWidgetPayload({ ...snapshot, cards });
 
   const [{ default: qrScan }, { default: businessCard }, { default: recentConnections }] = await Promise.all([
     import('../../../widgets/QrScanWidget'),
@@ -157,12 +224,13 @@ async function updateIosWidgets(snapshot: WidgetSnapshot) {
   recentConnections.updateSnapshot(payload);
 }
 
-export async function updateQuickShareWidget(
-  card: MobileCard,
-  cardUrl?: string,
+export async function syncAllWidgets(
+  cards: MobileCard[],
+  cardPublicUrl: (card: MobileCard) => string,
   accessToken?: string,
+  preferredCard?: MobileCard,
 ) {
-  const snapshot = await buildWidgetSnapshot(card, cardUrl, accessToken);
+  const snapshot = await buildWidgetSnapshot(cards, cardPublicUrl, accessToken, preferredCard);
 
   if (Platform.OS === 'ios') {
     try {
@@ -185,9 +253,24 @@ export async function updateQuickShareWidget(
   throw new Error('Home-screen widgets are only available on iPhone and Android.');
 }
 
+export async function updateQuickShareWidget(
+  card: MobileCard,
+  publicUrl: string,
+  accessToken?: string,
+  allCards: MobileCard[] = [card],
+  cardPublicUrl?: (item: MobileCard) => string,
+) {
+  const env = readEnv();
+  const urlFn = cardPublicUrl || ((item: MobileCard) => {
+    if (item.id === card.id && publicUrl) return publicUrl;
+    return `${env?.publicCardBaseUrl || 'https://aftermeet.app'}/c/${item.slug}`;
+  });
+  await syncAllWidgets(allCards, urlFn, accessToken, card);
+}
+
 export function widgetSetupInstructions(platform: 'ios' | 'android') {
   if (platform === 'android') {
-    return 'Long-press your home screen → Widgets → AfterMeet. Choose QR Scan (2×2), Business Card, or Recent Connections.';
+    return 'Long-press your home screen → Widgets → AfterMeet. Add QR Scan (2×2), Business Card, or Recent Connections. Swipe cards with ‹ › on the business card widget.';
   }
-  return 'Long-press your home screen → Edit → Add Widget → AfterMeet. Choose QR Scan (2×2), Business Card, or Recent Connections.';
+  return 'Long-press your home screen → Edit → Add Widget → AfterMeet. Add QR Scan, Business Card, or Recent Connections. Use ‹ › on the business card widget to switch cards.';
 }

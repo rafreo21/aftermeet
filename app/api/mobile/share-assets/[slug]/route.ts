@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 import {
-  buildVirtualBackgroundSvg,
-  buildWatchFaceSvg,
+  buildVirtualBackgroundJpeg,
+  buildWatchFacePng,
   shareAssetFilename,
+  shareAssetMimeType,
   type ShareAssetProfile,
 } from "../../../../../lib/share-assets";
+import { buildBrandedQrDataUri } from "../../../../../lib/branded-qr.ts";
 import { getAppUserFromRequest } from "../../../../../lib/auth/mobile-api-auth";
 import { readPublicSupabaseConfig } from "../../../../../lib/supabase/env";
 
@@ -66,9 +68,19 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 
   const url = new URL(request.url);
   const type = url.searchParams.get("type")?.trim().toLowerCase();
+  if (type === "branded-qr") {
+    const profile = await loadShareAssetProfile(normalized, request, user.workspaceId, accessToken);
+    if (!profile) {
+      return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
+    }
+    const size = Math.min(Math.max(Number(url.searchParams.get("size") || 512), 256), 1600);
+    const dataUri = await buildBrandedQrDataUri(profile.cardUrl, size);
+    return NextResponse.json({ dataUri });
+  }
+
   if (type !== "virtual-background" && type !== "watch-face") {
     return NextResponse.json({
-      error: "Pass type=virtual-background or type=watch-face.",
+      error: "Pass type=virtual-background, type=watch-face, or type=branded-qr.",
     }, { status: 400 });
   }
 
@@ -77,14 +89,15 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
   }
 
-  const svg = type === "virtual-background"
-    ? await buildVirtualBackgroundSvg(profile)
-    : await buildWatchFaceSvg(profile);
+  const asset = type === "virtual-background"
+    ? await buildVirtualBackgroundJpeg(profile)
+    : await buildWatchFacePng(profile);
+  const format = type === "virtual-background" ? "jpg" : "png";
 
-  return new NextResponse(svg, {
+  return new NextResponse(new Uint8Array(asset), {
     headers: {
-      "Content-Type": "image/svg+xml; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${shareAssetFilename(type, normalized)}"`,
+      "Content-Type": shareAssetMimeType(type),
+      "Content-Disposition": `attachment; filename="${shareAssetFilename(type, normalized, format)}"`,
       "Cache-Control": "private, no-store",
     },
   });

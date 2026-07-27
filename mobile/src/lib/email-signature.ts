@@ -8,6 +8,7 @@ export type SignatureProfile = {
   email?: string;
   phone?: string;
   themeColor?: string;
+  qrDataUri?: string;
 };
 
 function escapeHtml(value: string) {
@@ -72,6 +73,20 @@ export function buildHtmlSignature(profile: SignatureProfile) {
     : `<div style="width:64px;height:64px;border-radius:10px;background:#163300;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:700;line-height:64px;text-align:center;">${initials}</div>`;
 
   const contactHtml = contactRows(profile);
+  const qrBlock = profile.qrDataUri?.trim()
+    ? [
+        `<div style="padding-top:12px;">`,
+        `<img src="${escapeHtml(profile.qrDataUri.trim())}" alt="Scan to open my AfterMeet card" width="96" height="96" style="display:block;width:96px;height:96px;border-radius:12px;" />`,
+        `<div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;">`,
+        `<a href="${cardUrl}" target="_blank" rel="noopener noreferrer" style="color:#2F5711;text-decoration:none;font-weight:700;">View my card</a>`,
+        `</div>`,
+        `</div>`,
+      ].join('')
+    : [
+        `<div style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;">`,
+        `<a href="${cardUrl}" target="_blank" rel="noopener noreferrer" style="color:#2F5711;text-decoration:none;font-weight:700;">View my card</a>`,
+        `</div>`,
+      ].join('');
 
   return [
     '<!-- AfterMeet email signature -->',
@@ -89,9 +104,7 @@ export function buildHtmlSignature(profile: SignatureProfile) {
     contactHtml
       ? `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;margin-top:10px;">${contactHtml}</table>`
       : '',
-    '<div style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;">',
-    `<a href="${cardUrl}" target="_blank" rel="noopener noreferrer" style="color:#2F5711;text-decoration:none;font-weight:700;">View my card</a>`,
-    '</div>',
+    qrBlock,
     '</td>',
     '</tr>',
     '<tr>',

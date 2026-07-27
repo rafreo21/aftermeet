@@ -32,6 +32,7 @@ import { useCard } from '@/features/card/card-context';
 import { themeSurfaceStyle } from '@/features/card/theme-colors';
 import { fetchWalletAvailability } from '@/features/card/wallet-actions';
 import { buildHtmlSignature, buildPlainSignature } from '@/lib/email-signature';
+import { fetchBrandedQrDataUri } from '@/lib/branded-qr-client';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -92,9 +93,9 @@ export default function CardToolsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!card || card.status !== 'published' || !session?.access_token) return;
-      void syncCardToolsForCard(card, publicUrl, session.access_token);
-    }, [card, publicUrl, session?.access_token]),
+      if (!card || !session?.access_token) return;
+      void syncCardToolsForCard(cards, cardPublicUrl, session.access_token, card);
+    }, [card, cards, cardPublicUrl, session?.access_token]),
   );
 
   useEffect(() => {
@@ -161,9 +162,20 @@ export default function CardToolsScreen() {
   }
 
   async function copySignature(kind: 'plain' | 'html') {
+    if (!card) return;
+
+    let qrDataUri: string | undefined;
+    if (kind === 'html' && card.slug && session?.access_token) {
+      try {
+        qrDataUri = await fetchBrandedQrDataUri(card.slug, session.access_token);
+      } catch {
+        qrDataUri = undefined;
+      }
+    }
+
     const value = kind === 'plain'
       ? buildPlainSignature(signatureProfile)
-      : buildHtmlSignature(signatureProfile);
+      : buildHtmlSignature({ ...signatureProfile, qrDataUri });
     await Clipboard.setStringAsync(value);
     setCopied(kind);
     setTimeout(() => setCopied(''), 1500);
@@ -292,7 +304,7 @@ export default function CardToolsScreen() {
 
       <BottomSheet visible={activeSheet === 'nfc'} title="NFC" onClose={closeSheet}>
         <NfcToolSheetContent
-          publicUrl={publicUrl}
+          {...sharedSheetProps}
           actions={sheetActions}
           message={message}
           error={error}
@@ -302,6 +314,8 @@ export default function CardToolsScreen() {
       <BottomSheet visible={activeSheet === 'widgets'} title="Home screen widgets" onClose={closeSheet}>
         <WidgetToolSheetContent
           {...sharedSheetProps}
+          allCards={cards}
+          cardPublicUrl={cardPublicUrl}
           showCompany={showCompany}
           initials={initials}
           message={message}
@@ -312,6 +326,8 @@ export default function CardToolsScreen() {
       <BottomSheet visible={activeSheet === 'signature'} title="Email signature" onClose={closeSheet}>
         <SignatureToolSheetContent
           card={card}
+          publicUrl={publicUrl}
+          accessToken={session?.access_token}
           signatureProfile={signatureProfile}
           initials={initials}
           showCompany={showCompany}

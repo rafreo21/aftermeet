@@ -2,51 +2,52 @@
 
 ## Product behaviour
 
-The first widget is **AfterMeet Quick Share**. It shows your card's **QR code on the home screen**
-so someone can scan it directly from the widget — no need to open the app first.
+AfterMeet ships three home-screen widgets:
 
-Tapping the widget still opens the full-screen QR view in the app if you want maximum brightness.
+1. **QR Scan** — large scannable QR code (2×2 on Android, small on iOS)
+2. **Business Card** — QR plus name, role, and company (4×2 wide)
+3. **Recent Connections** — recent people who shared their details (4×2 wide)
+
+Tapping a widget opens the matching deep link (`aftermeet://share-card` or `aftermeet://connections`).
+
+## Shared data model
+
+Both platforms read from the same snapshot built in `mobile/src/features/card/widget-sync.ts`:
+
+- `cardsJson` — all published cards, including per-card QR and photo assets
+- `recentConnectionsJson` / `connection1Name`… — recent connections
+- Placeholder/demo content when nothing is synced yet (Alex Morgan + sample connections)
 
 ## iOS
 
-`expo-widgets` creates a WidgetKit extension with small, medium, and lock-screen
-rectangular families. The snapshot is refreshed whenever the locally cached card
-changes.
+`expo-widgets` generates a WidgetKit extension from:
 
-Files:
+- `mobile/widgets/QrScanWidget.tsx`
+- `mobile/widgets/BusinessCardWidget.tsx`
+- `mobile/widgets/RecentConnectionsWidget.tsx`
+- `mobile/widgets/widget-shared.ts`
 
-- `mobile/widgets/QuickShareWidget.tsx`
-- `mobile/src/features/card/widget-sync.ts`
-- widget configuration in `mobile/app.json`
+Widget configuration lives in `mobile/app.json` under the `expo-widgets` plugin.
 
-The app and extension use the application group
-`group.com.aftermeet.app`. Apple Developer provisioning must enable that exact
-group for both targets.
+The app and extension share `group.com.aftermeet.app`. Apple Developer provisioning must enable that group for both targets.
+
+Business Card widgets support multi-card paging with ‹ › buttons (iOS 17+ interactive widgets).
 
 ## Android
 
-The custom Expo config plugin generates an Android `AppWidgetProvider`, layout,
-drawables, metadata, and manifest receiver during prebuild. Tapping either the
-surface or its action opens `aftermeet://share-card`.
-
-File:
+The custom Expo config plugin generates Kotlin `AppWidgetProvider` classes, XML layouts, picker preview PNGs, and the `QuickShareWidgetBridge` during prebuild:
 
 - `mobile/plugins/withAndroidQuickShareWidget.js`
+- `mobile/plugins/widget-preview-pngs.js`
 
-Run `npx expo prebuild --clean` after changing native widget metadata. Do not use
-`--clean` when the generated native folders contain hand-written changes that
-have not been moved into a config plugin.
+Run `npx expo prebuild --platform android` after changing native widget metadata.
 
 ## Testing
 
-1. Build and install the native development app.
-2. Launch it once and edit the card.
-3. iOS: long-press the Home Screen, add AfterMeet, and test every supported
-   family.
-4. Android: open the widget picker, add AfterMeet Quick Share, resize it, and
-   tap both the card and button.
-5. Confirm the deep link opens Quick Share and the QR resolves on a second
-   device.
+1. Build and install the native development app on device or simulator.
+2. Launch the app once and open **Card tools → Home screen widgets → Refresh**.
+3. Add each widget from the system picker.
+4. Confirm QR scan, card paging, and connection actions behave as expected.
+5. Confirm deep links open the in-app Quick Share or Connections screens.
 
-Widgets cannot be fully validated in a browser or Expo Go; they require a signed
-native build and a simulator or physical device.
+Widgets cannot be fully validated in Expo Go; use a dev or production native build.

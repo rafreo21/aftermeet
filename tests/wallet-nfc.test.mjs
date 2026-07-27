@@ -36,14 +36,16 @@ test("html email signature includes structured layout and card link", async () =
     email: "alex@aftermeet.app",
     phone: "+1 555 0100",
     themeColor: "#9FE870",
+    qrDataUri: "data:image/png;base64,abc",
   });
   assert.match(html, /View my card/);
   assert.match(html, /alex@aftermeet.app/);
   assert.match(html, /Product designer/);
   assert.match(html, /AfterMeet email signature/);
+  assert.match(html, /data:image\/png;base64,abc/);
 });
 
-test("virtual background svg includes name and qr overlay", async () => {
+test("virtual background svg includes name and centered branded qr overlay", async () => {
   const { buildVirtualBackgroundSvg } = await import("../lib/share-assets.ts");
   const svg = await buildVirtualBackgroundSvg({
     name: "Alex Morgan",
@@ -54,7 +56,23 @@ test("virtual background svg includes name and qr overlay", async () => {
   });
   assert.match(svg, /Alex Morgan/);
   assert.match(svg, /1920/);
+  assert.match(svg, /width="220"/);
+  assert.match(svg, /text-anchor="middle">Scan to save my contact/);
   assert.match(svg, /data:image\/png;base64,/);
+});
+
+test("virtual background jpeg export is a valid image", async () => {
+  const { buildVirtualBackgroundJpeg } = await import("../lib/share-assets.ts");
+  const jpeg = await buildVirtualBackgroundJpeg({
+    name: "Alex Morgan",
+    role: "Consultant",
+    company: "Northstar",
+    cardUrl: "https://aftermeet.app/c/alex-morgan",
+    themeColor: "#9FE870",
+  });
+  assert.ok(jpeg.length > 10_000);
+  assert.equal(jpeg[0], 0xff);
+  assert.equal(jpeg[1], 0xd8);
 });
 
 test("watch face svg includes personal card label", async () => {

@@ -4,11 +4,15 @@ import QRCode from 'qrcode';
 import { Platform } from 'react-native';
 
 const IOS_APP_GROUP = 'group.com.aftermeet.app';
-const QR_FILE_NAME = 'quick-share-qr.png';
+function qrFileName(fileKey: string) {
+  const safeKey = fileKey.replace(/[^a-zA-Z0-9_-]/g, '') || 'primary';
+  return `quick-share-qr-${safeKey}.png`;
+}
 
 export const QR_LOGO = require('../../assets/images/splash-icon.png');
 
-export async function buildWidgetQrFileUri(cardUrl: string) {
+export async function buildWidgetQrFileUri(cardUrl: string, fileKey = 'primary') {
+  const QR_FILE_NAME = qrFileName(fileKey);
   const dataUrl = await QRCode.toDataURL(cardUrl, {
     errorCorrectionLevel: 'H',
     margin: 1,

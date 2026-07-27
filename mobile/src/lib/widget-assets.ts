@@ -7,7 +7,10 @@ import { isRemoteImageUrl } from '@/lib/card-assets-client';
 
 const IOS_APP_GROUP = 'group.com.aftermeet.app';
 const LOGO_FILE = 'widget-logo.png';
-const PHOTO_FILE = 'widget-photo.jpg';
+function photoFileName(fileKey: string) {
+  const safeKey = fileKey.replace(/[^a-zA-Z0-9_-]/g, '') || 'default';
+  return `widget-photo-${safeKey}.jpg`;
+}
 
 function widgetStorageDirectory() {
   if (Platform.OS === 'ios') {
@@ -50,13 +53,14 @@ export async function ensureWidgetLogoUri() {
   return destination;
 }
 
-export async function cacheWidgetPhotoUri(photo: string) {
+export async function cacheWidgetPhotoUri(photo: string, fileKey = 'default') {
   const trimmed = photo.trim();
   if (!trimmed) return undefined;
 
   const directory = widgetStorageDirectory();
   if (!directory) return undefined;
 
+  const PHOTO_FILE = photoFileName(fileKey);
   const destination = `${directory}${PHOTO_FILE}`;
 
   try {
