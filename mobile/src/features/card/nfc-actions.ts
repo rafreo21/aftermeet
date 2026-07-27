@@ -16,9 +16,14 @@ export async function programNfcTag(cardUrl: string) {
   const supported = await NfcManager.isSupported();
   if (!supported) throw new Error('This device does not support NFC writing.');
 
+  const enabled = await NfcManager.isEnabled();
+  if (!enabled) throw new Error('Turn on NFC in your phone settings, then try again.');
+
   await NfcManager.start();
   try {
-    await NfcManager.requestTechnology(NfcTech.Ndef);
+    await NfcManager.requestTechnology(NfcTech.Ndef, {
+      alertMessage: 'Hold your phone against the NFC tag.',
+    });
     const bytes = Ndef.encodeMessage([Ndef.uriRecord(cardUrl)]);
     if (!bytes) throw new Error('Could not encode the NFC message.');
     await NfcManager.ndefHandler.writeNdefMessage(bytes);

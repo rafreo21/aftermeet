@@ -1,18 +1,12 @@
 import { Image } from 'expo-image';
-import { ArrowUpRight, EnvelopeSimple, Globe, Phone, UserCircle } from 'phosphor-react-native';
+import { ArrowUpRight } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ContactMethodIcon } from '@/components/contact-method-icon';
 import { openContactMethod } from '@/features/card/contact-actions';
 import { cardWithCompanyVisibility, showsCompanyDetails } from '@/features/card/company-display';
-import type { ContactMethod, MobileCard } from '@/features/card/types';
+import type { MobileCard } from '@/features/card/types';
 import { colors, radius, spacing } from '@/theme/tokens';
-
-const icons: Partial<Record<ContactMethod['type'], typeof EnvelopeSimple>> = {
-  email: EnvelopeSimple,
-  phone: Phone,
-  website: Globe,
-  link: Globe,
-};
 
 export function MobileCardPreview({ card, compact = false }: { card: MobileCard; compact?: boolean }) {
   const visible = cardWithCompanyVisibility(card);
@@ -41,16 +35,15 @@ export function MobileCardPreview({ card, compact = false }: { card: MobileCard;
         <Text style={styles.role}>{visible.role}{visible.company ? ` · ${visible.company}` : ''}</Text>
         {!compact && visible.bio ? <Text style={styles.bio}>{visible.bio}</Text> : null}
         <View style={styles.methods}>
-          {visible.methods.slice(0, compact ? 2 : undefined).map((method) => {
-            const Icon = icons[method.type] || UserCircle;
-            return (
+          {visible.methods.slice(0, compact ? 2 : undefined).map((method) => (
               <Pressable key={method.id} onPress={() => openContactMethod(method)} style={({ pressed }) => [styles.method, pressed && styles.pressed]}>
-                <View style={[styles.methodIcon, { backgroundColor: visible.theme }]}><Icon size={18} color={colors.ink} weight="bold" /></View>
+                <View style={[styles.methodIcon, { backgroundColor: visible.theme }]}>
+                  <ContactMethodIcon type={method.type} size={18} color={colors.ink} />
+                </View>
                 <View style={styles.methodCopy}><Text style={styles.methodLabel}>{method.label}</Text><Text numberOfLines={1} style={styles.methodValue}>{method.value}</Text></View>
                 <ArrowUpRight size={17} color={colors.muted} />
               </Pressable>
-            );
-          })}
+          ))}
         </View>
       </View>
     </View>

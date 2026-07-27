@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
-import { DeviceMobile, PencilSimple, QrCode, Star, Trash } from 'phosphor-react-native';
+import { PencilSimple, ShareNetwork, Star, Trash, Wrench } from 'phosphor-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -110,11 +110,13 @@ export default function CardDetailScreen() {
           <MobileCardPreview card={selected} />
           <Body style={styles.url}>{cardPublicUrl(selected)}</Body>
 
-          <Button onPress={() => router.push('/share-card')}>
-            <QrCode size={18} /> Share this card
+          <Button onPress={() => router.push(`/share-card?id=${selected.id}`)}>
+            <ShareNetwork size={18} color={colors.ink} weight="bold" />
+            Share this card
           </Button>
-          <Button variant="secondary" onPress={() => router.push('/card-tools')}>
-            <DeviceMobile size={17} /> Wallet, NFC, signature, widget
+          <Button variant="secondary" onPress={() => router.push(`/card-tools?id=${selected.id}`)}>
+            <Wrench size={18} color={colors.ink} weight="bold" />
+            Wallet, NFC, signature, widget
           </Button>
         </ScrollView>
       </View>

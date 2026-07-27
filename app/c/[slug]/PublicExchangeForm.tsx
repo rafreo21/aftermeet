@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { BriefcaseIcon } from "@phosphor-icons/react/dist/csr/Briefcase";
+import { BuildingsIcon } from "@phosphor-icons/react/dist/csr/Buildings";
 import { Button } from "../../components/Button";
+import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { TextField } from "../../components/FormField";
 
 type OptionalField = "x" | "instagram" | "tiktok" | "linkedin" | "role" | "company";
@@ -15,6 +18,12 @@ const OPTIONAL_PILLS: { id: OptionalField; label: string; fieldLabel: string; pl
   { id: "role", label: "Job title", fieldLabel: "Job title (optional)", placeholder: "Product designer" },
   { id: "company", label: "Company name", fieldLabel: "Company name (optional)", placeholder: "Acme Inc." },
 ];
+
+function OptionalPillIcon({ field }: { field: OptionalField }) {
+  if (field === "role") return <BriefcaseIcon size={14} weight="bold" aria-hidden />;
+  if (field === "company") return <BuildingsIcon size={14} weight="bold" aria-hidden />;
+  return <ContactMethodIcon type={field} size={14} />;
+}
 
 function buildNote(
   ownerName: string,
@@ -164,7 +173,8 @@ export function PublicExchangeForm({
           {OPTIONAL_PILLS.map((pill) =>
             activeFields.has(pill.id) ? null : (
               <button key={pill.id} type="button" className="public-exchange-add" onClick={() => showField(pill.id)}>
-                + {pill.label}
+                <OptionalPillIcon field={pill.id} />
+                {pill.label}
               </button>
             ),
           )}

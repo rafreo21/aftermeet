@@ -5,13 +5,17 @@ import { Check, Copy, ShareNetwork } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
 import { Share, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import { useLocalSearchParams } from 'expo-router';
 
 import { Button, PageHeader, ScreenFrame } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function ShareCardScreen() {
-  const { card, publicUrl } = useCard();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { card: activeCard, getCardById, cardPublicUrl } = useCard();
+  const card = (id ? getCardById(id) : undefined) || activeCard;
+  const publicUrl = cardPublicUrl(card);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
