@@ -139,16 +139,6 @@ export function PublicExchangeForm({
       />
 
       <div className="public-exchange-optional">
-        <div className="public-exchange-optional-pills">
-          {OPTIONAL_PILLS.map((pill) =>
-            activeFields.has(pill.id) ? null : (
-              <button key={pill.id} type="button" className="public-exchange-add" onClick={() => showField(pill.id)}>
-                + {pill.label}
-              </button>
-            ),
-          )}
-        </div>
-
         {OPTIONAL_PILLS.filter((pill) => activeFields.has(pill.id)).map((pill) => (
           <TextField
             key={pill.id}
@@ -160,6 +150,16 @@ export function PublicExchangeForm({
             placeholder={pill.placeholder}
           />
         ))}
+
+        <div className="public-exchange-optional-pills">
+          {OPTIONAL_PILLS.map((pill) =>
+            activeFields.has(pill.id) ? null : (
+              <button key={pill.id} type="button" className="public-exchange-add" onClick={() => showField(pill.id)}>
+                + {pill.label}
+              </button>
+            ),
+          )}
+        </div>
       </div>
 
       {error ? <p className="public-exchange-error" role="alert">{error}</p> : null}
