@@ -4,6 +4,7 @@ import { showsCompanyDetails } from '@/features/card/company-display';
 import { shareCardDeepLink } from '@/features/card/share-deep-link';
 import type { MobileCard } from '@/features/card/types';
 import { readEnv } from '@/lib/env';
+import { buildWidgetQrFileUri } from '@/lib/widget-qr';
 
 type WidgetBridge = {
   updateWidget?: (payload: {
@@ -12,6 +13,7 @@ type WidgetBridge = {
     company: string;
     cardUrl: string;
     shareDeepLink: string;
+    qrImageUri?: string;
   }) => Promise<void>;
 };
 
@@ -19,12 +21,21 @@ export async function updateQuickShareWidget(card: MobileCard, cardUrl?: string)
   const env = readEnv();
   const resolvedUrl = cardUrl || `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${card.slug}`;
   const showCompany = showsCompanyDetails(card);
+  let qrImageUri: string | undefined;
+
+  try {
+    qrImageUri = await buildWidgetQrFileUri(resolvedUrl);
+  } catch {
+    qrImageUri = undefined;
+  }
+
   const payload = {
     name: card.name.trim() || 'My card',
     role: card.role.trim(),
     company: showCompany ? card.company.trim() : '',
     cardUrl: resolvedUrl,
     shareDeepLink: shareCardDeepLink(card),
+    qrImageUri,
   };
 
   if (Platform.OS === 'ios') {
@@ -51,7 +62,7 @@ export async function updateQuickShareWidget(card: MobileCard, cardUrl?: string)
 
 export function widgetSetupInstructions(platform: 'ios' | 'android') {
   if (platform === 'android') {
-    return 'Long-press your home screen → Widgets → AfterMeet Quick Share → Add. Then tap Open QR to launch your card.';
+    return 'Long-press your home screen → Widgets → AfterMeet Quick Share. Your QR code appears on the widget so people can scan it directly.';
   }
-  return 'Long-press your home screen → Edit → search AfterMeet Quick Share → Add widget. Tap it to open your QR code.';
+  return 'Long-press your home screen → Edit → search AfterMeet Quick Share. Your QR code appears on the widget so people can scan it directly.';
 }

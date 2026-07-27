@@ -247,16 +247,18 @@ export default function CardToolsScreen() {
             <Body>{widgetSetupInstructions(Platform.OS === 'android' ? 'android' : 'ios')}</Body>
             <View style={styles.widgetPreview}>
               <Text style={styles.widgetEyebrow}>AfterMeet</Text>
+              <View style={styles.widgetQrPlaceholder}>
+                <Text style={styles.widgetQrLabel}>QR</Text>
+              </View>
               <Text style={styles.widgetName}>{card.name}</Text>
               {subtitle ? <Text style={styles.widgetSubtitle}>{subtitle}</Text> : null}
-              <Text style={styles.widgetButton}>Open QR →</Text>
             </View>
             <Button
               variant="secondary"
               loading={busy === 'widget'}
               onPress={() => void run('widget', async () => {
                 await updateQuickShareWidget(card, publicUrl);
-                setMessage('Widget updated. Add or refresh it on your home screen, then tap Open QR.');
+                setMessage('Widget updated with your QR code. Add or refresh it on your home screen.');
               })}>
               <SquaresFour size={18} color={colors.ink} weight="bold" />
               Refresh home-screen widget
@@ -322,20 +324,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   widgetEyebrow: { color: '#2F5711', fontSize: 11, fontWeight: '800' },
-  widgetName: { color: colors.ink, fontSize: 20, fontWeight: '800' },
-  widgetSubtitle: { color: colors.muted, fontSize: 12 },
-  widgetButton: {
+  widgetQrPlaceholder: {
+    width: 132,
+    height: 132,
     marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: colors.ink,
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: '800',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: colors.white,
   },
+  widgetQrLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
+  widgetName: { color: colors.ink, fontSize: 16, fontWeight: '800', marginTop: 8 },
+  widgetSubtitle: { color: colors.muted, fontSize: 12 },
   success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
 });

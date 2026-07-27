@@ -2,11 +2,10 @@
 
 ## Product behaviour
 
-The first widget is **AfterMeet Quick Share**. Its purpose is narrow: get from
-the home or lock screen to the full-screen contact QR in one tap.
+The first widget is **AfterMeet Quick Share**. It shows your card's **QR code on the home screen**
+so someone can scan it directly from the widget — no need to open the app first.
 
-The widget is an entry point, not a miniature copy of the app. Editing, scanning,
-authentication, and relationship work stay in the app.
+Tapping the widget still opens the full-screen QR view in the app if you want maximum brightness.
 
 ## iOS
 

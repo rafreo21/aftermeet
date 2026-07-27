@@ -16,11 +16,24 @@
   box-shadow: 0 20px 60px rgba(22, 51, 0, .12);
 }
 
-.public-card-cover { height: 152px; background: var(--card-accent); position: relative; }
+.public-card-cover {
+  height: 152px;
+  background: var(--card-accent);
+  position: relative;
+  overflow: hidden;
+}
+.public-card-cover-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .public-card-company-row {
   position: absolute;
   top: 16px;
   left: 20px;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -48,13 +61,23 @@
   font-size: 14px;
   font-weight: 800;
 }
-.public-card-cover img,
-.public-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.public-card-content { padding: 0 24px 28px; }
+.public-card-cover img.public-card-company-logo,
+.public-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.public-card-content {
+  position: relative;
+  z-index: 3;
+  padding: 0 24px 28px;
+}
 .public-card-avatar {
   width: 92px;
   height: 92px;
   margin-top: -46px;
+  position: relative;
+  z-index: 4;
   display: grid;
   place-items: center;
   overflow: hidden;

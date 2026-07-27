@@ -334,7 +334,16 @@ export default function CardsPage() {
               <li><span>2</span>Point at the QR</li>
               <li><span>3</span>Open your card</li>
             </ol>
-            {qr ? <div className="inline-qr-frame"><img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} /></div> : !qrError && <div className="inline-qr-frame" aria-label="Generating QR code" aria-busy="true"><span className="skeleton qr-skeleton" /></div>}
+            {qr ? (
+              <div className="inline-qr-frame">
+                <img className="inline-qr-image" src={qr} alt={`QR code for ${profile.name}'s card`} />
+                <img className="inline-qr-logo" src="/aftermeet-logo.svg?v=2" alt="" />
+              </div>
+            ) : !qrError && (
+              <div className="inline-qr-frame" aria-label="Generating QR code" aria-busy="true">
+                <span className="skeleton qr-skeleton" />
+              </div>
+            )}
             <div className="inline-qr-url"><span>Public card link</span><strong>{shareUrl}</strong></div>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>

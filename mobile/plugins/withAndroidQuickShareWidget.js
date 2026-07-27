@@ -200,8 +200,14 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.widget.RemoteViews
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import ${packageName}.R
 
 class QuickShareWidgetReceiver : AppWidgetProvider() {
@@ -210,17 +216,36 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
   }
 
   companion object {
+    private fun generateQrBitmap(content: String, size: Int): Bitmap? {
+      if (content.isBlank()) return null
+      return try {
+        val hints = mapOf(
+          EncodeHintType.MARGIN to 1,
+          EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H,
+        )
+        val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
+        for (x in 0 until size) {
+          for (y in 0 until size) {
+            bitmap.setPixel(x, y, if (matrix.get(x, y)) Color.parseColor("#163300") else Color.WHITE)
+          }
+        }
+        bitmap
+      } catch (_: Exception) {
+        null
+      }
+    }
+
     fun renderWidget(context: Context, manager: AppWidgetManager, id: Int) {
       val prefs = context.getSharedPreferences("${PREFS_NAME}", Context.MODE_PRIVATE)
       val name = prefs.getString("${PREFS_KEY_NAME}", "My contact card") ?: "My contact card"
       val role = prefs.getString("${PREFS_KEY_ROLE}", "") ?: ""
       val company = prefs.getString("${PREFS_KEY_COMPANY}", "") ?: ""
-      val subtitle = listOf(role, company).filter { it.isNotBlank() }.joinToString(" · ")
-
       val cardUrl = prefs.getString("${PREFS_KEY_CARD_URL}", "") ?: ""
       val shareDeepLink = prefs.getString("${PREFS_KEY_SHARE_DEEP_LINK}", "aftermeet://share-card") ?: "aftermeet://share-card"
-      val targetUrl = if (shareDeepLink.isNotBlank()) shareDeepLink else "aftermeet://share-card"
-      val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+      val subtitle = listOf(role, company).filter { it.isNotBlank() }.joinToString(" · ")
+
+      val intent = Intent(Intent.ACTION_VIEW, Uri.parse(shareDeepLink)).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
       }
       val pendingIntent = PendingIntent.getActivity(
@@ -234,10 +259,14 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
       views.setTextViewText(R.id.aftermeet_widget_name, name)
       views.setTextViewText(
         R.id.aftermeet_widget_subtitle,
-        if (subtitle.isBlank()) "Tap to open your QR code" else subtitle
+        if (subtitle.isBlank()) "Scan to connect" else subtitle
       )
+      val qrBitmap = generateQrBitmap(cardUrl, 320)
+      if (qrBitmap != null) {
+        views.setImageViewBitmap(R.id.aftermeet_widget_qr, qrBitmap)
+      }
       views.setOnClickPendingIntent(R.id.aftermeet_widget_root, pendingIntent)
-      views.setOnClickPendingIntent(R.id.aftermeet_widget_button, pendingIntent)
+      views.setOnClickPendingIntent(R.id.aftermeet_widget_qr, pendingIntent)
       manager.updateAppWidget(id, views)
     }
   }
@@ -253,48 +282,55 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:background="@drawable/aftermeet_widget_background"
-  android:gravity="center_vertical"
+  android:gravity="center_horizontal"
   android:orientation="vertical"
-  android:padding="18dp">
+  android:padding="14dp">
   <TextView
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:text="AFTERMEET"
     android:textColor="#2F5711"
-    android:textSize="11sp"
+    android:textSize="10sp"
     android:textStyle="bold" />
+  <ImageView
+    android:id="@+id/aftermeet_widget_qr"
+    android:layout_width="132dp"
+    android:layout_height="132dp"
+    android:layout_marginTop="8dp"
+    android:contentDescription="Scan QR code"
+    android:scaleType="fitCenter" />
   <TextView
     android:id="@+id/aftermeet_widget_name"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:layout_marginTop="6dp"
+    android:layout_marginTop="8dp"
     android:text="My contact card"
     android:textColor="#163300"
-    android:textSize="21sp"
+    android:textSize="14sp"
     android:textStyle="bold" />
   <TextView
     android:id="@+id/aftermeet_widget_subtitle"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:layout_marginTop="4dp"
-    android:text="Tap to open your QR code"
+    android:layout_marginTop="2dp"
+    android:text="Scan to connect"
     android:textColor="#667363"
-    android:textSize="12sp" />
-  <TextView
-    android:id="@+id/aftermeet_widget_button"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:layout_marginTop="12dp"
-    android:background="@drawable/aftermeet_widget_button"
-    android:paddingHorizontal="14dp"
-    android:paddingVertical="8dp"
-    android:text="Open QR →"
-    android:textColor="#FFFFFF"
-    android:textSize="13sp"
-    android:textStyle="bold" />
+    android:textSize="11sp" />
 </LinearLayout>
 `,
       );
+
+      const buildGradlePath = path.join(projectRoot, 'android', 'app', 'build.gradle');
+      if (fs.existsSync(buildGradlePath)) {
+        let buildGradle = fs.readFileSync(buildGradlePath, 'utf8');
+        if (!buildGradle.includes('com.google.zxing:core')) {
+          buildGradle = buildGradle.replace(
+            /dependencies\s*\{/,
+            "dependencies {\n    implementation 'com.google.zxing:core:3.5.3'",
+          );
+          fs.writeFileSync(buildGradlePath, buildGradle);
+        }
+      }
 
       const drawableDir = path.join(androidRoot, 'res', 'drawable');
       fs.mkdirSync(drawableDir, { recursive: true });
@@ -323,7 +359,7 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
   android:description="@string/app_name"
   android:initialLayout="@layout/aftermeet_quick_share_widget"
   android:minWidth="180dp"
-  android:minHeight="110dp"
+  android:minHeight="180dp"
   android:previewLayout="@layout/aftermeet_quick_share_widget"
   android:resizeMode="horizontal|vertical"
   android:updatePeriodMillis="0"

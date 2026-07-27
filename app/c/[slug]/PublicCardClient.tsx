@@ -51,7 +51,7 @@ function PublicCardView({
   return (
     <>
       <div className="public-card-cover">
-        {coverImageUrl ? <img src={coverImageUrl} alt="" /> : null}
+        {coverImageUrl ? <img src={coverImageUrl} alt="" className="public-card-cover-photo" /> : null}
         {showCompanyDetails && (companyLogoUrl || company) ? (
           <div className="public-card-company-row">
             {companyLogoUrl ? (

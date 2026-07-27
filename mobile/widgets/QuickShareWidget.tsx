@@ -1,5 +1,5 @@
-import { HStack, Text, VStack } from '@expo/ui/swift-ui';
-import { font, foregroundStyle, padding, widgetURL } from '@expo/ui/swift-ui/modifiers';
+import { HStack, Image, Text, VStack } from '@expo/ui/swift-ui';
+import { font, foregroundStyle, frame, padding, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 export type QuickShareWidgetProps = {
@@ -7,6 +7,7 @@ export type QuickShareWidgetProps = {
   role: string;
   company: string;
   shareDeepLink?: string;
+  qrImageUri?: string;
 };
 
 function QuickShareWidget(
@@ -20,29 +21,30 @@ function QuickShareWidget(
   if (environment.widgetFamily === 'accessoryRectangular') {
     return (
       <HStack modifiers={[padding({ all: 6 }), widgetURL(deepLink)]}>
+        {props.qrImageUri ? (
+          <Image uiImage={props.qrImageUri} modifiers={[frame({ width: 36, height: 36 })]} />
+        ) : null}
         <Text modifiers={[font({ weight: 'bold', size: 13 })]}>
           {props.name || 'My card'}
-        </Text>
-        <Text modifiers={[foregroundStyle('#66785F'), font({ size: 11 })]}>
-          Tap to share
         </Text>
       </HStack>
     );
   }
 
   return (
-    <VStack modifiers={[padding({ all: 16 }), widgetURL(deepLink)]}>
-      <Text modifiers={[foregroundStyle('#2F5711'), font({ weight: 'bold', size: 11 })]}>
+    <VStack modifiers={[padding({ all: 14 }), widgetURL(deepLink)]}>
+      <Text modifiers={[foregroundStyle('#2F5711'), font({ weight: 'bold', size: 10 })]}>
         AFTERMEET
       </Text>
-      <Text modifiers={[foregroundStyle('#163300'), font({ weight: 'bold', size: 21 })]}>
-        {props.name || 'My card'}
-      </Text>
-      <Text modifiers={[foregroundStyle('#53634D'), font({ size: 12 })]}>
-        {[props.role, props.company].filter(Boolean).join(' · ') || 'Ready to share'}
-      </Text>
-      <Text modifiers={[foregroundStyle('#163300'), font({ weight: 'semibold', size: 13 })]}>
-        Open QR →
+      {props.qrImageUri ? (
+        <Image uiImage={props.qrImageUri} modifiers={[frame({ width: 132, height: 132 }), padding({ top: 8 })]} />
+      ) : (
+        <Text modifiers={[foregroundStyle('#163300'), font({ weight: 'bold', size: 18 }), padding({ top: 8 })]}>
+          {props.name || 'My card'}
+        </Text>
+      )}
+      <Text modifiers={[foregroundStyle('#53634D'), font({ size: 11 }), padding({ top: 6 })]}>
+        {[props.role, props.company].filter(Boolean).join(' · ') || 'Scan to connect'}
       </Text>
     </VStack>
   );

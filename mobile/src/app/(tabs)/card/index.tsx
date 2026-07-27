@@ -1,104 +1,122 @@
 import { router } from 'expo-router';
 import { IdentificationCard, Plus, Scan } from 'phosphor-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
+import { Body, Button, Eyebrow, Panel, Title } from '@/components/ui';
 import { MAX_CARDS } from '@/features/card/card-library';
 import { useCard } from '@/features/card/card-context';
+import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function CardLibraryScreen() {
   const { cards, activeCardId, syncing, canCreateCard, createCard, setPrimaryCard } = useCard();
+  const insets = useAppInsets();
 
   return (
-    <Screen>
-      <View style={styles.topBar}>
+    <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
+      <View style={styles.page}>
         <View style={styles.header}>
-          <Eyebrow>{syncing ? 'Syncing…' : 'My cards'}</Eyebrow>
-          <Title>Choose a card to open</Title>
-          <Body>
-            You can create up to {MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.
-          </Body>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Scan QR code"
-          onPress={() => router.push('/scanner')}
-          style={styles.scanButton}>
-          <Scan size={22} color={colors.ink} weight="bold" />
-        </Pressable>
-      </View>
-
-      <View style={styles.grid}>
-        {cards.map((item, index) => {
-          const isPrimary = item.id === activeCardId;
-          return (
-            <Pressable
-              key={item.id}
-              accessibilityRole="button"
-              onPress={() => {
-                void setPrimaryCard(item.id!);
-                router.push(`/card/${item.id}`);
-              }}
-              style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
-              <View style={[styles.cover, { backgroundColor: item.theme }]}>
-                <Text style={styles.coverLetter}>{item.company[0] || item.name[0] || 'A'}</Text>
-              </View>
-              <View style={styles.tileBody}>
-                <Text style={styles.cardNumber}>Card {index + 1}</Text>
-                <Text style={styles.cardLabel}>{item.label || `Card ${index + 1}`}</Text>
-                <Text style={styles.cardName}>{item.name || 'Finish setting up this card'}</Text>
-                <View style={styles.metaRow}>
-                  <Text style={styles.cardStatus}>{item.status === 'published' ? 'Published' : 'Draft'}</Text>
-                  {isPrimary ? <Text style={styles.primaryBadge}>Primary</Text> : null}
-                </View>
-              </View>
-            </Pressable>
-          );
-        })}
-
-        {canCreateCard ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={async () => {
-              const created = await createCard({ label: `Card ${cards.length + 1}` });
-              if (created) router.push(`/edit-card?id=${created.id}`);
-            }}
-            style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
-            <View style={styles.addIcon}>
-              <Plus size={24} color={colors.ink} weight="bold" />
+          <View style={styles.topBar}>
+            <View style={styles.headerCopy}>
+              <Eyebrow>{syncing ? 'Syncing…' : 'My cards'}</Eyebrow>
+              <Title style={styles.title}>Choose a card to open</Title>
+              <Body>
+                You can create up to {MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.
+              </Body>
             </View>
-            <Text style={styles.addTitle}>Create another card</Text>
-            <Text style={styles.addCopy}>{MAX_CARDS - cards.length} remaining</Text>
-          </Pressable>
-        ) : null}
-      </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scan QR code"
+              onPress={() => router.push('/scanner')}
+              style={styles.scanButton}>
+              <Scan size={22} color={colors.ink} weight="bold" />
+            </Pressable>
+          </View>
+        </View>
 
-      {!cards.length ? (
-        <Panel style={styles.empty}>
-          <IdentificationCard size={32} color={colors.ink} weight="bold" />
-          <Text style={styles.emptyTitle}>Create your first card</Text>
-          <Body>Add your identity and the ways people can reach you.</Body>
-          <Button
-            onPress={async () => {
-              const created = await createCard();
-              if (created) router.push(`/edit-card?id=${created.id}`);
-            }}>
-            Create your first card
-          </Button>
-        </Panel>
-      ) : null}
-    </Screen>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
+          <View style={styles.grid}>
+            {cards.map((item, index) => {
+              const isPrimary = item.id === activeCardId;
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    void setPrimaryCard(item.id!);
+                    router.push(`/card/${item.id}`);
+                  }}
+                  style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
+                  <View style={[styles.cover, { backgroundColor: item.theme }]}>
+                    <Text style={styles.coverLetter}>{item.company[0] || item.name[0] || 'A'}</Text>
+                  </View>
+                  <View style={styles.tileBody}>
+                    <Text style={styles.cardNumber}>Card {index + 1}</Text>
+                    <Text style={styles.cardLabel}>{item.label || `Card ${index + 1}`}</Text>
+                    <Text style={styles.cardName}>{item.name || 'Finish setting up this card'}</Text>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.cardStatus}>{item.status === 'published' ? 'Published' : 'Draft'}</Text>
+                      {isPrimary ? <Text style={styles.primaryBadge}>Primary</Text> : null}
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+
+            {canCreateCard ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={async () => {
+                  const created = await createCard({ label: `Card ${cards.length + 1}` });
+                  if (created) router.push(`/edit-card?id=${created.id}`);
+                }}
+                style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
+                <View style={styles.addIcon}>
+                  <Plus size={24} color={colors.ink} weight="bold" />
+                </View>
+                <Text style={styles.addTitle}>Create another card</Text>
+                <Text style={styles.addCopy}>{MAX_CARDS - cards.length} remaining</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {!cards.length ? (
+            <Panel style={styles.empty}>
+              <IdentificationCard size={32} color={colors.ink} weight="bold" />
+              <Text style={styles.emptyTitle}>Create your first card</Text>
+              <Body>Add your identity and the ways people can reach you.</Body>
+              <Button
+                onPress={async () => {
+                  const created = await createCard();
+                  if (created) router.push(`/edit-card?id=${created.id}`);
+                }}>
+                Create your first card
+              </Button>
+            </Panel>
+          ) : null}
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.canvas },
+  page: { flex: 1 },
+  header: {
+    paddingHorizontal: spacing.x5,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.x3,
   },
-  header: { flex: 1, paddingTop: spacing.x2, gap: spacing.x3 },
+  headerCopy: { flex: 1, gap: spacing.x3 },
+  title: { fontSize: 32, lineHeight: 34, letterSpacing: -1.1 },
   scanButton: {
     width: 44,
     height: 44,
@@ -109,6 +127,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  scroll: { flex: 1, marginTop: spacing.x4 },
+  scrollContent: {
+    paddingHorizontal: spacing.x5,
+    gap: spacing.x4,
   },
   grid: { gap: spacing.x4 },
   cardTile: {

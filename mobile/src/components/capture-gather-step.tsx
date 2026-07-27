@@ -191,7 +191,18 @@ export function CaptureGatherStep({
             </Pressable>
             {showQr ? (
               <View style={styles.qrWrap}>
-                <QRCode value={publicUrl} size={200} color={colors.ink} backgroundColor={colors.white} />
+                <QRCode
+                  value={publicUrl}
+                  size={200}
+                  color={colors.ink}
+                  backgroundColor={colors.white}
+                  logo={require('../../assets/images/splash-icon.png')}
+                  logoSize={42}
+                  logoBackgroundColor={colors.white}
+                  logoMargin={3}
+                  logoBorderRadius={10}
+                  ecl="H"
+                />
                 <Text style={styles.qrHint}>{card.name}</Text>
               </View>
             ) : null}

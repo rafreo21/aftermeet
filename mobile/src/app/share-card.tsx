@@ -9,6 +9,7 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { Button, PageHeader, ScreenFrame } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
+import { QR_LOGO } from '@/lib/widget-qr';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function ShareCardScreen() {
@@ -38,7 +39,18 @@ export default function ShareCardScreen() {
       <PageHeader eyebrow="Quick Share" title={card.name} titleStyle={styles.heading} />
       <View style={styles.stage}>
         <View style={styles.qr}>
-          <QRCode value={publicUrl} size={246} color={colors.ink} backgroundColor={colors.white} />
+          <QRCode
+            value={publicUrl}
+            size={246}
+            color={colors.ink}
+            backgroundColor={colors.white}
+            logo={QR_LOGO}
+            logoSize={52}
+            logoBackgroundColor={colors.white}
+            logoMargin={4}
+            logoBorderRadius={12}
+            ecl="H"
+          />
         </View>
         <Text style={styles.title}>Scan to connect</Text>
         <Text style={styles.subtitle}>{card.role}{card.company ? ` · ${card.company}` : ''}</Text>
