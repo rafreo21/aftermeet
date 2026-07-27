@@ -1,6 +1,4 @@
 import {
-  CaretDown,
-  CaretUp,
   CheckCircle,
   Microphone,
 } from 'phosphor-react-native';
@@ -11,11 +9,12 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
+import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
+import { RecordingPlayback } from '@/components/recording-playback';
 import { Body, Button } from '@/components/ui';
 import type { CaptureRecorder } from '@/features/encounters/use-capture-recorder';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -27,9 +26,6 @@ type CaptureRecordStepProps = {
   onConsentMethodChange: (value: 'verbal' | 'written') => void;
   recorder: CaptureRecorder;
   signedIn: boolean;
-  draftMessage: string;
-  extracting: boolean;
-  uncertainFields: string[];
 };
 
 export function CaptureRecordStep({
@@ -39,9 +35,6 @@ export function CaptureRecordStep({
   onConsentMethodChange,
   recorder,
   signedIn,
-  draftMessage,
-  extracting,
-  uncertainFields,
 }: CaptureRecordStepProps) {
   const [consentSheetOpen, setConsentSheetOpen] = useState(false);
 
@@ -215,71 +208,41 @@ export function CaptureRecordStep({
               </Button>
             ) : null}
 
-            {recorder.playbackReady ? (
-              <Button variant="secondary" onPress={() => void recorder.playRecording()}>
-                Play recording
-              </Button>
+            {recorder.playbackReady && recorder.recordingUri ? (
+              <RecordingPlayback uri={recorder.recordingUri} durationSeconds={recorder.seconds} />
             ) : null}
           </View>
 
           {showTranscript ? (
-            <View style={styles.transcriptSection}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => recorder.setTranscriptOpen((value) => !value)}
-                style={styles.transcriptToggle}>
-                <View style={styles.transcriptToggleCopy}>
-                  <Text style={styles.transcriptTitle}>Live transcript</Text>
-                  <Text style={styles.transcriptHint}>{recorder.transcriptStatusLabel}</Text>
+            <CollapsibleTranscriptSection
+              title="Live transcript"
+              hint={recorder.transcriptStatusLabel}
+              value={recorder.displayTranscript}
+              onChangeText={recorder.updateTranscriptFromUser}
+              open={recorder.transcriptOpen}
+              onOpenChange={recorder.setTranscriptOpen}
+              showWhenEmpty
+              placeholder={
+                recorder.transcriptSupported
+                  ? 'Your transcript will appear here while you record…'
+                  : recorder.usesServerTranscription
+                    ? 'Words appear here after you tap Finish (same pipeline as web).'
+                    : 'Live transcription is unavailable here. Paste or type the transcript.'
+              }>
+              {recorder.transcriptStatus === 'transcribing' ? (
+                <View style={styles.transcribingRow}>
+                  <ActivityIndicator color={colors.ink} />
+                  <Text style={styles.transcribingText}>Transcribing recording…</Text>
                 </View>
-                {recorder.transcriptOpen ? (
-                  <CaretUp size={16} color={colors.ink} weight="bold" />
-                ) : (
-                  <CaretDown size={16} color={colors.ink} weight="bold" />
-                )}
-              </Pressable>
-
-              {recorder.transcriptOpen ? (
-                <>
-                  {recorder.transcriptStatus === 'transcribing' ? (
-                    <View style={styles.transcribingRow}>
-                      <ActivityIndicator color={colors.ink} />
-                      <Text style={styles.transcribingText}>Transcribing recording…</Text>
-                    </View>
-                  ) : null}
-                  <TextInput
-                    value={recorder.displayTranscript}
-                    onChangeText={recorder.updateTranscriptFromUser}
-                    placeholder={
-                      recorder.transcriptSupported
-                        ? 'Your transcript will appear here while you record…'
-                        : recorder.usesServerTranscription
-                          ? 'Words appear here after you tap Finish (same pipeline as web).'
-                          : 'Live transcription is unavailable here. Paste or type the transcript.'
-                    }
-                    placeholderTextColor={colors.muted}
-                    multiline
-                    style={[styles.input, styles.textarea]}
-                  />
-                  {!recorder.transcriptSupported ? (
-                    <Text style={styles.transcriptFallback}>
-                      {recorder.usesServerTranscription
-                        ? 'Expo Go transcribes when you tap Finish (sign in required). For live words while recording, install a dev build: npx expo run:android'
-                        : 'Live speech-to-text needs microphone and speech permissions in Settings.'}
-                    </Text>
-                  ) : null}
-                  {draftMessage ? (
-                    <Text style={styles.draftNote}>
-                      {draftMessage}
-                      {extracting ? ' Generating…' : ''}
-                    </Text>
-                  ) : null}
-                  {uncertainFields.length > 0 ? (
-                    <Text style={styles.uncertain}>Double-check: {uncertainFields.join(', ')}</Text>
-                  ) : null}
-                </>
               ) : null}
-            </View>
+              {!recorder.transcriptSupported ? (
+                <Text style={styles.transcriptFallback}>
+                  {recorder.usesServerTranscription
+                    ? 'Expo Go transcribes when you tap Finish (sign in required). For live words while recording, install a dev build: npx expo run:android'
+                    : 'Live speech-to-text needs microphone and speech permissions in Settings.'}
+                </Text>
+              ) : null}
+            </CollapsibleTranscriptSection>
           ) : null}
 
           <Text style={styles.recordingNote}>
@@ -298,8 +261,8 @@ export function CaptureRecordStep({
             <Text style={styles.successTitle}>Recording ready</Text>
             <Text style={styles.successBody}>
               {recorder.displayTranscript.trim()
-                ? 'We will draft meeting context from your transcript on the next step.'
-                : 'Continue to add meeting context, or paste a transcript first.'}
+                ? 'Tap Finish to gather meeting context — recording has no time limit.'
+                : 'Continue to gather context, or paste a transcript on the next step.'}
             </Text>
           </View>
         </View>
@@ -466,7 +429,8 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
   },
-  textarea: { minHeight: 168, paddingTop: spacing.x4, textAlignVertical: 'top' },
+  textarea: { height: 220, maxHeight: 220, paddingTop: spacing.x4, textAlignVertical: 'top' },
+  transcriptField: { height: 220, maxHeight: 220, paddingTop: spacing.x4, textAlignVertical: 'top' },
   transcriptFallback: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   transcribingRow: {
     flexDirection: 'row',

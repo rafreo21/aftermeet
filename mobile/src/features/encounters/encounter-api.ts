@@ -48,6 +48,7 @@ export type InboundExchange = {
   id: string;
   visitor_name: string;
   visitor_email: string;
+  visitor_phone?: string;
   visitor_company: string;
   visitor_role: string;
   note: string;
@@ -62,19 +63,68 @@ function createId() {
   });
 }
 
+export type EncounterSummary = {
+  id: string;
+  title: string;
+  personName: string;
+  sharedSummary: string;
+  privateNotes: string;
+  followUp: string;
+  followUpType: EncounterDraft['followUpType'];
+  status: EncounterPayload['status'];
+  startedAt: string;
+  endedAt: string;
+};
+
+function mapEncounterSummary(row: Record<string, unknown>): EncounterSummary {
+  const actions = Array.isArray(row.actions) ? row.actions as EncounterAction[] : [];
+  const followUp = actions[0];
+  return {
+    id: String(row.id ?? ''),
+    title: String(row.title ?? ''),
+    personName: String(row.person_name ?? row.personName ?? ''),
+    sharedSummary: String(row.shared_summary ?? row.sharedSummary ?? ''),
+    privateNotes: String(row.private_notes ?? row.privateNotes ?? ''),
+    followUp: followUp?.title ?? '',
+    followUpType: followUp?.channel ?? 'other',
+    status: (row.status as EncounterPayload['status']) ?? 'draft',
+    startedAt: String(row.started_at ?? row.startedAt ?? ''),
+    endedAt: String(row.ended_at ?? row.endedAt ?? ''),
+  };
+}
+
+export async function fetchEncounters(accessToken: string) {
+  const response = await mobileFetch('/api/encounters', accessToken);
+  const payload = await response.json() as { encounters?: Array<Record<string, unknown>>; error?: string; preview?: boolean };
+  if (!response.ok) {
+    throw new Error(payload.error || 'Could not load your captures.');
+  }
+  return (payload.encounters ?? []).map(mapEncounterSummary);
+}
+
 export async function extractEncounterDraft(
   accessToken: string,
   transcript: string,
-  personName: string,
+  hints?: {
+    personName?: string;
+    personEmail?: string;
+    personPhone?: string;
+  },
 ) {
   const response = await mobileFetch('/api/encounters/extract', accessToken, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transcript, personName }),
+    body: JSON.stringify({
+      transcript,
+      personName: hints?.personName?.trim() || '',
+      personEmail: hints?.personEmail?.trim() || '',
+      personPhone: hints?.personPhone?.trim() || '',
+    }),
   });
   const payload = await response.json() as {
     draft?: EncounterDraft;
     source?: 'ai' | 'heuristic';
+    uncertainFields?: string[];
     error?: string;
   };
   if (!response.ok || !payload.draft) {
@@ -212,6 +262,34 @@ function guessRecordingMimeType(uri: string) {
   return 'audio/mp4';
 }
 
+export async function uploadEncounterRecording(
+  accessToken: string,
+  encounterId: string,
+  uri: string,
+  mimeType?: string,
+) {
+  const formData = new FormData();
+  formData.append('audio', {
+    uri,
+    name: guessRecordingFileName(uri),
+    type: mimeType || guessRecordingMimeType(uri),
+  } as unknown as Blob);
+
+  const response = await mobileFetch(`/api/encounters/${encounterId}/recording`, accessToken, {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await response.json() as {
+    ok?: boolean;
+    error?: string;
+    recording?: { sharedAudioUrl?: string };
+  };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || 'Could not upload this recording for sharing.');
+  }
+  return payload.recording;
+}
+
 export async function saveEncounter(accessToken: string, encounter: EncounterPayload) {
   const response = await mobileFetch('/api/encounters', accessToken, {
     method: 'POST',
@@ -260,6 +338,14 @@ export async function getEncounter(accessToken: string, id: string) {
     throw new Error(payload.error || 'Encounter not found.');
   }
   return payload.encounter;
+}
+
+export async function deleteEncounter(accessToken: string, id: string) {
+  const response = await mobileFetch(`/api/encounters/${id}`, accessToken, { method: 'DELETE' });
+  const payload = await response.json() as { ok?: boolean; error?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || 'Could not delete this capture.');
+  }
 }
 
 export async function generateOutboundDraft(

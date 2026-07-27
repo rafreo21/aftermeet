@@ -14,6 +14,9 @@ export type CaptureWizardDraft = {
   retention: AudioRetention;
   personName: string;
   personEmail: string;
+  personPhone: string;
+  personLinkedIn: string;
+  personAcknowledged: boolean;
   contactId: string;
   exchangeId: string;
   transcript: string;
@@ -23,9 +26,20 @@ export type CaptureWizardDraft = {
   followUp: string;
   followUpType: EncounterPayload['actions'][number]['channel'];
   dueAt: string;
+  updatedAt: string;
+};
+
+export type CaptureDraftSummary = {
+  encounterId: string;
+  updatedAt: string;
+  step: number;
+  personName: string;
+  title: string;
+  transcriptPreview: string;
 };
 
 export const CAPTURE_DRAFT_KEY = 'aftermeet-capture-wizard-v1';
+export const CAPTURE_DRAFTS_INDEX_KEY = 'aftermeet-capture-drafts-index-v2';
 export const AUTH_RETURN_KEY = 'aftermeet-auth-return-v1';
 
 function createEncounterId() {
@@ -34,6 +48,31 @@ function createEncounterId() {
     const value = char === 'x' ? random : (random & 0x3) | 0x8;
     return value.toString(16);
   });
+}
+
+function draftStorageKey(encounterId: string) {
+  return `aftermeet-capture-draft-${encounterId}`;
+}
+
+function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft {
+  return {
+    ...EMPTY_CAPTURE_DRAFT,
+    ...parsed,
+    encounterId: parsed.encounterId || createEncounterId(),
+    updatedAt: parsed.updatedAt || new Date().toISOString(),
+    step: typeof parsed.step === 'number' && parsed.step >= 0 && parsed.step <= 3 ? parsed.step : 0,
+  };
+}
+
+function toSummary(draft: CaptureWizardDraft): CaptureDraftSummary {
+  return {
+    encounterId: draft.encounterId,
+    updatedAt: draft.updatedAt,
+    step: draft.step,
+    personName: draft.personName.trim(),
+    title: draft.title.trim(),
+    transcriptPreview: draft.transcript.trim().slice(0, 120),
+  };
 }
 
 export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
@@ -47,6 +86,9 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   retention: '7_days',
   personName: '',
   personEmail: '',
+  personPhone: '',
+  personLinkedIn: '',
+  personAcknowledged: false,
   contactId: '',
   exchangeId: '',
   transcript: '',
@@ -56,34 +98,138 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   followUp: '',
   followUpType: 'email',
   dueAt: '',
+  updatedAt: new Date().toISOString(),
 };
 
 export function createFreshCaptureDraft(): CaptureWizardDraft {
-  return { ...EMPTY_CAPTURE_DRAFT, encounterId: createEncounterId() };
+  return {
+    ...EMPTY_CAPTURE_DRAFT,
+    encounterId: createEncounterId(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-export async function readCaptureDraft(): Promise<CaptureWizardDraft | null> {
+async function readDraftIndex(): Promise<CaptureDraftSummary[]> {
   try {
-    const raw = await AsyncStorage.getItem(CAPTURE_DRAFT_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<CaptureWizardDraft>;
-    return {
-      ...EMPTY_CAPTURE_DRAFT,
-      ...parsed,
-      encounterId: parsed.encounterId || createEncounterId(),
-      step: typeof parsed.step === 'number' && parsed.step >= 0 && parsed.step <= 3 ? parsed.step : 0,
-    };
+    const raw = await AsyncStorage.getItem(CAPTURE_DRAFTS_INDEX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as CaptureDraftSummary[];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return null;
+    return [];
   }
 }
 
-export async function writeCaptureDraft(draft: CaptureWizardDraft) {
-  await AsyncStorage.setItem(CAPTURE_DRAFT_KEY, JSON.stringify(draft));
+async function writeDraftIndex(entries: CaptureDraftSummary[]) {
+  const sorted = [...entries].sort(
+    (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+  );
+  await AsyncStorage.setItem(CAPTURE_DRAFTS_INDEX_KEY, JSON.stringify(sorted));
 }
 
-export async function clearCaptureDraft() {
+async function migrateLegacyDraftIfNeeded() {
+  const legacyRaw = await AsyncStorage.getItem(CAPTURE_DRAFT_KEY);
+  if (!legacyRaw) return;
+
+  try {
+    const parsed = JSON.parse(legacyRaw) as Partial<CaptureWizardDraft>;
+    const draft = normalizeDraft(parsed);
+    if (hasCaptureDraftProgress(draft)) {
+      await AsyncStorage.setItem(draftStorageKey(draft.encounterId), JSON.stringify(draft));
+      const index = await readDraftIndex();
+      const next = index.filter((item) => item.encounterId !== draft.encounterId);
+      next.unshift(toSummary(draft));
+      await writeDraftIndex(next);
+    }
+  } catch {
+    // ignore corrupt legacy draft
+  }
+
   await AsyncStorage.removeItem(CAPTURE_DRAFT_KEY);
+}
+
+export async function listCaptureDrafts(): Promise<CaptureDraftSummary[]> {
+  await migrateLegacyDraftIfNeeded();
+  const index = await readDraftIndex();
+  const valid: CaptureDraftSummary[] = [];
+
+  for (const entry of index) {
+    const raw = await AsyncStorage.getItem(draftStorageKey(entry.encounterId));
+    if (!raw) continue;
+    try {
+      const draft = normalizeDraft(JSON.parse(raw) as Partial<CaptureWizardDraft>);
+      if (!hasCaptureDraftProgress(draft)) continue;
+      valid.push(toSummary(draft));
+    } catch {
+      // ignore corrupt draft
+    }
+  }
+
+  if (valid.length !== index.length) {
+    await writeDraftIndex(valid);
+  }
+
+  return valid;
+}
+
+export async function readCaptureDraft(encounterId?: string): Promise<CaptureWizardDraft | null> {
+  await migrateLegacyDraftIfNeeded();
+
+  if (encounterId) {
+    const raw = await AsyncStorage.getItem(draftStorageKey(encounterId));
+    if (!raw) return null;
+    try {
+      return normalizeDraft(JSON.parse(raw) as Partial<CaptureWizardDraft>);
+    } catch {
+      return null;
+    }
+  }
+
+  const drafts = await listCaptureDrafts();
+  if (!drafts[0]) return null;
+  return readCaptureDraft(drafts[0].encounterId);
+}
+
+export async function writeCaptureDraft(draft: CaptureWizardDraft) {
+  const next = normalizeDraft({
+    ...draft,
+    updatedAt: new Date().toISOString(),
+  });
+  await AsyncStorage.setItem(draftStorageKey(next.encounterId), JSON.stringify(next));
+
+  const index = await readDraftIndex();
+  const filtered = index.filter((item) => item.encounterId !== next.encounterId);
+  if (hasCaptureDraftProgress(next)) {
+    filtered.unshift(toSummary(next));
+  }
+  await writeDraftIndex(filtered);
+}
+
+export async function deleteCaptureDraft(encounterId: string) {
+  await AsyncStorage.removeItem(draftStorageKey(encounterId));
+  const index = await readDraftIndex();
+  await writeDraftIndex(index.filter((item) => item.encounterId !== encounterId));
+}
+
+export async function clearCaptureDraft(encounterId?: string) {
+  if (encounterId) {
+    await deleteCaptureDraft(encounterId);
+    return;
+  }
+  const drafts = await listCaptureDrafts();
+  await Promise.all(drafts.map((draft) => deleteCaptureDraft(draft.encounterId)));
+}
+
+export function hasCaptureDraftProgress(draft: CaptureWizardDraft) {
+  return draft.step > 0
+    || draft.consent
+    || draft.transcript.trim().length > 0
+    || draft.recordingUri.trim().length > 0
+    || draft.personName.trim().length > 0
+    || draft.title.trim().length > 0
+    || draft.privateNotes.trim().length > 0
+    || draft.sharedSummary.trim().length > 0
+    || draft.followUp.trim().length > 0;
 }
 
 export async function setAuthReturnPath(path: string) {

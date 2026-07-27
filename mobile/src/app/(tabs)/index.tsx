@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ArrowRight, CaretRight } from 'phosphor-react-native';
+import { CaretRight } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BrandMark } from '@/components/brand-mark';
@@ -37,28 +37,22 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.steps}>
-        {STEPS.map((step, index) => (
-          <View key={step.num}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push(step.route)}
-              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepNum}>{step.num}</Text>
-              </View>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepCopy}>{step.copy}</Text>
-              <View style={styles.stepAction}>
-                <Text style={styles.stepActionText}>Open</Text>
-                <CaretRight size={14} color={colors.accent} weight="bold" />
-              </View>
-            </Pressable>
-            {index < STEPS.length - 1 ? (
-              <View style={styles.connector}>
-                <ArrowRight size={16} color={colors.accent} weight="bold" />
-              </View>
-            ) : null}
-          </View>
+        {STEPS.map((step) => (
+          <Pressable
+            key={step.num}
+            accessibilityRole="button"
+            onPress={() => router.navigate(step.route)}
+            style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepNum}>{step.num}</Text>
+            </View>
+            <Text style={styles.stepTitle}>{step.title}</Text>
+            <Text style={styles.stepCopy}>{step.copy}</Text>
+            <View style={styles.stepAction}>
+              <Text style={styles.stepActionText}>Open</Text>
+              <CaretRight size={14} color={colors.accent} weight="bold" />
+            </View>
+          </Pressable>
         ))}
       </View>
 
@@ -75,7 +69,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.x5, gap: spacing.x3 },
+  header: { paddingTop: spacing.x2, gap: spacing.x3 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
   title: { fontSize: 34, lineHeight: 36 },
   steps: { gap: spacing.x2 },
@@ -99,7 +93,6 @@ const styles = StyleSheet.create({
   stepCopy: { color: '#C5D3BF', fontSize: 14, lineHeight: 20 },
   stepAction: { marginTop: spacing.x2, flexDirection: 'row', alignItems: 'center', gap: 4 },
   stepActionText: { color: colors.accent, fontSize: 13, fontWeight: '800' },
-  connector: { alignItems: 'center', paddingVertical: 4 },
   quickShare: {
     padding: spacing.x5,
     borderRadius: radius.medium,

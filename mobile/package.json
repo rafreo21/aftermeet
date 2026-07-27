@@ -55,6 +55,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "android:install": "bash scripts/install-dev-android.sh",
+    "android:rebuild": "bash scripts/install-dev-android.sh --rebuild",
+    "android:dev": "bash scripts/run-dev-android.sh",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",

@@ -9,6 +9,9 @@ export type LocalRecordingMetadata = {
   retention: AudioRetention;
   expiresAt: string | null;
   createdAt: string;
+  audioLocation?: "user_device" | "server";
+  storagePath?: string;
+  sharedAudioUrl?: string;
 };
 
 const DATABASE_NAME = "aftermeet-private-audio";

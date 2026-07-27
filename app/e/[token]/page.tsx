@@ -40,6 +40,11 @@ export default function GuestEncounterPage() {
   if (!encounter) return <main className="guest-page"><section className="guest-panel"><LockKeyIcon size={32} weight="bold" /><h1>This meeting record is not available.</h1><p>Ask the person who shared it to approve the record or send a new secure link.</p></section></main>;
 
   const guestActions = encounter.actions.filter((action) => action.owner === "guest");
+  const sharedRecordingUrl = encounter.recording?.sharedAudioUrl
+    ? (encounter.recording.sharedAudioUrl.startsWith("http")
+      ? encounter.recording.sharedAudioUrl
+      : `${window.location.origin}${encounter.recording.sharedAudioUrl}`)
+    : null;
   return (
     <main className="guest-page">
       <section className="guest-panel">
@@ -47,6 +52,12 @@ export default function GuestEncounterPage() {
         <span className="step-pill">Shared with you</span>
         <h1>{encounter.title}</h1>
         <p className="guest-meta">A reviewed meeting record from {encounter.personName ? `your conversation with ${encounter.personName}` : "a recent conversation"}.</p>
+        {sharedRecordingUrl ? (
+          <article className="guest-summary">
+            <span>Meeting recording</span>
+            <audio controls preload="metadata" src={sharedRecordingUrl} style={{ width: "100%", marginTop: 12 }} />
+          </article>
+        ) : null}
         <article className="guest-summary"><span>What you agreed</span><p>{encounter.sharedSummary || "The shared summary is still being prepared."}</p></article>
         <section className="guest-actions">
           <h2>Your next steps</h2>
@@ -56,7 +67,7 @@ export default function GuestEncounterPage() {
           <div><strong>Keep this relationship moving</strong><p>Create your private AfterMeet workspace to claim these actions, receive reminders, and add your own notes.</p></div>
           <LinkButton href={buildAuthHref({ intent: "visitor", shareToken: encounter.shareToken })}>Create account <ArrowRightIcon size={16} weight="bold" /></LinkButton>
         </div>
-        <small className="guest-privacy"><LockKeyIcon size={14} weight="bold" />The raw recording, transcript, and private notes were not shared with you.</small>
+        <small className="guest-privacy"><LockKeyIcon size={14} weight="bold" />Private notes and the full transcript stay with the host. This page shows the shared summary{sharedRecordingUrl ? " and meeting recording" : ""} only.</small>
       </section>
     </main>
   );

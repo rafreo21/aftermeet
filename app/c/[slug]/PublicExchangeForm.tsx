@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { Button } from "../../components/Button";
 import { VisitorSignInPrompt } from "../../components/VisitorSignInPrompt";
 import { TextField } from "../../components/FormField";
@@ -15,7 +14,6 @@ export function PublicExchangeForm({
   slug: string;
   ownerName: string;
 }) {
-  const [skipped, setSkipped] = useState(false);
   const [showRole, setShowRole] = useState(false);
   const [showCompany, setShowCompany] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -34,6 +32,10 @@ export function PublicExchangeForm({
     const visitorName = `${firstName} ${lastName}`.trim();
     if (visitorName.length < 2) {
       setError("Enter your name.");
+      return;
+    }
+    if (!visitorEmail.trim() || !visitorEmail.includes("@")) {
+      setError("Email is required.");
       return;
     }
     setLoading(true);
@@ -67,8 +69,6 @@ export function PublicExchangeForm({
     }
   }
 
-  if (skipped) return null;
-
   if (sent) {
     return (
       <div className="public-exchange-success" aria-live="polite">
@@ -82,17 +82,6 @@ export function PublicExchangeForm({
 
   return (
     <form className="public-exchange-form" onSubmit={submit} noValidate>
-      <div className="public-exchange-header">
-        <div className="public-exchange-intro">
-          <span className="public-exchange-icon"><PaperPlaneTiltIcon size={22} weight="fill" /></span>
-          <div>
-            <h2>Share your contact information with {ownerName}</h2>
-            <p>Send your details back so they can remember who you are.</p>
-          </div>
-        </div>
-        <button type="button" className="ghost-link public-exchange-skip" onClick={() => setSkipped(true)}>Skip</button>
-      </div>
-
       <div className="public-exchange-grid public-exchange-grid-names">
         <TextField
           id="exchange-first-name"
@@ -117,10 +106,11 @@ export function PublicExchangeForm({
         value={visitorEmail}
         onChange={(event) => setVisitorEmail(event.target.value)}
         autoComplete="email"
+        required
       />
       <TextField
         id="exchange-phone"
-        label="Phone number"
+        label="Phone number (optional)"
         type="tel"
         value={visitorPhone}
         onChange={(event) => setVisitorPhone(event.target.value)}
@@ -134,7 +124,7 @@ export function PublicExchangeForm({
         ) : (
           <TextField
             id="exchange-role"
-            label="Job title"
+            label="Job title (optional)"
             value={visitorRole}
             onChange={(event) => setVisitorRole(event.target.value)}
             autoComplete="organization-title"
@@ -145,7 +135,7 @@ export function PublicExchangeForm({
         ) : (
           <TextField
             id="exchange-company"
-            label="Company name"
+            label="Company name (optional)"
             value={visitorCompany}
             onChange={(event) => setVisitorCompany(event.target.value)}
             autoComplete="organization"
@@ -155,7 +145,7 @@ export function PublicExchangeForm({
 
       {error ? <p className="public-exchange-error" role="alert">{error}</p> : null}
       <Button fullWidth type="submit" loading={loading}>
-        {loading ? "Sending…" : "Send"} {!loading && <ArrowRightIcon size={18} weight="bold" />}
+        {loading ? "Sending…" : "Send my details"} {!loading && <ArrowRightIcon size={18} weight="bold" />}
       </Button>
       <small className="public-exchange-privacy">We don&apos;t sell your contact details.</small>
     </form>

@@ -10,25 +10,38 @@ test("buildHeuristicDraft extracts a person and follow-up channel", () => {
   const draft = buildHeuristicDraft(
     "Hi, my name is Sarah Chen. We discussed the pilot rollout. I'll email you the deck next week.",
     "",
+    { ownerNames: ["Alex Morgan"] },
   );
 
   assert.ok(draft);
   assert.match(draft.title, /Sarah Chen/);
   assert.equal(draft.personName, "Sarah Chen");
   assert.equal(draft.followUpType, "email");
+  assert.match(draft.sharedSummary, /We discussed/i);
 });
 
 test("buildHeuristicDraft handles run-on speech about website work with Sarah", () => {
-  const draft = buildHeuristicDraft(websiteTranscript, "");
+  const draft = buildHeuristicDraft(websiteTranscript, "", { ownerNames: ["Raf"] });
   assert.ok(draft);
   assert.equal(draft.personName, "Sarah");
   assert.match(draft.title, /Sarah/);
-  assert.match(draft.sharedSummary, /Sarah/);
-  assert.match(draft.sharedSummary, /London paint section|about page|address page/i);
-  assert.match(draft.privateNotes, /Work discussed:/);
+  assert.match(draft.sharedSummary, /Sarah|We discussed/i);
+  assert.match(draft.sharedSummary, /London paint section|about page|address page|website/i);
   assert.match(draft.privateNotes, /Sarah/);
-  assert.match(draft.followUp, /London paint section|about page|address page/i);
+  assert.doesNotMatch(draft.privateNotes, /My contribution/i);
+  assert.match(draft.followUp, /London paint section|about page|address page|Sarah/i);
   assert.doesNotMatch(draft.personName, /here with/i);
+});
+
+test("buildHeuristicDraft keeps owner name out of personName", () => {
+  const draft = buildHeuristicDraft(
+    "I'm Raf and I'm here with Jordan Lee. Jordan needs the proposal by Friday.",
+    "",
+    { ownerNames: ["Raf"] },
+  );
+  assert.ok(draft);
+  assert.equal(draft.personName, "Jordan Lee");
+  assert.match(draft.privateNotes, /Jordan|Friday/i);
 });
 
 test("applyExtractionDraft only fills empty fields", () => {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "AfterMeet",
     "slug": "aftermeet",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "aftermeet",
@@ -13,6 +13,7 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 3,
       "package": "com.aftermeet.app",
       "adaptiveIcon": {
         "backgroundColor": "#87EA5C",
@@ -76,7 +77,11 @@
         {
           "microphonePermission": "Allow AfterMeet to record meetings you choose to capture.",
           "speechRecognitionPermission": "Allow AfterMeet to transcribe your meetings while you record.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.tts",
+            "com.google.android.as"
+          ]
         }
       ],
       [
@@ -110,7 +115,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "publicCardBaseUrl": "https://aftermeet-beta.vercel.app"
+      "publicCardBaseUrl": "https://aftermeet-beta.vercel.app",
+    "buildNumber": 3,
+    "buildStamp": "2026-07-27-gather"
     }
   }
 }

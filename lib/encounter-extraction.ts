@@ -5,6 +5,7 @@ import {
   buildPrivateNotes,
   buildSharedSummary,
   detectPersonName,
+  extractOtherPersonInsights,
   extractOwnerContribution,
   extractRole,
   extractTopics,
@@ -23,30 +24,52 @@ export type EncounterExtractionDraft = {
   uncertainFields?: string[];
 };
 
-export function buildHeuristicDraft(transcript: string, personName: string): EncounterExtractionDraft | null {
+export type ExtractionOwnerContext = {
+  ownerNames: string[];
+  ownerEmail?: string;
+  recentMeetings?: Array<{
+    personName: string;
+    privateNotesSample?: string;
+    sharedSummarySample?: string;
+  }>;
+};
+
+export function buildHeuristicDraft(
+  transcript: string,
+  personName: string,
+  ownerContext?: ExtractionOwnerContext,
+): EncounterExtractionDraft | null {
   const clean = normalizeTranscriptForExtraction(transcript);
   if (clean.length < 12) return null;
 
+  const ownerNames = ownerContext?.ownerNames ?? [];
   const segments = segmentSpeechTranscript(clean);
-  const person = detectPersonName(clean, personName);
+  const person = detectPersonName(clean, personName, ownerNames);
   const topics = extractTopics(clean);
   const role = extractRole(clean, person);
   const ownerContribution = extractOwnerContribution(clean);
+  const otherPersonInsights = extractOtherPersonInsights({
+    transcript: clean,
+    personName: person,
+    role,
+    segments,
+    ownerNames,
+  });
   const sharedSummary = buildSharedSummary({
     personName: person,
     topics,
     role,
     ownerContribution,
     transcript: clean,
+    ownerNames,
   });
   const privateNotes = buildPrivateNotes({
-    topics,
     personName: person,
     role,
-    ownerContribution,
-    segments,
+    otherPersonInsights,
+    topics,
   });
-  const followUp = buildFollowUp({ topics, transcript: clean, ownerContribution });
+  const followUp = buildFollowUp({ topics, transcript: clean, ownerContribution, personName: person });
 
   return {
     title: buildMeetingTitle({ personName: person, topics }),

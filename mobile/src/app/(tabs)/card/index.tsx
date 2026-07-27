@@ -85,7 +85,7 @@ export default function CardLibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.x5, gap: spacing.x3 },
+  header: { paddingTop: spacing.x2, gap: spacing.x3 },
   grid: { gap: spacing.x4 },
   cardTile: {
     overflow: 'hidden',

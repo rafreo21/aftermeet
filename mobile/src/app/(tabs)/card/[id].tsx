@@ -1,13 +1,17 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { DeviceMobile, PencilSimple, QrCode, Scan, Star } from 'phosphor-react-native';
+import { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader, Screen } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
+import { useTabBarHeight } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function CardDetailScreen() {
+  const navigation = useNavigation();
+  const tabBarHeight = useTabBarHeight();
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     getCardById,
@@ -20,12 +24,31 @@ export default function CardDetailScreen() {
   const selected = (id ? getCardById(id) : undefined) || card;
   const primary = isPrimaryCard(selected.id || '');
 
+  useFocusEffect(
+    useCallback(() => {
+      const tabNav = navigation.getParent();
+      tabNav?.setOptions({ tabBarStyle: { display: 'none' } });
+      return () => {
+        tabNav?.setOptions({
+          tabBarStyle: {
+            height: tabBarHeight,
+            paddingTop: 8,
+            paddingBottom: Math.max(12, tabBarHeight - 56),
+            borderTopColor: colors.line,
+            backgroundColor: colors.surface,
+          },
+        });
+      };
+    }, [navigation, tabBarHeight]),
+  );
+
   return (
-    <Screen>
+    <Screen reserveTabBar={false}>
       <PageHeader
         eyebrow="Viewing"
         title={selected.label || selected.name || 'Untitled card'}
         titleStyle={styles.detailTitle}
+        onBack={() => router.back()}
       />
 
       <View style={styles.badges}>

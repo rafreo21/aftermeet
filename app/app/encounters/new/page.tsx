@@ -941,8 +941,8 @@ export default function NewEncounterPage() {
             />
             <ActiveCampaignField value={campaignId} onChange={setCampaignId} />
             <TextField label="Meeting title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Coffee after ProductCon" hint="Optional if the person name is enough" />
-            <TextAreaField label="Private notes" hint="Only you" rows={4} value={form.privateNotes} onChange={(event) => update("privateNotes", event.target.value)} placeholder="Personal impressions, sensitive context, or anything that should never be shared." />
-            <TextAreaField label="Shared meeting summary" hint="Review before sharing" rows={4} value={form.sharedSummary} onChange={(event) => update("sharedSummary", event.target.value)} placeholder="What did both of you agree happened, and what should each person remember?" />
+            <TextAreaField label="Private notes" hint="Only you — what they said that matters" rows={4} value={form.privateNotes} onChange={(event) => update("privateNotes", event.target.value)} placeholder="Key points from the other person: their priorities, constraints, commitments, and anything you'd want to remember later." />
+            <TextAreaField label="Shared meeting summary" hint="Review before sharing" rows={4} value={form.sharedSummary} onChange={(event) => update("sharedSummary", event.target.value)} placeholder="What you both discussed and agreed — neutral enough to share with them." />
             {form.transcript.trim() && <Button type="button" variant="secondary" loading={draftLoading} onClick={() => void generateMeetingContext()}><MagicWandIcon size={15} weight="bold" />{draftLoading ? "Generating draft…" : "Regenerate draft"}</Button>}
           </section>
           {error && <p className="encounter-error" role="alert">{error}</p>}

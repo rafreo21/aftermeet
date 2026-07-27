@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
+import { resolveApiUser } from "../../../../lib/auth/api-request";
 import { extractEncounterDraft } from "../../../../lib/encounter-extraction-server";
+import { loadExtractionOwnerContext } from "../../../../lib/extraction-context-server";
 
 export async function POST(request: Request) {
   const user = await resolveApiUser(request);
@@ -12,13 +13,19 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const transcript = typeof body?.transcript === "string" ? body.transcript.trim() : "";
   const personName = typeof body?.personName === "string" ? body.personName.trim() : "";
+  const personEmail = typeof body?.personEmail === "string" ? body.personEmail.trim() : "";
+  const personPhone = typeof body?.personPhone === "string" ? body.personPhone.trim() : "";
 
   if (transcript.length < 20) {
     return NextResponse.json({ error: "Add more transcript before generating context." }, { status: 400 });
   }
 
   try {
-    const result = await extractEncounterDraft(transcript, personName);
+    const ownerContext = await loadExtractionOwnerContext(request, user);
+    const result = await extractEncounterDraft(transcript, personName, ownerContext, {
+      personEmail,
+      personPhone,
+    });
     return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not extract meeting context.";

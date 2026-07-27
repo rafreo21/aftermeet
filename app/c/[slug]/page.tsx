@@ -1,9 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import type { CSSProperties } from "react";
 
-import { PublicCardFlow } from "./PublicCardFlow";
+import { PublicCardClient } from "./PublicCardClient";
 import "./public-card.css";
 
 type Params = Promise<{ slug: string }>;
@@ -46,43 +45,16 @@ export default async function PublicCardPage({ params }: { params: Params }) {
     (a, b) => a.sort_order - b.sort_order,
   );
   return (
-    <main
-      className="public-card-page"
-      style={{ "--card-accent": card.theme_color } as CSSProperties}
-    >
-      <section className="public-card-shell">
-        <div className="public-card-cover">
-          {card.cover_image_url ? <img src={card.cover_image_url} alt="" /> : null}
-        </div>
-        <div className="public-card-content">
-          <div className="public-card-avatar">
-            {card.profile_image_url ? (
-              <img src={card.profile_image_url} alt={card.full_name} />
-            ) : (
-              <span>
-                {card.full_name
-                  .split(/\s+/)
-                  .map((part: string) => part[0])
-                  .slice(0, 2)
-                  .join("")}
-              </span>
-            )}
-          </div>
-          <p className="public-card-brand">AFTERMEET</p>
-          <h1>{card.full_name}</h1>
-          <p className="public-card-role">
-            {[card.job_title, card.company].filter(Boolean).join(" · ")}
-          </p>
-          <PublicCardFlow
-            slug={slug}
-            ownerName={card.full_name}
-            jobTitle={card.job_title}
-            company={card.company}
-            bio={card.bio}
-            methods={methods}
-          />
-        </div>
-      </section>
-    </main>
+    <PublicCardClient
+      slug={slug}
+      ownerName={card.full_name}
+      jobTitle={card.job_title}
+      company={card.company}
+      bio={card.bio}
+      coverImageUrl={card.cover_image_url}
+      profileImageUrl={card.profile_image_url}
+      themeColor={card.theme_color}
+      methods={methods}
+    />
   );
 }

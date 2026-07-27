@@ -17,6 +17,24 @@ export function cleanLiveTranscript(raw: string) {
   return unique.join(" ").trim();
 }
 
+/** Prepare noisy speech-to-text for AI extraction — repair gaps, keep meaning. */
 export function normalizeTranscriptForExtraction(raw: string) {
-  return cleanLiveTranscript(raw);
+  let text = cleanLiveTranscript(raw);
+  if (!text) return "";
+
+  text = text
+    .replace(/\b(uh+|um+|erm+|like,\s*|you know,\s*)/gi, " ")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/([.!?])\s*(?=[a-z])/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!/[.!?]/.test(text) && text.length > 80) {
+    text = text
+      .replace(/\s+(?:and then|so|but|because|however|anyway|okay|right|then)\s+/gi, ". $1 ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return text;
 }

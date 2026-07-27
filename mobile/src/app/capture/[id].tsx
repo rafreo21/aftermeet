@@ -1,24 +1,36 @@
-import * as Clipboard from 'expo-clipboard';
 import { router, useLocalSearchParams } from 'expo-router';
-import { CheckCircle, Copy, ShareNetwork, Sparkle } from 'phosphor-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Microphone, ShareNetwork } from 'phosphor-react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
+import { RecordingPlayback } from '@/components/recording-playback';
 import { Body, Button, PageHeader, Panel, Screen } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
-  buildEncounterPayload,
-  extractEncounterDraft,
+  findLocalRecordingUri,
+  formatDuration,
+  readLocalRecordingMetadata,
+} from '@/features/encounters/local-recordings';
+import {
   generateOutboundDraft,
   getEncounter,
   saveEncounter,
+  uploadEncounterRecording,
   type EncounterPayload,
-  type InboundExchange,
 } from '@/features/encounters/encounter-api';
 import { readEnv } from '@/lib/env';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-export default function CaptureReviewScreen() {
+function resolveSharedRecordingUrl(recording?: EncounterPayload['recording']) {
+  if (!recording?.sharedAudioUrl) return null;
+  const base = readEnv()?.publicCardBaseUrl?.replace(/\/+$/, '');
+  if (!base) return recording.sharedAudioUrl.startsWith('http') ? recording.sharedAudioUrl : null;
+  if (recording.sharedAudioUrl.startsWith('http')) return recording.sharedAudioUrl;
+  return `${base}${recording.sharedAudioUrl.startsWith('/') ? '' : '/'}${recording.sharedAudioUrl}`;
+}
+
+export default function CaptureDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
   const [encounter, setEncounter] = useState<EncounterPayload | null>(null);
@@ -26,6 +38,8 @@ export default function CaptureReviewScreen() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [recordingUri, setRecordingUri] = useState<string | null>(null);
+  const [recordingLoading, setRecordingLoading] = useState(true);
 
   const guestUrl = encounter && readEnv()
     ? `${readEnv()!.publicCardBaseUrl}/e/${encounter.shareToken}`
@@ -34,13 +48,65 @@ export default function CaptureReviewScreen() {
   useEffect(() => {
     if (!session?.access_token || !id) {
       setLoading(false);
+      setRecordingLoading(false);
       return;
     }
-    void getEncounter(session.access_token, id)
-      .then(setEncounter)
+    void Promise.all([
+      getEncounter(session.access_token, id),
+      findLocalRecordingUri(id),
+      readLocalRecordingMetadata(id),
+    ])
+      .then(async ([nextEncounter, localUri]) => {
+        setEncounter(nextEncounter);
+        let uri = localUri || resolveSharedRecordingUrl(nextEncounter.recording);
+        if (!uri && localUri && session.access_token) {
+          try {
+            const uploaded = await uploadEncounterRecording(
+              session.access_token,
+              nextEncounter.id,
+              localUri,
+              nextEncounter.recording?.mimeType,
+            );
+            if (uploaded?.sharedAudioUrl) {
+              uri = resolveSharedRecordingUrl({ sharedAudioUrl: uploaded.sharedAudioUrl } as EncounterPayload['recording']) || localUri;
+              setEncounter((current) => current ? {
+                ...current,
+                recording: {
+                  ...(current.recording ?? {
+                    id: current.id,
+                    durationSeconds: current.durationSeconds,
+                    fileSize: 0,
+                    mimeType: 'audio/mp4',
+                    source: 'recorded',
+                    retention: '7_days',
+                    expiresAt: null,
+                    createdAt: current.startedAt,
+                    localUri,
+                  }),
+                  sharedAudioUrl: uploaded.sharedAudioUrl,
+                  audioLocation: 'server',
+                },
+              } : current);
+            }
+          } catch {
+            uri = localUri;
+          }
+        }
+        setRecordingUri(uri);
+      })
       .catch((caught) => setError(caught instanceof Error ? caught.message : 'Could not load this meeting.'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setRecordingLoading(false);
+      });
   }, [id, session?.access_token]);
+
+  const recordingDuration = useMemo(
+    () => encounter?.durationSeconds || encounter?.recording?.durationSeconds || 0,
+    [encounter?.durationSeconds, encounter?.recording?.durationSeconds],
+  );
+
+  const hasRecording = Boolean(recordingUri || encounter?.recording || encounter?.durationSeconds);
 
   async function persist(next: EncounterPayload) {
     if (!session?.access_token) return;
@@ -55,19 +121,6 @@ export default function CaptureReviewScreen() {
     } finally {
       setSaving(false);
     }
-  }
-
-  async function approveAndShare() {
-    if (!encounter) return;
-    const next = { ...encounter, status: 'shared' as const };
-    await persist(next);
-    setMessage('Shared view is ready. Nothing has been sent automatically.');
-  }
-
-  async function copyGuestLink() {
-    if (!guestUrl) return;
-    await Clipboard.setStringAsync(guestUrl);
-    setMessage('Guest link copied.');
   }
 
   async function shareGuestLink() {
@@ -86,6 +139,7 @@ export default function CaptureReviewScreen() {
     try {
       const body = await generateOutboundDraft(session.access_token, encounter);
       if (body) {
+        const Clipboard = await import('expo-clipboard');
         await Clipboard.setStringAsync(body);
         setMessage('Follow-up draft copied.');
       }
@@ -107,8 +161,8 @@ export default function CaptureReviewScreen() {
   if (!session || !encounter) {
     return (
       <Screen edges={['top', 'bottom']} reserveTabBar={false}>
-        <PageHeader eyebrow="Review" title="Meeting not available" titleStyle={styles.title} />
-        <Body>{error || 'Sign in to review this meeting.'}</Body>
+        <PageHeader eyebrow="Previous" title="Meeting not available" titleStyle={styles.title} />
+        <Body>{error || 'Sign in to view this meeting.'}</Body>
         {!session ? <Button onPress={() => router.push('/auth')}>Sign in</Button> : null}
         <Button variant="secondary" onPress={() => router.back()}>Go back</Button>
       </Screen>
@@ -118,11 +172,48 @@ export default function CaptureReviewScreen() {
   return (
     <Screen edges={['top', 'bottom']} reserveTabBar={false}>
       <PageHeader
-        eyebrow="Step 5 · Review"
+        eyebrow="Previous capture"
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Decide what stays private, what is shared, and copy the guest link when you are ready.</Body>
+      <Body>Review notes, listen to the recording, and edit anything before you follow up.</Body>
+
+      {hasRecording ? (
+        <View style={styles.recorderCard}>
+          <View style={styles.recorderHero}>
+            <View style={styles.micOrb}>
+              <Microphone size={28} color={colors.ink} weight="fill" />
+            </View>
+            <View style={styles.recorderMeta}>
+              <Text style={styles.recorderTitle}>Recording</Text>
+              <Text style={styles.recorderHint}>
+                {recordingUri ? 'Saved on this device or synced to AfterMeet' : 'Recording metadata only'}
+              </Text>
+            </View>
+            <Text style={styles.recorderTime}>{formatDuration(recordingDuration)}</Text>
+          </View>
+
+          {recordingLoading ? (
+            <ActivityIndicator color={colors.ink} />
+          ) : recordingUri ? (
+            <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} />
+          ) : (
+            <Text style={styles.recordingMissing}>
+              Recording file is not available on this device. It may still be syncing from another session.
+            </Text>
+          )}
+
+          {encounter.transcript ? (
+            <CollapsibleTranscriptSection
+              title="Full transcript"
+              hint="Expand to edit the full transcript"
+              value={encounter.transcript}
+              onChangeText={(value) => setEncounter({ ...encounter, transcript: value })}
+              defaultOpen={false}
+            />
+          ) : null}
+        </View>
+      ) : null}
 
       <Panel style={styles.section}>
         <Text style={styles.sectionTitle}>Private to you</Text>
@@ -131,19 +222,9 @@ export default function CaptureReviewScreen() {
           value={encounter.privateNotes}
           onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
           multiline
-          style={[styles.input, styles.textarea]}
+          scrollEnabled
+          style={[styles.input, styles.notesField]}
         />
-        {encounter.transcript ? (
-          <>
-            <Text style={styles.label}>Transcript</Text>
-            <TextInput
-              value={encounter.transcript}
-              onChangeText={(value) => setEncounter({ ...encounter, transcript: value })}
-              multiline
-              style={[styles.input, styles.textarea]}
-            />
-          </>
-        ) : null}
       </Panel>
 
       <Panel style={styles.section}>
@@ -153,7 +234,8 @@ export default function CaptureReviewScreen() {
           value={encounter.sharedSummary}
           onChangeText={(value) => setEncounter({ ...encounter, sharedSummary: value })}
           multiline
-          style={[styles.input, styles.textarea]}
+          scrollEnabled
+          style={[styles.input, styles.notesField]}
         />
       </Panel>
 
@@ -169,23 +251,13 @@ export default function CaptureReviewScreen() {
 
       <View style={styles.actions}>
         <Button loading={saving} onPress={() => void persist(encounter)}>Save changes</Button>
-        {encounter.status !== 'shared' ? (
-          <Button variant="secondary" loading={saving} onPress={() => void approveAndShare()}>
-            <CheckCircle size={18} color={colors.ink} weight="fill" />
-            Approve shared record
+        {guestUrl ? (
+          <Button variant="secondary" onPress={() => void shareGuestLink()}>
+            <ShareNetwork size={18} color={colors.ink} />
+            Share guest link
           </Button>
         ) : null}
-        {guestUrl ? (
-          <>
-            <Button variant="secondary" onPress={() => void copyGuestLink()}>
-              <Copy size={18} color={colors.ink} /> Copy guest link
-            </Button>
-            <Button variant="secondary" onPress={() => void shareGuestLink()}>
-              <ShareNetwork size={18} color={colors.ink} /> Share guest link
-            </Button>
-          </>
-        ) : null}
-        <Button variant="ghost" onPress={() => router.replace('/(tabs)')}>Done</Button>
+        <Button variant="ghost" onPress={() => router.replace('/capture')}>Done</Button>
       </View>
 
       {message ? <Text style={styles.success}>{message}</Text> : null}
@@ -196,6 +268,39 @@ export default function CaptureReviewScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 30, lineHeight: 32 },
+  recorderCard: {
+    gap: spacing.x5,
+    padding: spacing.x6,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  recorderHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x4,
+  },
+  micOrb: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  recorderMeta: { flex: 1, gap: 4 },
+  recorderTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
+  recorderHint: { color: colors.muted, fontSize: 13 },
+  recorderTime: {
+    color: colors.ink,
+    fontSize: 22,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  recordingMissing: { color: colors.muted, fontSize: 13, lineHeight: 20 },
   section: { gap: spacing.x3 },
   sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
@@ -210,7 +315,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
   },
-  textarea: { minHeight: 110, paddingTop: spacing.x3, textAlignVertical: 'top' },
+  notesField: { height: 140, maxHeight: 140, paddingTop: spacing.x3, textAlignVertical: 'top' },
   actions: { gap: spacing.x2 },
   success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 18 },

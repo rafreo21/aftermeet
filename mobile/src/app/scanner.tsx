@@ -30,7 +30,7 @@ export default function ScannerScreen() {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const slug = parseCardSlug(result.data);
     if (slug) {
-      router.replace({ pathname: '/capture', params: { slug } });
+      router.replace({ pathname: '/capture/new', params: { slug } });
       return;
     }
     if (await Linking.canOpenURL(result.data)) await Linking.openURL(result.data);

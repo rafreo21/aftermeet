@@ -1,4 +1,4 @@
-import { Children, type PropsWithChildren, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, type PropsWithChildren, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -19,6 +19,7 @@ import { colors, radius, spacing } from '@/theme/tokens';
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   style?: ViewStyle;
+  contentContainerStyle?: ViewStyle;
   edges?: Array<'top' | 'bottom' | 'left' | 'right'>;
   reserveTabBar?: boolean;
 }>;
@@ -27,6 +28,7 @@ export function Screen({
   children,
   scroll = true,
   style,
+  contentContainerStyle,
   edges = ['top'],
   reserveTabBar = true,
 }: ScreenProps) {
@@ -34,7 +36,7 @@ export function Screen({
   const tabBarHeight = useTabBarHeight();
   const paddingTop = edges.includes('top') ? insets.top + spacing.x2 : 0;
   const paddingBottom = (edges.includes('bottom') ? insets.bottom : 0)
-    + (reserveTabBar ? tabBarHeight : spacing.x6);
+    + (reserveTabBar ? tabBarHeight : spacing.x3);
 
   const content = (
     <View
@@ -50,7 +52,10 @@ export function Screen({
   return (
     <View style={styles.safe}>
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.scroll, contentContainerStyle]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
           {content}
         </ScrollView>
       ) : content}
@@ -145,7 +150,21 @@ type ButtonProps = {
   style?: ViewStyle;
 };
 
+function flattenButtonChildren(children: ReactNode): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  Children.forEach(children, (child) => {
+    if (child == null || typeof child === 'boolean') return;
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
+      nodes.push(...flattenButtonChildren(child.props.children));
+      return;
+    }
+    nodes.push(child);
+  });
+  return nodes;
+}
+
 export function Button({ children, onPress, variant = 'primary', disabled, loading, style }: ButtonProps) {
+  const items = flattenButtonChildren(children);
   return (
     <Pressable
       accessibilityRole="button"
@@ -160,10 +179,10 @@ export function Button({ children, onPress, variant = 'primary', disabled, loadi
         style,
       ]}>
       {loading ? <ActivityIndicator color={variant === 'primary' ? colors.ink : colors.muted} /> : (
-        <View style={styles.buttonContent}>{Children.map(children, (child) =>
+        <View style={styles.buttonContent}>{items.map((child, index) =>
           typeof child === 'string' || typeof child === 'number'
-            ? <Text style={[styles.buttonText, variant !== 'primary' && styles.buttonTextSecondary]}>{child}</Text>
-            : child
+            ? <Text key={`label-${index}`} style={[styles.buttonText, variant !== 'primary' && styles.buttonTextSecondary]}>{child}</Text>
+            : isValidElement(child) ? child : null
         )}</View>
       )}
     </Pressable>
@@ -172,8 +191,8 @@ export function Button({ children, onPress, variant = 'primary', disabled, loadi
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
-  scroll: { flexGrow: 1 },
-  screenContent: { flex: 1, paddingHorizontal: spacing.x5, gap: spacing.x5 },
+  scroll: { paddingBottom: spacing.x2 },
+  screenContent: { paddingHorizontal: spacing.x5, gap: spacing.x4 },
   eyebrow: { color: colors.muted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
   title: { color: colors.ink, fontSize: 40, lineHeight: 42, fontWeight: '700', letterSpacing: -1.5 },
   body: { color: colors.muted, fontSize: 15, lineHeight: 22 },

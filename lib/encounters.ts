@@ -142,6 +142,21 @@ export function encounterFromSharedPayload(payload: Record<string, unknown>): En
     transcript: String(payload.transcript ?? ""),
     privateNotes: String(payload.privateNotes ?? ""),
     sharedSummary: String(payload.sharedSummary ?? ""),
+    recording: payload.recording && typeof payload.recording === "object"
+      ? {
+          id: String(payload.id),
+          durationSeconds: typeof (payload.recording as Record<string, unknown>).durationSeconds === "number"
+            ? (payload.recording as Record<string, unknown>).durationSeconds as number
+            : 0,
+          fileSize: 0,
+          mimeType: String((payload.recording as Record<string, unknown>).mimeType ?? "audio/mp4"),
+          source: "recorded",
+          retention: "never",
+          expiresAt: null,
+          createdAt: String(payload.startedAt ?? new Date().toISOString()),
+          sharedAudioUrl: String((payload.recording as Record<string, unknown>).sharedAudioUrl ?? ""),
+        }
+      : undefined,
     actions: Array.isArray(payload.actions) ? payload.actions as EncounterAction[] : [],
     status: "shared",
     shareToken: String(payload.shareToken ?? ""),

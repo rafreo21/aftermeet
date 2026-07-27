@@ -10,8 +10,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useLiveTranscript, type LiveTranscriptStatus } from '@/features/encounters/live-transcript';
-import { NativeSpeechTranscription, isNativeSpeechTranscriptionAvailable } from '@/features/encounters/native-speech-transcript';
-import { ensureRecordingsDirectory, formatDuration } from '@/features/encounters/local-recordings';
+import {
+  NativeSpeechCapture,
+  isNativeSpeechTranscriptionAvailable,
+  resolveSpeechCaptureMode,
+  type SpeechCaptureMode,
+} from '@/features/encounters/native-speech-transcript';
+import { ensureRecordingsDirectory, formatDuration, recordingsDirectory } from '@/features/encounters/local-recordings';
 import { isExpoGo } from '@/lib/runtime';
 
 export type RecordingState = 'idle' | 'recording' | 'paused' | 'stopped';
@@ -47,17 +52,23 @@ export function useCaptureRecorder({
   const [recordingSource, setRecordingSource] = useState<'recorded' | 'imported'>('recorded');
   const [playbackReady, setPlaybackReady] = useState(false);
   const [playbackSource, setPlaybackSource] = useState<string | null>(null);
+  const [speechAudioLevel, setSpeechAudioLevel] = useState(0);
+  const [speechSeconds, setSpeechSeconds] = useState(0);
+  const [captureMode, setCaptureMode] = useState<SpeechCaptureMode>(() => resolveSpeechCaptureMode());
 
   const recordingStateRef = useRef<RecordingState>('idle');
-  const speechRef = useRef(new NativeSpeechTranscription());
+  const speechCaptureRef = useRef(new NativeSpeechCapture());
   const liveSttReceivedRef = useRef(false);
+  const speechTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onErrorRef = useRef(onError);
   const onTranscriptFinalizedRef = useRef(onTranscriptFinalized);
   const transcribeFromServerRef = useRef(transcribeFromServer);
+  const captureModeRef = useRef<SpeechCaptureMode>(captureMode);
 
   onErrorRef.current = onError;
   onTranscriptFinalizedRef.current = onTranscriptFinalized;
   transcribeFromServerRef.current = transcribeFromServer;
+  captureModeRef.current = captureMode;
 
   const liveTranscript = useLiveTranscript({ transcript, onTranscriptChange });
 
@@ -65,50 +76,75 @@ export function useCaptureRecorder({
   const recorderState = useAudioRecorderState(audioRecorder, 250);
   const player = useAudioPlayer(playbackSource);
 
+  const usingSpeechCapture = captureMode === 'unified' || captureMode === 'transcript-only';
+
   const seconds = useMemo(
-    () => Math.max(0, Math.round(recorderState.durationMillis / 1000)),
-    [recorderState.durationMillis],
+    () => (usingSpeechCapture
+      ? speechSeconds
+      : Math.max(0, Math.round(recorderState.durationMillis / 1000))),
+    [recorderState.durationMillis, speechSeconds, usingSpeechCapture],
   );
 
   const audioLevel = useMemo(() => {
+    if (usingSpeechCapture) return speechAudioLevel;
     if (typeof recorderState.metering !== 'number') return 0;
     return Math.min(1, Math.max(0, (recorderState.metering + 160) / 160));
-  }, [recorderState.metering]);
+  }, [recorderState.metering, speechAudioLevel, usingSpeechCapture]);
 
   useEffect(() => {
     recordingStateRef.current = recordingState;
   }, [recordingState]);
 
   useEffect(() => {
+    if (recordingState !== 'recording' && recordingState !== 'paused') return;
+    const display = liveTranscript.displayTranscript.trim();
+    if (!display) return;
+
+    const timer = setTimeout(() => {
+      onTranscriptChange(display);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [liveTranscript.displayTranscript, onTranscriptChange, recordingState]);
+
+  useEffect(() => {
     void ensureRecordingsDirectory().catch(() => {});
+
+    return () => {
+      speechCaptureRef.current.abort();
+      if (speechTimerRef.current) clearInterval(speechTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (usingSpeechCapture) return;
     void setAudioModeAsync({
       allowsRecording: true,
       playsInSilentMode: true,
     }).catch(() => {});
-
-    return () => {
-      speechRef.current.abort();
-    };
-  }, []);
+  }, [usingSpeechCapture]);
 
   const publishDuration = useCallback((nextSeconds: number) => {
     onDurationChange(nextSeconds);
   }, [onDurationChange]);
 
-  const startSpeechTranscription = useCallback(async () => {
-    liveSttReceivedRef.current = false;
-    liveTranscript.markListening();
-    const started = await speechRef.current.start(
-      (text, isFinal) => {
-        if (text.trim()) liveSttReceivedRef.current = true;
-        liveTranscript.appendSpeechResult(text, isFinal);
-      },
-      () => liveTranscript.markUnavailable(),
-    );
-    if (!started && !speechRef.current.isAvailable()) {
-      liveTranscript.markUnavailable();
+  const clearSpeechTimer = useCallback(() => {
+    if (speechTimerRef.current) {
+      clearInterval(speechTimerRef.current);
+      speechTimerRef.current = null;
     }
-  }, [liveTranscript]);
+  }, []);
+
+  const startSpeechTimer = useCallback(() => {
+    clearSpeechTimer();
+    speechTimerRef.current = setInterval(() => {
+      setSpeechSeconds((current) => {
+        const next = current + 1;
+        publishDuration(next);
+        return next;
+      });
+    }, 1000);
+  }, [clearSpeechTimer, publishDuration]);
 
   const maybeTranscribeFromServer = useCallback(async (uri: string, cleanedTranscript: string) => {
     const transcribe = transcribeFromServerRef.current;
@@ -140,9 +176,42 @@ export function useCaptureRecorder({
     return cleanedTranscript;
   }, [liveTranscript]);
 
-  const stopSpeechTranscription = useCallback(() => {
-    speechRef.current.stop();
-  }, []);
+  const startSpeechCapture = useCallback(async (mode: SpeechCaptureMode) => {
+    liveSttReceivedRef.current = false;
+    liveTranscript.markListening();
+    await ensureRecordingsDirectory();
+    const started = await speechCaptureRef.current.start({
+      mode,
+      outputDirectory: recordingsDirectory(),
+      onResult: (text, isFinal) => {
+        if (text.trim()) liveSttReceivedRef.current = true;
+        liveTranscript.appendSpeechResult(text, isFinal);
+      },
+      onVolume: setSpeechAudioLevel,
+      onListening: () => liveTranscript.markListening(),
+      onSegmentEnd: () => liveTranscript.commitPendingSpeech(),
+      onError: (message) => onErrorRef.current(message),
+      onUnavailable: () => liveTranscript.markUnavailable(),
+    });
+    if (!started) {
+      liveTranscript.markUnavailable();
+    }
+    return started;
+  }, [liveTranscript]);
+
+  const startExpoAudioRecording = useCallback(async () => {
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
+    });
+    await audioRecorder.prepareToRecordAsync(RECORDING_OPTIONS);
+    audioRecorder.record();
+  }, [audioRecorder]);
+
+  const stopSpeechCapture = useCallback(async () => {
+    clearSpeechTimer();
+    return speechCaptureRef.current.stop();
+  }, [clearSpeechTimer]);
 
   const startRecording = useCallback(async (consent: boolean) => {
     if (!consent) {
@@ -162,22 +231,54 @@ export function useCaptureRecorder({
 
     try {
       liveTranscript.resetForRecording();
-      await audioRecorder.prepareToRecordAsync(RECORDING_OPTIONS);
-      audioRecorder.record();
       setTranscriptOpen(true);
+      setSpeechSeconds(0);
       publishDuration(0);
+      setSpeechAudioLevel(0);
       setRecordingState('recording');
-      await startSpeechTranscription();
+
+      const preferredMode = resolveSpeechCaptureMode();
+      if (preferredMode !== 'none') {
+        setCaptureMode(preferredMode);
+        captureModeRef.current = preferredMode;
+        speechCaptureRef.current.resetSession();
+        const started = await startSpeechCapture(preferredMode);
+        if (started) {
+          startSpeechTimer();
+          return;
+        }
+
+        if (preferredMode === 'unified') {
+          const transcriptOnlyStarted = await startSpeechCapture('transcript-only');
+          if (transcriptOnlyStarted) {
+            setCaptureMode('transcript-only');
+            captureModeRef.current = 'transcript-only';
+            onErrorRef.current('Saved audio may be unavailable on this device. Live transcript is still active.');
+            startSpeechTimer();
+            return;
+          }
+        }
+      }
+
+      setCaptureMode('none');
+      captureModeRef.current = 'none';
+      liveTranscript.markListening();
+      await startExpoAudioRecording();
     } catch {
       onErrorRef.current('Could not start recording. Check microphone permission and try again.');
+      setRecordingState('idle');
     }
-  }, [audioRecorder, liveTranscript, publishDuration, startSpeechTranscription]);
+  }, [liveTranscript, publishDuration, startExpoAudioRecording, startSpeechCapture, startSpeechTimer]);
 
   const pauseOrResume = useCallback(async () => {
     if (recordingStateRef.current === 'recording') {
       liveTranscript.finalizeTranscript();
-      stopSpeechTranscription();
-      audioRecorder.pause();
+      if (usingSpeechCapture) {
+        clearSpeechTimer();
+        speechCaptureRef.current.abort();
+      } else {
+        audioRecorder.pause();
+      }
       setRecordingState('paused');
       publishDuration(seconds);
       return;
@@ -185,34 +286,61 @@ export function useCaptureRecorder({
 
     if (recordingStateRef.current === 'paused') {
       liveTranscript.resetForRecording();
-      audioRecorder.record();
       setRecordingState('recording');
-      await startSpeechTranscription();
+      if (usingSpeechCapture) {
+        const started = await startSpeechCapture(captureModeRef.current);
+        if (started) startSpeechTimer();
+      } else {
+        audioRecorder.record();
+      }
     }
-  }, [audioRecorder, liveTranscript, publishDuration, seconds, startSpeechTranscription, stopSpeechTranscription]);
+  }, [
+    audioRecorder,
+    clearSpeechTimer,
+    liveTranscript,
+    publishDuration,
+    seconds,
+    startSpeechCapture,
+    startSpeechTimer,
+    usingSpeechCapture,
+  ]);
 
   const stopRecording = useCallback(async () => {
     if (recordingStateRef.current === 'stopped') return;
 
-    stopSpeechTranscription();
     setRecordingState('stopped');
     try {
-      await audioRecorder.stop();
-      const uri = audioRecorder.uri ?? recorderState.url;
+      let uri: string | null = null;
+
+      if (usingSpeechCapture) {
+        liveTranscript.commitPendingSpeech();
+        uri = await stopSpeechCapture();
+        speechCaptureRef.current.resetSession();
+      } else {
+        await audioRecorder.stop();
+        uri = audioRecorder.uri ?? recorderState.url;
+      }
+
       publishDuration(seconds);
       let cleaned = liveTranscript.finalizeTranscript();
+
       if (uri) {
-        cleaned = await maybeTranscribeFromServer(uri, cleaned);
-      } else if (cleaned) {
-        onTranscriptFinalizedRef.current?.(cleaned);
-      }
-      if (uri) {
+        if (!liveSttReceivedRef.current) {
+          cleaned = await maybeTranscribeFromServer(uri, cleaned);
+        } else if (cleaned) {
+          onTranscriptFinalizedRef.current?.(cleaned);
+        }
         setRecordingUri(uri);
         setRecordingSource('recorded');
         setPlaybackSource(uri);
         onRecordingUriChange(uri, 'recorded');
         setPlaybackReady(true);
+      } else if (cleaned) {
+        onTranscriptFinalizedRef.current?.(cleaned);
+      } else if (!usingSpeechCapture) {
+        cleaned = await maybeTranscribeFromServer('', cleaned);
       }
+
       setTranscriptOpen(true);
     } catch {
       onErrorRef.current('Recording stopped, but the audio file could not be saved on this device.');
@@ -220,31 +348,40 @@ export function useCaptureRecorder({
   }, [
     audioRecorder,
     liveTranscript,
+    maybeTranscribeFromServer,
     onRecordingUriChange,
     publishDuration,
     recorderState.url,
     seconds,
-    stopSpeechTranscription,
-    maybeTranscribeFromServer,
+    stopSpeechCapture,
+    usingSpeechCapture,
   ]);
 
   const resetRecording = useCallback(async () => {
-    stopSpeechTranscription();
-    try {
-      if (audioRecorder.isRecording) {
-        await audioRecorder.stop();
+    if (usingSpeechCapture) {
+      speechCaptureRef.current.abort();
+      speechCaptureRef.current.resetSession();
+      clearSpeechTimer();
+      setSpeechSeconds(0);
+      setSpeechAudioLevel(0);
+    } else {
+      try {
+        if (audioRecorder.isRecording) {
+          await audioRecorder.stop();
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
     player.pause();
     setRecordingState('idle');
+    setCaptureMode(resolveSpeechCaptureMode());
     publishDuration(0);
     setRecordingUri('');
     setPlaybackSource(null);
     setPlaybackReady(false);
     liveTranscript.markIdle();
-  }, [audioRecorder, liveTranscript, player, publishDuration, stopSpeechTranscription]);
+  }, [audioRecorder, clearSpeechTimer, liveTranscript, player, publishDuration, usingSpeechCapture]);
 
   const importRecording = useCallback(async (consent: boolean) => {
     if (!consent) {
@@ -264,7 +401,7 @@ export function useCaptureRecorder({
       return;
     }
 
-    stopSpeechTranscription();
+    speechCaptureRef.current.abort();
     setRecordingState('stopped');
     setRecordingSource('imported');
     setRecordingUri(asset.uri);
@@ -279,7 +416,7 @@ export function useCaptureRecorder({
     } else {
       liveTranscript.markIdle();
     }
-  }, [liveTranscript, maybeTranscribeFromServer, onRecordingUriChange, player.duration, publishDuration, stopSpeechTranscription, transcript]);
+  }, [liveTranscript, maybeTranscribeFromServer, onRecordingUriChange, player.duration, publishDuration, transcript]);
 
   const playRecording = useCallback(async () => {
     if (!recordingUri) return;
@@ -305,13 +442,13 @@ export function useCaptureRecorder({
       case 'unavailable':
         return isExpoGo()
           ? 'Recording — transcript appears when you tap Finish (requires sign-in)'
-          : liveTranscript.transcriptSupported
-            ? 'Live transcription unavailable — audio is still recording'
+          : usingSpeechCapture
+            ? 'Check mic and speech permissions in Settings'
             : 'Type or paste what was said';
       default:
         return 'Editable meeting record';
     }
-  }, [liveTranscript.transcriptStatus, liveTranscript.transcriptSupported]);
+  }, [liveTranscript.transcriptStatus, usingSpeechCapture]);
 
   return {
     recordingState,
@@ -323,7 +460,7 @@ export function useCaptureRecorder({
     transcriptStatus: liveTranscript.transcriptStatus,
     transcriptStatusLabel,
     transcriptSupported: isNativeSpeechTranscriptionAvailable(),
-    usesServerTranscription: isExpoGo() || !isNativeSpeechTranscriptionAvailable(),
+    usesServerTranscription: isExpoGo() || captureMode === 'none',
     recordingUri,
     recordingSource,
     recordingComplete: recordingState === 'stopped' || Boolean(recordingUri),
