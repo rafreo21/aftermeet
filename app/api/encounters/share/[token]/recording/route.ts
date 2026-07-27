@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { createClient } from "../../../../../lib/supabase/server";
-import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../lib/supabase/service";
+import { createClient } from "../../../../../../lib/supabase/server";
+import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../../lib/supabase/service";
 
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;

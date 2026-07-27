@@ -8,15 +8,13 @@ export function detectMobilePlatform(userAgent?: string): MobilePlatform {
 }
 
 export function getPlayStoreUrl() {
-  return (
-    process.env.NEXT_PUBLIC_ANDROID_APP_URL?.trim()
-    || "https://play.google.com/store/apps/details?id=com.aftermeet.app"
-  );
+  return process.env.NEXT_PUBLIC_ANDROID_APP_URL?.trim() || null;
 }
 
 export function getAppStoreUrl() {
-  return (
-    process.env.NEXT_PUBLIC_IOS_APP_URL?.trim()
-    || "https://apps.apple.com/app/aftermeet/id0000000000"
-  );
+  return process.env.NEXT_PUBLIC_IOS_APP_URL?.trim() || null;
+}
+
+export function hasPublishedMobileApp() {
+  return Boolean(getPlayStoreUrl() || getAppStoreUrl());
 }

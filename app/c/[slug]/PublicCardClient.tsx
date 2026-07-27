@@ -200,6 +200,7 @@ export function PublicCardClient({
         <PublicAppDownloadPrompt
           ownerName={ownerName}
           visitorEmail={visitorEmail}
+          slug={slug}
           onClose={returnToCard}
         />
       </main>
