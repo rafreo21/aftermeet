@@ -1,7 +1,10 @@
 import {
+  MAX_BASE64_TRANSCRIBE_BYTES,
   guessRecordingFileName,
   guessRecordingMimeType,
+  prepareAudioFile,
   prepareAudioUpload,
+  type PreparedAudioUpload,
 } from '@/features/encounters/audio-upload';
 import type { LocalRecordingMetadata } from '@/features/encounters/local-recordings';
 import { mobileFetch } from '@/lib/mobile-api';
@@ -206,12 +209,74 @@ export function buildEncounterPayload(input: {
   };
 }
 
-export async function transcribeEncounterAudio(
+type TranscribePayload = {
+  transcript?: string;
+  source?: 'ai' | 'unavailable';
+  unavailable?: string;
+  error?: string;
+};
+
+function transcribeFailureMessage(status: number, payload: TranscribePayload, raw: string) {
+  if (payload.error?.trim()) return payload.error.trim();
+  if (status === 401) return 'Your session has expired. Sign in again and retry the import.';
+  if (status === 404 || status === 405) {
+    return 'Transcription API is not deployed yet. Deploy the latest web app, then try again.';
+  }
+  if (status === 413) {
+    return 'Recording is too large to upload. Try a shorter clip or a compressed M4A/MP3 file.';
+  }
+  if (status >= 500) return 'Transcription service is temporarily unavailable. Try again in a moment.';
+  if (raw.trim().startsWith('<!DOCTYPE') || raw.trim().startsWith('<html')) {
+    return 'Transcription request failed. The recording may be too large — try a shorter clip.';
+  }
+  return `Transcription failed (${status}).`;
+}
+
+async function parseTranscribeResponse(response: Response) {
+  const raw = await response.text();
+  let payload: TranscribePayload = {};
+  try {
+    payload = raw ? JSON.parse(raw) as TranscribePayload : {};
+  } catch {
+    throw new Error(transcribeFailureMessage(response.status, payload, raw));
+  }
+  if (!response.ok) {
+    throw new Error(transcribeFailureMessage(response.status, payload, raw));
+  }
+  return {
+    transcript: payload.transcript?.trim() || '',
+    source: payload.source || 'unavailable' as const,
+    unavailable: payload.unavailable,
+  };
+}
+
+async function transcribeViaMultipart(
   accessToken: string,
-  uri: string,
-  options?: { fileName?: string; mimeType?: string; language?: string },
+  prepared: PreparedAudioUpload,
+  language?: string,
 ) {
-  const prepared = await prepareAudioUpload(uri, options);
+  const formData = new FormData();
+  formData.append('audio', {
+    uri: prepared.uri,
+    name: prepared.fileName,
+    type: prepared.mimeType,
+  } as unknown as Blob);
+  formData.append('fileName', prepared.fileName);
+  formData.append('mimeType', prepared.mimeType);
+  if (language?.trim()) formData.append('lang', language.trim());
+
+  const response = await mobileFetch('/api/encounters/transcribe', accessToken, {
+    method: 'POST',
+    body: formData,
+  });
+  return parseTranscribeResponse(response);
+}
+
+async function transcribeViaBase64Json(
+  accessToken: string,
+  prepared: PreparedAudioUpload & { base64: string },
+  language?: string,
+) {
   const response = await mobileFetch('/api/encounters/transcribe', accessToken, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -219,32 +284,41 @@ export async function transcribeEncounterAudio(
       audioBase64: prepared.base64,
       fileName: prepared.fileName,
       mimeType: prepared.mimeType,
-      lang: options?.language,
+      lang: language,
     }),
   });
-  const raw = await response.text();
-  let payload: {
-    transcript?: string;
-    source?: 'ai' | 'unavailable';
-    unavailable?: string;
-    error?: string;
-  } = {};
-  try {
-    payload = raw ? JSON.parse(raw) as typeof payload : {};
-  } catch {
-    if (response.status === 405 || response.status === 404) {
-      throw new Error('Transcription API is not deployed yet. Deploy the latest web app, then try again.');
+  return parseTranscribeResponse(response);
+}
+
+export async function transcribeEncounterAudio(
+  accessToken: string,
+  uri: string,
+  options?: { fileName?: string; mimeType?: string; language?: string },
+) {
+  const prepared = await prepareAudioFile(uri, options);
+  const preferMultipart = prepared.size === 0 || prepared.size > MAX_BASE64_TRANSCRIBE_BYTES;
+
+  if (preferMultipart) {
+    try {
+      return await transcribeViaMultipart(accessToken, prepared, options?.language);
+    } catch (error) {
+      if (prepared.size > MAX_BASE64_TRANSCRIBE_BYTES) throw error;
     }
-    throw new Error(`Transcription failed (${response.status}).`);
   }
-  if (!response.ok) {
-    throw new Error(payload.error || `Transcription failed (${response.status}).`);
+
+  try {
+    const withBase64 = await prepareAudioUpload(uri, options);
+    return await transcribeViaBase64Json(accessToken, withBase64, options?.language);
+  } catch (error) {
+    if (!preferMultipart) {
+      try {
+        return await transcribeViaMultipart(accessToken, prepared, options?.language);
+      } catch {
+        throw error;
+      }
+    }
+    throw error;
   }
-  return {
-    transcript: payload.transcript?.trim() || '',
-    source: payload.source || 'unavailable',
-    unavailable: payload.unavailable,
-  };
 }
 
 export async function uploadEncounterRecording(

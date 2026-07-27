@@ -80,10 +80,21 @@ export function normalizeAudioMimeType(mimeType: string, hintPath: string) {
   return guessMimeFromFileName(hintPath) || 'audio/mp4';
 }
 
-export async function prepareAudioUpload(
+export const MAX_TRANSCRIBE_UPLOAD_BYTES = 25 * 1024 * 1024;
+/** Above this size, base64 JSON exceeds typical server body limits — prefer multipart upload. */
+export const MAX_BASE64_TRANSCRIBE_BYTES = 3 * 1024 * 1024;
+
+export type PreparedAudioUpload = {
+  uri: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
+
+async function copyAudioToCache(
   uri: string,
   options?: { fileName?: string; mimeType?: string },
-): Promise<{ uri: string; fileName: string; mimeType: string; base64: string }> {
+): Promise<PreparedAudioUpload> {
   const ext = extensionFromPath(options?.fileName || '')
     || extensionFromPath(uri)
     || mimeToExtension(options?.mimeType)
@@ -101,12 +112,39 @@ export async function prepareAudioUpload(
   }
 
   const mimeType = guessRecordingMimeType(uploadUri, options?.mimeType, fileName);
-  const base64 = await FileSystem.readAsStringAsync(uploadUri, {
+  const info = await FileSystem.getInfoAsync(uploadUri);
+  const size = info.exists && 'size' in info && typeof info.size === 'number' ? info.size : 0;
+  if (!info.exists) {
+    throw new Error('Could not read this audio file from your device.');
+  }
+  if (size > 0 && size < 128) {
+    throw new Error('That audio file looks empty or corrupted.');
+  }
+  if (size > MAX_TRANSCRIBE_UPLOAD_BYTES) {
+    throw new Error('Recording is larger than 25 MB. Choose a shorter or compressed recording.');
+  }
+
+  return { uri: uploadUri, fileName, mimeType, size };
+}
+
+export async function prepareAudioUpload(
+  uri: string,
+  options?: { fileName?: string; mimeType?: string },
+): Promise<PreparedAudioUpload & { base64: string }> {
+  const prepared = await copyAudioToCache(uri, options);
+  const base64 = await FileSystem.readAsStringAsync(prepared.uri, {
     encoding: FileSystem.EncodingType.Base64,
   });
   if (!base64) {
     throw new Error('Could not read this audio file from your device.');
   }
 
-  return { uri: uploadUri, fileName, mimeType, base64 };
+  return { ...prepared, base64 };
+}
+
+export async function prepareAudioFile(
+  uri: string,
+  options?: { fileName?: string; mimeType?: string },
+) {
+  return copyAudioToCache(uri, options);
 }

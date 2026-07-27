@@ -233,9 +233,6 @@ export default function CaptureWizardScreen() {
     const mimeType = meta?.mimeType || draftRef.current.importMimeType || undefined;
     const result = await transcribeEncounterAudio(session.access_token, uri, { fileName, mimeType });
     if (result.transcript) return result.transcript;
-    if (result.unavailable === 'ai_not_configured') {
-      throw new Error('Server transcription is not configured. Paste a transcript manually for now.');
-    }
     throw new Error('Could not transcribe this recording. Paste or type what was said.');
   }, [session?.access_token]);
 

@@ -13,7 +13,7 @@ function transcriptionModel() {
 
 export async function transcribeEncounterAudio(
   audio: Uint8Array,
-  options?: { language?: string; mimeType?: string },
+  options?: { language?: string; mimeType?: string; fileName?: string },
 ): Promise<{
   transcript: string;
   source: "ai" | "unavailable";
@@ -28,11 +28,7 @@ export async function transcribeEncounterAudio(
   }
 
   if (!(await isAiGatewayConfigured())) {
-    return {
-      transcript: "",
-      source: "unavailable",
-      unavailable: "ai_not_configured",
-    };
+    throw new Error("Server transcription is not configured yet. Paste a transcript manually for now.");
   }
 
   await refreshAiGatewayAuth();
