@@ -5,6 +5,7 @@ import { Check, Image as ImageIcon, Palette, UserCircle, ListChecks } from 'phos
 import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { CardPublishSheet } from '@/components/card-publish-sheet';
 import { MethodListEditor } from '@/components/method-list-editor';
 import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader } from '@/components/ui';
@@ -93,15 +94,16 @@ function StepIndicator({
 
 export default function EditCardScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { card, getCardById, updateCardById, publishCard } = useCard();
+  const { card, getCardById, updateCardById, publishCard, publishing } = useCard();
   const source = useMemo(
     () => (id ? getCardById(id) : undefined) || card,
     [card, getCardById, id],
   );
   const [draft, setDraft] = useState<MobileCard>(source);
   const [step, setStep] = useState(0);
-  const [saveError, setSaveError] = useState('');
-  const [publishing, setPublishing] = useState(false);
+  const [sheet, setSheet] = useState<'none' | 'success' | 'error'>('none');
+  const [sheetMessage, setSheetMessage] = useState('');
+  const [sheetDetail, setSheetDetail] = useState('');
   const insets = useAppInsets();
 
   useEffect(() => {
@@ -131,18 +133,38 @@ export default function EditCardScreen() {
   }
 
   async function publish() {
-    setPublishing(true);
-    setSaveError('');
+    setSheet('none');
     try {
       await persist(draft);
-      const ok = await publishCard(draft.id, draft);
-      if (!ok) setSaveError('We couldn’t publish this card.');
-      else router.back();
+      const result = await publishCard(draft.id, draft);
+      if (result.ok) {
+        setSheetMessage('Your card is live. Share the link, QR code, or open Card Tools for wallet and widgets.');
+        setSheetDetail(result.publicUrl);
+        setSheet('success');
+        return;
+      }
+      setSheetMessage('We couldn’t publish this card. Check the details below and try again.');
+      setSheetDetail(result.error);
+      setSheet('error');
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'We couldn’t publish this card.');
-    } finally {
-      setPublishing(false);
+      setSheetMessage('We couldn’t publish this card.');
+      setSheetDetail(error instanceof Error ? error.message : 'Something went wrong.');
+      setSheet('error');
     }
+  }
+
+  function closeSheet() {
+    setSheet('none');
+  }
+
+  function finishAfterSuccess() {
+    setSheet('none');
+    router.back();
+  }
+
+  function openCardToolsAfterPublish() {
+    setSheet('none');
+    router.replace(`/card-tools?id=${draft.id}`);
   }
 
   return (
@@ -352,8 +374,6 @@ export default function EditCardScreen() {
                   thumbColor={colors.surface}
                 />
               </View>
-
-              {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
             </View>
           ) : null}
         </ScrollView>
@@ -375,6 +395,36 @@ export default function EditCardScreen() {
           )}
         </View>
       </View>
+
+      <CardPublishSheet
+        visible={sheet === 'success'}
+        variant="success"
+        title="Card published"
+        message={sheetMessage}
+        detail={sheetDetail}
+        primaryLabel="Done"
+        secondaryLabel="Open card tools"
+        onPrimary={finishAfterSuccess}
+        onSecondary={openCardToolsAfterPublish}
+        onClose={finishAfterSuccess}
+      />
+
+      <CardPublishSheet
+        visible={sheet === 'error'}
+        variant="error"
+        title="Publish failed"
+        message={sheetMessage}
+        detail={sheetDetail}
+        primaryLabel="Try again"
+        secondaryLabel="Close"
+        onPrimary={() => {
+          closeSheet();
+          void publish();
+        }}
+        onSecondary={closeSheet}
+        onClose={closeSheet}
+        loading={publishing}
+      />
     </View>
   );
 }

@@ -25,10 +25,25 @@ export async function POST(request: Request) {
   if (!cardId || !allowedFields.has(field)) {
     return NextResponse.json({ error: "A valid card and image field are required." }, { status: 400 });
   }
-  if (!(file instanceof File) || file.size <= 0) {
+
+  let buffer: Buffer | null = null;
+  let mimeType = "image/jpeg";
+  let fileSize = 0;
+
+  if (file instanceof File) {
+    fileSize = file.size;
+    mimeType = file.type || mimeType;
+    buffer = Buffer.from(await file.arrayBuffer());
+  } else if (file instanceof Blob) {
+    fileSize = file.size;
+    mimeType = file.type || mimeType;
+    buffer = Buffer.from(await file.arrayBuffer());
+  }
+
+  if (!buffer || fileSize <= 0) {
     return NextResponse.json({ error: "An image file is required." }, { status: 400 });
   }
-  if (file.size > 8 * 1024 * 1024) {
+  if (fileSize > 8 * 1024 * 1024) {
     return NextResponse.json({ error: "Images must be 8 MB or smaller." }, { status: 400 });
   }
 
@@ -50,8 +65,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const mimeType = file.type || "image/jpeg";
-    const buffer = Buffer.from(await file.arrayBuffer());
     const url = await uploadCardAssetBuffer(service, user.workspaceId, cardId, field, buffer, mimeType);
     return NextResponse.json({ ok: true, url }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

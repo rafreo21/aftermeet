@@ -17,6 +17,7 @@ import { defaultCard } from '@/features/card/default-card';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
 import { syncCardToolsForCard } from '@/features/card/card-tools-sync';
 import { uploadCardImagesForPublish } from '@/features/card/card-image-upload';
+import { formatPublishError, type PublishCardResult, validateCardForPublish } from '@/features/card/publish-card';
 import { readEnv } from '@/lib/env';
 import { mobileFetch } from '@/lib/mobile-api';
 import { getSupabase } from '@/lib/supabase';
@@ -42,8 +43,8 @@ type CardValue = {
   addMethod: (method: ContactMethod) => Promise<void>;
   removeMethod: (id: string) => Promise<void>;
   sync: () => Promise<void>;
-  publish: () => Promise<boolean>;
-  publishCard: (id?: string, cardOverride?: MobileCard) => Promise<boolean>;
+  publish: () => Promise<PublishCardResult>;
+  publishCard: (id?: string, cardOverride?: MobileCard) => Promise<PublishCardResult>;
   deleteCard: (id: string) => Promise<boolean>;
 };
 
@@ -124,30 +125,44 @@ export function CardProvider({ children }: PropsWithChildren) {
 
   const saveRemoteCard = useCallback(async (card: MobileCard, options?: { strictImages?: boolean }) => {
     if (!session?.access_token) return card;
+
+    async function persistPayload(payload: MobileCard) {
+      const response = await mobileFetch('/api/cards', session!.access_token!, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mobileCardToLibraryPayload(payload)),
+      });
+      if (!response.ok) {
+        const responsePayload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(responsePayload?.error || 'We couldn’t save this card.');
+      }
+      return payload;
+    }
+
     let payload = card;
-    if (card.id) {
-      try {
-        const uploaded = await uploadCardImagesForPublish(session.access_token, card.id, {
-          photo: card.photo || '',
-          coverPhoto: card.coverPhoto || '',
-          companyLogo: card.showCompanyDetails !== false ? (card.companyLogo || '') : '',
-        });
+    await persistPayload(payload);
+
+    if (!card.id) return payload;
+
+    try {
+      const uploaded = await uploadCardImagesForPublish(session.access_token, card.id, {
+        photo: card.photo || '',
+        coverPhoto: card.coverPhoto || '',
+        companyLogo: card.showCompanyDetails !== false ? (card.companyLogo || '') : '',
+      });
+      const imagesChanged = uploaded.photo !== payload.photo
+        || uploaded.coverPhoto !== payload.coverPhoto
+        || uploaded.companyLogo !== payload.companyLogo;
+      if (imagesChanged) {
         payload = { ...card, ...uploaded };
-      } catch (error) {
-        if (options?.strictImages) {
-          throw error instanceof Error ? error : new Error('Could not upload card images.');
-        }
+        await persistPayload(payload);
+      }
+    } catch (error) {
+      if (options?.strictImages) {
+        throw error instanceof Error ? error : new Error('Could not upload card images.');
       }
     }
-    const response = await mobileFetch('/api/cards', session.access_token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mobileCardToLibraryPayload(payload)),
-    });
-    if (!response.ok) {
-      const responsePayload = await response.json().catch(() => null) as { error?: string } | null;
-      throw new Error(responsePayload?.error || 'We couldn’t save this card.');
-    }
+
     return payload;
   }, [session?.access_token]);
 
@@ -235,20 +250,33 @@ export function CardProvider({ children }: PropsWithChildren) {
     }
   }, [persistCards, saveRemoteCard, session?.access_token]);
 
-  const publishCard = useCallback(async (id = activeCardId, cardOverride?: MobileCard) => {
+  const cardPublicUrl = useCallback((target: MobileCard) => {
+    const env = readEnv();
+    return `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`;
+  }, []);
+
+  const publishCard = useCallback(async (id = activeCardId, cardOverride?: MobileCard): Promise<PublishCardResult> => {
     const supabase = getSupabase();
     const target = cardOverride
       ?? cardsRef.current.find((item) => item.id === id)
       ?? cardsRef.current.find((item) => item.id === activeCardIdRef.current)
       ?? activeCard;
     if (!supabase || !session) {
-      setPublishError('Sign in to publish this card.');
-      return false;
+      const error = 'Sign in to publish this card.';
+      setPublishError(error);
+      return { ok: false, error };
     }
     if (!target.id) {
-      setPublishError('Save this card before publishing.');
-      return false;
+      const error = 'Save this card before publishing.';
+      setPublishError(error);
+      return { ok: false, error };
     }
+    const validationError = validateCardForPublish(target);
+    if (validationError) {
+      setPublishError(validationError);
+      return { ok: false, error: validationError };
+    }
+
     setPublishing(true);
     setPublishError('');
     try {
@@ -271,6 +299,7 @@ export function CardProvider({ children }: PropsWithChildren) {
         p_methods: publishTarget.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
       });
       if (error) throw error;
+
       await updateCardById(target.id, {
         id: String(data),
         status: 'published',
@@ -278,14 +307,17 @@ export function CardProvider({ children }: PropsWithChildren) {
         coverPhoto: publishTarget.coverPhoto,
         companyLogo: publishTarget.companyLogo,
       });
-      return true;
+
+      const publicUrl = cardPublicUrl({ ...publishTarget, slug: publishTarget.slug });
+      return { ok: true, publicUrl };
     } catch (error) {
-      setPublishError(error instanceof Error ? error.message : 'Card publishing failed.');
-      return false;
+      const message = formatPublishError(error);
+      setPublishError(message);
+      return { ok: false, error: message };
     } finally {
       setPublishing(false);
     }
-  }, [activeCard, activeCardId, saveRemoteCard, session, updateCardById]);
+  }, [activeCard, activeCardId, cardPublicUrl, saveRemoteCard, session, updateCardById]);
 
   const deleteCard = useCallback(async (id: string) => {
     const currentCards = cardsRef.current;
@@ -312,11 +344,6 @@ export function CardProvider({ children }: PropsWithChildren) {
     (cardId: string) => cards.find((item) => item.id === cardId),
     [cards],
   );
-
-  const cardPublicUrl = useCallback((target: MobileCard) => {
-    const env = readEnv();
-    return `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`;
-  }, []);
 
   const value = useMemo<CardValue>(() => {
     const env = readEnv();
