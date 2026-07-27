@@ -17,7 +17,7 @@ import { defaultCard } from '@/features/card/default-card';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
 import { syncCardToolsForCard } from '@/features/card/card-tools-sync';
 import { uploadCardImagesForPublish } from '@/features/card/card-image-upload';
-import { formatPublishError, type PublishCardResult, validateCardForPublish } from '@/features/card/publish-card';
+import { describePublishError, formatPublishError, type PublishCardResult, validateCardForPublish } from '@/features/card/publish-card';
 import { readEnv } from '@/lib/env';
 import { mobileFetch } from '@/lib/mobile-api';
 import { getSupabase } from '@/lib/supabase';
@@ -262,19 +262,20 @@ export function CardProvider({ children }: PropsWithChildren) {
       ?? cardsRef.current.find((item) => item.id === activeCardIdRef.current)
       ?? activeCard;
     if (!supabase || !session) {
-      const error = 'Sign in to publish this card.';
-      setPublishError(error);
-      return { ok: false, error };
+      const failure = describePublishError('Sign in to publish this card.');
+      setPublishError(failure.message);
+      return { ok: false, ...failure };
     }
     if (!target.id) {
-      const error = 'Save this card before publishing.';
-      setPublishError(error);
-      return { ok: false, error };
+      const failure = describePublishError('Save this card before publishing.');
+      setPublishError(failure.message);
+      return { ok: false, ...failure };
     }
     const validationError = validateCardForPublish(target);
     if (validationError) {
-      setPublishError(validationError);
-      return { ok: false, error: validationError };
+      const failure = describePublishError(validationError);
+      setPublishError(failure.message);
+      return { ok: false, ...failure };
     }
 
     setPublishing(true);
@@ -312,8 +313,9 @@ export function CardProvider({ children }: PropsWithChildren) {
       return { ok: true, publicUrl };
     } catch (error) {
       const message = formatPublishError(error);
-      setPublishError(message);
-      return { ok: false, error: message };
+      const failure = describePublishError(message);
+      setPublishError(failure.message);
+      return { ok: false, ...failure };
     } finally {
       setPublishing(false);
     }

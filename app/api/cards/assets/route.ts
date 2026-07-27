@@ -4,17 +4,39 @@ import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/ap
 import {
   CARD_ASSETS_BUCKET,
   type CardAssetField,
+  parseDataUrl,
   uploadCardAssetBuffer,
 } from "../../../../lib/card-assets";
 import { createServiceSupabaseClient } from "../../../../lib/supabase/service";
 
 const allowedFields = new Set<CardAssetField>(["photo", "coverPhoto", "companyLogo"]);
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-export async function POST(request: Request) {
-  const user = await resolveApiUser(request);
-  if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
-  if (user.id === "local-development-preview") {
-    return NextResponse.json({ preview: true, url: "" }, { headers: { "Cache-Control": "private, no-store" } });
+type JsonUploadBody = {
+  cardId?: string;
+  field?: string;
+  dataUrl?: string;
+};
+
+async function readUploadPayload(request: Request) {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json().catch(() => null)) as JsonUploadBody | null;
+    const cardId = String(body?.cardId || "").trim();
+    const field = String(body?.field || "").trim() as CardAssetField;
+    const dataUrl = String(body?.dataUrl || "").trim();
+    if (!cardId || !allowedFields.has(field) || !dataUrl) {
+      return { error: "A valid card, image field, and photo are required." as const, status: 400 as const };
+    }
+    const parsed = parseDataUrl(dataUrl);
+    if (!parsed?.buffer.length) {
+      return { error: "The uploaded photo could not be read." as const, status: 400 as const };
+    }
+    if (parsed.buffer.length > MAX_IMAGE_BYTES) {
+      return { error: "Images must be 8 MB or smaller." as const, status: 413 as const };
+    }
+    return { cardId, field, buffer: parsed.buffer, mimeType: parsed.mimeType };
   }
 
   const formData = await request.formData();
@@ -23,7 +45,7 @@ export async function POST(request: Request) {
   const file = formData.get("file");
 
   if (!cardId || !allowedFields.has(field)) {
-    return NextResponse.json({ error: "A valid card and image field are required." }, { status: 400 });
+    return { error: "A valid card and image field are required." as const, status: 400 as const };
   }
 
   let buffer: Buffer | null = null;
@@ -41,11 +63,28 @@ export async function POST(request: Request) {
   }
 
   if (!buffer || fileSize <= 0) {
-    return NextResponse.json({ error: "An image file is required." }, { status: 400 });
+    return { error: "An image file is required." as const, status: 400 as const };
   }
-  if (fileSize > 8 * 1024 * 1024) {
-    return NextResponse.json({ error: "Images must be 8 MB or smaller." }, { status: 400 });
+  if (fileSize > MAX_IMAGE_BYTES) {
+    return { error: "Images must be 8 MB or smaller." as const, status: 413 as const };
   }
+
+  return { cardId, field, buffer, mimeType };
+}
+
+export async function POST(request: Request) {
+  const user = await resolveApiUser(request);
+  if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
+  if (user.id === "local-development-preview") {
+    return NextResponse.json({ preview: true, url: "" }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
+  const payload = await readUploadPayload(request);
+  if ("error" in payload) {
+    return NextResponse.json({ error: payload.error }, { status: payload.status });
+  }
+
+  const { cardId, field, buffer, mimeType } = payload;
 
   const supabase = await createApiSupabaseClient(request);
   const { data: card, error: cardError } = await supabase

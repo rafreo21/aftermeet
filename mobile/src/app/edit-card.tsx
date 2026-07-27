@@ -11,6 +11,7 @@ import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader } from '@/components/ui';
 import { useAppInsets } from '@/lib/safe-area';
 import { useCard } from '@/features/card/card-context';
+import { describePublishError } from '@/features/card/publish-card';
 import { CARD_THEMES, normalizeThemeColor, themeForegroundColor, themeMatches } from '@/features/card/theme-colors';
 import type { MobileCard } from '@/features/card/types';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -102,6 +103,7 @@ export default function EditCardScreen() {
   const [draft, setDraft] = useState<MobileCard>(source);
   const [step, setStep] = useState(0);
   const [sheet, setSheet] = useState<'none' | 'success' | 'error'>('none');
+  const [sheetTitle, setSheetTitle] = useState('');
   const [sheetMessage, setSheetMessage] = useState('');
   const [sheetDetail, setSheetDetail] = useState('');
   const insets = useAppInsets();
@@ -138,17 +140,22 @@ export default function EditCardScreen() {
       await persist(draft);
       const result = await publishCard(draft.id, draft);
       if (result.ok) {
+        setSheetTitle('Card published');
         setSheetMessage('Your card is live. Share the link, QR code, or open Card Tools for wallet and widgets.');
         setSheetDetail(result.publicUrl);
         setSheet('success');
         return;
       }
-      setSheetMessage('We couldn’t publish this card. Check the details below and try again.');
-      setSheetDetail(result.error);
+      setSheetTitle(result.title);
+      setSheetMessage(result.message);
+      setSheetDetail(result.detail || '');
       setSheet('error');
     } catch (error) {
-      setSheetMessage('We couldn’t publish this card.');
-      setSheetDetail(error instanceof Error ? error.message : 'Something went wrong.');
+      const message = error instanceof Error ? error.message : 'Something went wrong.';
+      const failure = describePublishError(message);
+      setSheetTitle(failure.title);
+      setSheetMessage(failure.message);
+      setSheetDetail(failure.detail || message);
       setSheet('error');
     }
   }
@@ -399,7 +406,7 @@ export default function EditCardScreen() {
       <CardPublishSheet
         visible={sheet === 'success'}
         variant="success"
-        title="Card published"
+        title={sheetTitle || 'Card published'}
         message={sheetMessage}
         detail={sheetDetail}
         primaryLabel="Done"
@@ -412,7 +419,7 @@ export default function EditCardScreen() {
       <CardPublishSheet
         visible={sheet === 'error'}
         variant="error"
-        title="Publish failed"
+        title={sheetTitle || 'Publish failed'}
         message={sheetMessage}
         detail={sheetDetail}
         primaryLabel="Try again"
