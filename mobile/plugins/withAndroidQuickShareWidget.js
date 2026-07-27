@@ -52,16 +52,16 @@ function withWidgetManifest(config) {
     });
     mod.modResults.manifest['uses-permission'] = usesPermission;
 
-    const mainApplication = application;
-    mainApplication['uses-feature'] = mainApplication['uses-feature'] || [];
-    if (!mainApplication['uses-feature'].some((item) => item.$?.['android:name'] === 'android.hardware.nfc')) {
-      mainApplication['uses-feature'].push({
+    const usesFeature = mod.modResults.manifest['uses-feature'] || [];
+    if (!usesFeature.some((item) => item.$?.['android:name'] === 'android.hardware.nfc')) {
+      usesFeature.push({
         $: {
           'android:name': 'android.hardware.nfc',
           'android:required': 'false',
         },
       });
     }
+    mod.modResults.manifest['uses-feature'] = usesFeature;
 
     return mod;
   });
@@ -73,16 +73,24 @@ function addPackageToMainApplication(mainApplication, packageImport, packageInst
   }
 
   const importAnchor = 'import com.facebook.react.ReactApplication';
-  const packageAnchor = 'PackageList(this).packages';
-
   let next = mainApplication.replace(
     importAnchor,
     `${importAnchor}\n${packageImport}`,
   );
 
+  const applyAnchor = 'PackageList(this).packages.apply {';
+  if (next.includes(applyAnchor)) {
+    next = next.replace(
+      applyAnchor,
+      `${applyAnchor}\n          ${packageInstance.replace('packages.add', 'add')}`,
+    );
+    return next;
+  }
+
+  const packageAnchor = 'PackageList(this).packages';
   next = next.replace(
     packageAnchor,
-    `${packageInstance}\n            ${packageAnchor}`,
+    `${packageInstance.replace('packages.add', 'add')}\n        ${packageAnchor}`,
   );
 
   return next;
