@@ -38,6 +38,7 @@ export async function GET(request: Request, { params }: { params: Params }) {
     methods: methods.map((method) => ({
       method_type: method.method_type,
       value: method.value,
+      label: method.label,
     })),
   });
 

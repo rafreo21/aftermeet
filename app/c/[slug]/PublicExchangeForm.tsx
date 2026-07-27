@@ -5,21 +5,26 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Button } from "../../components/Button";
 import { TextField } from "../../components/FormField";
 
-type OptionalField = "x" | "instagram" | "tiktok" | "role" | "company";
+type OptionalField = "x" | "instagram" | "tiktok" | "linkedin" | "role" | "company";
 
 const OPTIONAL_PILLS: { id: OptionalField; label: string; fieldLabel: string; placeholder: string }[] = [
   { id: "x", label: "X", fieldLabel: "X handle (optional)", placeholder: "@username" },
   { id: "instagram", label: "Instagram", fieldLabel: "Instagram handle (optional)", placeholder: "@username" },
   { id: "tiktok", label: "TikTok", fieldLabel: "TikTok handle (optional)", placeholder: "@username" },
+  { id: "linkedin", label: "LinkedIn", fieldLabel: "LinkedIn profile (optional)", placeholder: "linkedin.com/in/you" },
   { id: "role", label: "Job title", fieldLabel: "Job title (optional)", placeholder: "Product designer" },
   { id: "company", label: "Company name", fieldLabel: "Company name (optional)", placeholder: "Acme Inc." },
 ];
 
-function buildNote(ownerName: string, social: Record<"x" | "instagram" | "tiktok", string>) {
+function buildNote(
+  ownerName: string,
+  social: Record<"x" | "instagram" | "tiktok" | "linkedin", string>,
+) {
   const lines = [`Shared back from ${ownerName}'s AfterMeet card.`];
   if (social.x.trim()) lines.push(`X: ${social.x.trim()}`);
   if (social.instagram.trim()) lines.push(`Instagram: ${social.instagram.trim()}`);
   if (social.tiktok.trim()) lines.push(`TikTok: ${social.tiktok.trim()}`);
+  if (social.linkedin.trim()) lines.push(`LinkedIn: ${social.linkedin.trim()}`);
   return lines.join("\n");
 }
 
@@ -41,6 +46,7 @@ export function PublicExchangeForm({
   const [visitorX, setVisitorX] = useState("");
   const [visitorInstagram, setVisitorInstagram] = useState("");
   const [visitorTiktok, setVisitorTiktok] = useState("");
+  const [visitorLinkedin, setVisitorLinkedin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -52,6 +58,7 @@ export function PublicExchangeForm({
     if (field === "x") return visitorX;
     if (field === "instagram") return visitorInstagram;
     if (field === "tiktok") return visitorTiktok;
+    if (field === "linkedin") return visitorLinkedin;
     if (field === "role") return visitorRole;
     return visitorCompany;
   }
@@ -60,6 +67,7 @@ export function PublicExchangeForm({
     if (field === "x") setVisitorX(value);
     else if (field === "instagram") setVisitorInstagram(value);
     else if (field === "tiktok") setVisitorTiktok(value);
+    else if (field === "linkedin") setVisitorLinkedin(value);
     else if (field === "role") setVisitorRole(value);
     else setVisitorCompany(value);
   }
@@ -92,6 +100,7 @@ export function PublicExchangeForm({
             x: visitorX,
             instagram: visitorInstagram,
             tiktok: visitorTiktok,
+            linkedin: visitorLinkedin,
           }),
           consentGiven: true,
         }),

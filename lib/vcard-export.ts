@@ -5,6 +5,7 @@ import { splitFullName } from "./contacts.ts";
 export type CardVcardMethod = {
   method_type: string;
   value: string;
+  label?: string | null;
 };
 
 export type CardVcardInput = {
@@ -15,6 +16,31 @@ export type CardVcardInput = {
   cardUrl: string;
   methods: CardVcardMethod[];
   scannedAt?: Date;
+};
+
+const METHOD_LABELS: Record<string, string> = {
+  website: "Website",
+  link: "Link",
+  linkedin: "LinkedIn",
+  x: "X",
+  instagram: "Instagram",
+  threads: "Threads",
+  facebook: "Facebook",
+  youtube: "YouTube",
+  snapchat: "Snapchat",
+  tiktok: "TikTok",
+  twitch: "Twitch",
+  yelp: "Yelp",
+  whatsapp: "WhatsApp",
+  signal: "Signal",
+  discord: "Discord",
+  skype: "Skype",
+  telegram: "Telegram",
+  github: "GitHub",
+  calendly: "Calendly",
+  paypal: "PayPal",
+  venmo: "Venmo",
+  cashapp: "Cash App",
 };
 
 export function escapeVcard(value: string) {
@@ -41,6 +67,17 @@ function vcardFilename(fullName: string) {
   return fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "aftermeet-contact";
 }
 
+function methodLabel(method: CardVcardMethod) {
+  const custom = method.label?.trim();
+  if (custom) return custom;
+  return METHOD_LABELS[method.method_type] || method.method_type;
+}
+
+function appendLabeledUrl(lines: string[], itemIndex: number, label: string, href: string) {
+  lines.push(`item${itemIndex}.URL:${escapeVcard(href)}`);
+  lines.push(`item${itemIndex}.X-ABLabel:${escapeVcard(label)}`);
+}
+
 export function buildCardVcard(input: CardVcardInput) {
   const whenWeMetNote = buildWhenWeMetNote(input.cardUrl, input.scannedAt);
   const lines = [
@@ -54,8 +91,9 @@ export function buildCardVcard(input: CardVcardInput) {
   if (input.jobTitle?.trim()) lines.push(`TITLE:${escapeVcard(input.jobTitle.trim())}`);
   if (input.company?.trim()) lines.push(`ORG:${escapeVcard(input.company.trim())}`);
 
-  let primaryUrl: string | null = null;
-  const socialLines: string[] = [];
+  const labeledUrls: Array<{ label: string; href: string }> = [];
+  let primaryWebsite: string | null = null;
+  let itemIndex = 1;
 
   for (const method of input.methods) {
     const value = method.value.trim();
@@ -75,6 +113,10 @@ export function buildCardVcard(input: CardVcardInput) {
     if (method.method_type === "whatsapp") {
       const tel = normalizeTel(value);
       if (tel.length >= 5) lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
+      const href = contactMethodHref({ type: method.method_type, value });
+      if (href?.startsWith("http")) {
+        labeledUrls.push({ label: methodLabel(method), href });
+      }
       continue;
     }
 
@@ -86,31 +128,22 @@ export function buildCardVcard(input: CardVcardInput) {
     const href = contactMethodHref({ type: method.method_type, value });
     if (!href?.startsWith("http")) continue;
 
-    if (method.method_type === "linkedin") {
-      socialLines.push(`X-SOCIALPROFILE;type=linkedin:${escapeVcard(href)}`);
-      continue;
+    if ((method.method_type === "website" || method.method_type === "link") && !primaryWebsite) {
+      primaryWebsite = href;
     }
 
-    if ((method.method_type === "website" || method.method_type === "link") && !primaryUrl) {
-      primaryUrl = href;
-      continue;
-    }
-
-    socialLines.push(`X-SOCIALPROFILE;type=${escapeVcard(method.method_type)}:${escapeVcard(href)}`);
+    labeledUrls.push({ label: methodLabel(method), href });
   }
 
-  if (!primaryUrl) {
-    for (const method of input.methods) {
-      const href = contactMethodHref({ type: method.method_type, value: method.value.trim() });
-      if (href?.startsWith("http") && method.method_type !== "linkedin") {
-        primaryUrl = href;
-        break;
-      }
-    }
+  if (primaryWebsite) {
+    lines.push(`URL:${escapeVcard(primaryWebsite)}`);
   }
 
-  if (primaryUrl) lines.push(`URL:${escapeVcard(primaryUrl)}`);
-  lines.push(...socialLines);
+  for (const entry of labeledUrls) {
+    if (primaryWebsite && entry.href === primaryWebsite) continue;
+    appendLabeledUrl(lines, itemIndex, entry.label, entry.href);
+    itemIndex += 1;
+  }
 
   const noteParts = [input.bio?.trim(), whenWeMetNote].filter(Boolean);
   lines.push(`NOTE:${escapeVcard(noteParts.join("\n\n"))}`);

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { IdentificationCard, Plus, QrCode } from 'phosphor-react-native';
+import { IdentificationCard, Plus, Scan } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
@@ -12,12 +12,21 @@ export default function CardLibraryScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <Eyebrow>{syncing ? 'Syncing…' : 'My cards'}</Eyebrow>
-        <Title>Choose a card to open</Title>
-        <Body>
-          You can create up to {MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.
-        </Body>
+      <View style={styles.topBar}>
+        <View style={styles.header}>
+          <Eyebrow>{syncing ? 'Syncing…' : 'My cards'}</Eyebrow>
+          <Title>Choose a card to open</Title>
+          <Body>
+            You can create up to {MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.
+          </Body>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Scan QR code"
+          onPress={() => router.push('/scanner')}
+          style={styles.scanButton}>
+          <Scan size={22} color={colors.ink} weight="bold" />
+        </Pressable>
       </View>
 
       <View style={styles.grid}>
@@ -34,7 +43,6 @@ export default function CardLibraryScreen() {
               style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
               <View style={[styles.cover, { backgroundColor: item.theme }]}>
                 <Text style={styles.coverLetter}>{item.company[0] || item.name[0] || 'A'}</Text>
-                <QrCode size={20} color={colors.ink} weight="bold" />
               </View>
               <View style={styles.tileBody}>
                 <Text style={styles.cardNumber}>Card {index + 1}</Text>
@@ -85,7 +93,23 @@ export default function CardLibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.x2, gap: spacing.x3 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.x3,
+  },
+  header: { flex: 1, paddingTop: spacing.x2, gap: spacing.x3 },
+  scanButton: {
+    width: 44,
+    height: 44,
+    marginTop: spacing.x2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
   grid: { gap: spacing.x4 },
   cardTile: {
     overflow: 'hidden',

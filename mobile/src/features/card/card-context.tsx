@@ -43,6 +43,7 @@ type CardValue = {
   sync: () => Promise<void>;
   publish: () => Promise<boolean>;
   publishCard: (id?: string) => Promise<boolean>;
+  deleteCard: (id: string) => Promise<boolean>;
 };
 
 const CardContext = createContext<CardValue | null>(null);
@@ -219,7 +220,7 @@ export function CardProvider({ children }: PropsWithChildren) {
         p_bio: target.bio,
         p_theme_color: normalizeThemeColor(target.theme),
         p_profile_image_url: target.photo,
-        p_company_logo_url: target.companyLogo,
+        p_company_logo_url: target.showCompanyLogo !== false ? target.companyLogo : '',
         p_cover_image_url: target.coverPhoto,
         p_methods: target.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
       });
@@ -233,6 +234,27 @@ export function CardProvider({ children }: PropsWithChildren) {
       setPublishing(false);
     }
   }, [activeCard, activeCardId, cards, session, updateCardById]);
+
+  const deleteCard = useCallback(async (id: string) => {
+    const currentCards = cardsRef.current;
+    const target = currentCards.find((item) => item.id === id);
+    if (!target?.id) return false;
+
+    const supabase = getSupabase();
+    if (supabase && session) {
+      const { error } = await supabase.from('cards').update({ status: 'archived' }).eq('id', id);
+      if (error) throw error;
+    }
+
+    let nextCards = currentCards.filter((item) => item.id !== id);
+    if (!nextCards.length) nextCards = [createMobileCard()];
+    const nextActiveId = getActiveCardId(
+      nextCards,
+      activeCardIdRef.current === id ? nextCards[0]?.id || '' : activeCardIdRef.current,
+    );
+    await persistCards(nextCards, nextActiveId);
+    return true;
+  }, [persistCards, session]);
 
   const getCardById = useCallback(
     (cardId: string) => cards.find((item) => item.id === cardId),
@@ -273,12 +295,14 @@ export function CardProvider({ children }: PropsWithChildren) {
       sync,
       publish: () => publishCard(activeCardId),
       publishCard,
+      deleteCard,
     };
   }, [
     activeCard,
     activeCardId,
     cards,
     createCard,
+    deleteCard,
     loading,
     publishCard,
     publishError,

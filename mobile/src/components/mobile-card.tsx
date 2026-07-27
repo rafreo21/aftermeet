@@ -20,7 +20,15 @@ export function MobileCardPreview({ card, compact = false }: { card: MobileCard;
       <View style={[styles.cover, { backgroundColor: card.theme }]}>
         {card.coverPhoto ? <Image alt="" source={card.coverPhoto} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
         <View style={styles.companyRow}>
-          <View style={styles.logo}>{card.companyLogo ? <Image alt={`${card.company} logo`} source={card.companyLogo} style={styles.fill} /> : <Text style={styles.logoText}>{card.company[0] || 'A'}</Text>}</View>
+          {card.showCompanyLogo !== false ? (
+            <View style={styles.logo}>
+              {card.companyLogo ? (
+                <Image alt={`${card.company} logo`} source={card.companyLogo} style={styles.fill} />
+              ) : (
+                <Text style={styles.logoText}>{card.company[0] || 'A'}</Text>
+              )}
+            </View>
+          ) : null}
           <Text style={styles.company}>{card.company}</Text>
         </View>
       </View>

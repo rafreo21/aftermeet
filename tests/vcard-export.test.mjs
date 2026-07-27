@@ -29,7 +29,8 @@ test("buildCardVcard writes structured name fields for iOS and Android", () => {
   assert.match(body, /TITLE:Product Designer/);
   assert.match(body, /EMAIL;TYPE=INTERNET:rafreo21@gmail.com/);
   assert.match(body, /URL:https:\/\/rafreo\.webflow\.io/);
-  assert.match(body, /X-SOCIALPROFILE;type=linkedin:https:\/\/linkedin\.com\/in\/rafreo/);
+  assert.match(body, /item1\.URL:https:\/\/linkedin\.com\/in\/rafreo/);
+  assert.match(body, /item1\.X-ABLabel:LinkedIn/);
   assert.doesNotMatch(body, /URL:https:\/\/aftermeet-beta\.vercel\.app/);
   assert.match(body, /NOTE:.*When we met: 26 July 2026/s);
   assert.match(body, /END:VCARD\r\n$/);
@@ -53,4 +54,23 @@ test("buildCardVcard slugifies the download filename", () => {
   });
 
   assert.equal(filename, "raphael-okojie");
+});
+
+test("buildCardVcard exports every social link with labels for phone contacts", () => {
+  const { body } = buildCardVcard({
+    fullName: "Alex Morgan",
+    cardUrl: "https://aftermeet.app/c/alex",
+    methods: [
+      { method_type: "x", value: "@alexm" },
+      { method_type: "instagram", value: "alexm", label: "Instagram" },
+      { method_type: "tiktok", value: "@alexm" },
+      { method_type: "linkedin", value: "alex-morgan" },
+    ],
+  });
+
+  assert.match(body, /item1\.URL:https:\/\/x\.com\/alexm/);
+  assert.match(body, /item1\.X-ABLabel:X/);
+  assert.match(body, /item2\.URL:https:\/\/instagram\.com\/alexm/);
+  assert.match(body, /item3\.URL:https:\/\/tiktok\.com\/@alexm/);
+  assert.match(body, /item4\.URL:https:\/\/linkedin\.com\/in\/alex-morgan/);
 });

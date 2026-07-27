@@ -29,6 +29,7 @@ export function createMobileCard(seed: Partial<MobileCard> = {}): MobileCard {
     photo: seed.photo || '',
     companyLogo: seed.companyLogo || '',
     coverPhoto: seed.coverPhoto || '',
+    showCompanyLogo: seed.showCompanyLogo ?? true,
     status: seed.status || 'draft',
     methods: seed.methods || [],
   };
@@ -72,6 +73,7 @@ export function remoteRowToMobileCard(remote: {
     photo: remote.profile_image_url || '',
     companyLogo: remote.company_logo_url || '',
     coverPhoto: remote.cover_image_url || '',
+    showCompanyLogo: true,
     status: remote.status === 'published' ? 'published' : 'draft',
     methods: (remote.card_methods || [])
       .sort((left, right) => left.sort_order - right.sort_order)

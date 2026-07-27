@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, CheckCircle, Image as ImageIcon, Palette, UserCircle, ListChecks } from 'phosphor-react-native';
 import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { MethodListEditor } from '@/components/method-list-editor';
 import { MobileCardPreview } from '@/components/mobile-card';
@@ -339,11 +339,21 @@ export default function EditCardScreen() {
                 </View>
               </View>
 
+              <View style={styles.reviewOption}>
+                <View style={styles.reviewOptionCopy}>
+                  <Text style={styles.reviewOptionTitle}>Company logo</Text>
+                  <Text style={styles.reviewOptionHint}>Show your logo on the card cover</Text>
+                </View>
+                <Switch
+                  accessibilityLabel="Show company logo"
+                  value={draft.showCompanyLogo !== false}
+                  onValueChange={(value) => updateField('showCompanyLogo', value)}
+                  trackColor={{ false: colors.line, true: colors.accent }}
+                  thumbColor={colors.surface}
+                />
+              </View>
+
               {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
-              <Button loading={publishing} onPress={() => void publish()}>
-                <CheckCircle size={18} color={colors.ink} weight="fill" />
-                Save and publish
-              </Button>
             </View>
           ) : null}
         </ScrollView>
@@ -358,7 +368,12 @@ export default function EditCardScreen() {
             <Button style={{ flex: 1 }} onPress={() => setStep(step + 1)}>
               Continue
             </Button>
-          ) : null}
+          ) : (
+            <Button style={{ flex: 1 }} loading={publishing} onPress={() => void publish()}>
+              <CheckCircle size={18} color={colors.ink} weight="fill" />
+              Save and publish
+            </Button>
+          )}
         </View>
       </View>
     </View>
@@ -551,6 +566,20 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   statLabel: { color: colors.muted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  reviewOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.x4,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  reviewOptionCopy: { flex: 1, gap: 4 },
+  reviewOptionTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  reviewOptionHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 12, lineHeight: 18 },
   footer: {
     flexDirection: 'row',

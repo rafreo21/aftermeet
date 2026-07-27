@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
-import { GlobeIcon } from "@phosphor-icons/react/dist/csr/Globe";
-import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple";
-import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
-import { PhoneIcon } from "@phosphor-icons/react/dist/csr/Phone";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { Button } from "../../components/Button";
+import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { PublicAppDownloadPrompt } from "../../components/PublicAppDownloadPrompt";
 import { contactMethodHref } from "@/lib/contact-methods";
 import { PublicExchangeForm } from "./PublicExchangeForm";
@@ -25,14 +21,6 @@ type Step = "save" | "share";
 function isIosDevice() {
   if (typeof navigator === "undefined") return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
-
-function MethodIcon({ type }: { type: string }) {
-  if (type === "email") return <EnvelopeSimpleIcon aria-hidden size={21} weight="bold" />;
-  if (type === "phone" || type === "whatsapp") return <PhoneIcon aria-hidden size={21} weight="bold" />;
-  if (type === "address") return <MapPinIcon aria-hidden size={21} weight="bold" />;
-  if (type === "website") return <GlobeIcon aria-hidden size={21} weight="bold" />;
-  return <LinkSimpleIcon aria-hidden size={21} weight="bold" />;
 }
 
 function PublicCardView({
@@ -88,6 +76,7 @@ function PublicCardView({
                 value: method.value,
               });
               if (!href) return null;
+              const displayValue = href.startsWith("http") ? href : method.value;
               return (
                 <a
                   key={method.id}
@@ -95,10 +84,10 @@ function PublicCardView({
                   target={href.startsWith("http") ? "_blank" : undefined}
                   rel="noreferrer"
                 >
-                  <MethodIcon type={method.method_type} />
+                  <ContactMethodIcon type={method.method_type} />
                   <span>
                     <strong>{method.label || method.method_type}</strong>
-                    <small>{method.value}</small>
+                    <small>{displayValue}</small>
                   </span>
                 </a>
               );
