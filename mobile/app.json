@@ -8,19 +8,29 @@
     "scheme": "aftermeet",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.aftermeet.app",
       "supportsTablet": true
     },
     "android": {
       "package": "com.aftermeet.app",
       "adaptiveIcon": {
-        "backgroundColor": "#9FE870",
+        "backgroundColor": "#87EA5C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#F5F7F3",
+      "barStyle": "dark-content",
+      "translucent": false
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#FFFFFF",
+      "barStyle": "dark-content"
     },
     "web": {
       "output": "static",
@@ -56,6 +66,20 @@
         }
       ],
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow AfterMeet to record meetings you choose to capture."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow AfterMeet to record meetings you choose to capture.",
+          "speechRecognitionPermission": "Allow AfterMeet to transcribe your meetings while you record.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      [
         "expo-widgets",
         {
           "bundleIdentifier": "com.aftermeet.app.widgets",
@@ -74,11 +98,16 @@
           ]
         }
       ],
-      "./plugins/withAndroidQuickShareWidget"
+      "./plugins/withAndroidQuickShareWidget",
+      [
+        "react-native-nfc-manager",
+        {
+          "nfcPermission": "Allow AfterMeet to program NFC tags with your card link."
+        }
+      ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "publicCardBaseUrl": "https://aftermeet-beta.vercel.app"

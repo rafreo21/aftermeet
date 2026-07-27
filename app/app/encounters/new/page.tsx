@@ -31,6 +31,7 @@ import {
   type EncounterExtractionDraft,
 } from "../../../../lib/encounter-extraction";
 import { cleanLiveTranscript } from "../../../../lib/transcript-cleanup";
+import { transcribeEncounterAudioBlob } from "../../../../lib/encounter-transcription-client";
 import {
   deleteLocalRecording,
   removeExpiredLocalRecordings,
@@ -132,6 +133,8 @@ export default function NewEncounterPage() {
   const sampleRateRef = useRef(44100);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptFeedbackRef = useRef<number | null>(null);
+  const transcriptStatusRef = useRef<"idle" | "listening" | "receiving" | "unavailable" | "transcribing">("idle");
+  const liveTranscriptReceivedRef = useRef(false);
   const transcriptAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const recordingStateRef = useRef<RecordingState>("idle");
   const finalTranscriptRef = useRef("");
@@ -149,7 +152,7 @@ export default function NewEncounterPage() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [transcriptSupported, setTranscriptSupported] = useState(true);
-  const [transcriptStatus, setTranscriptStatus] = useState<"idle" | "listening" | "receiving" | "unavailable">("idle");
+  const [transcriptStatus, setTranscriptStatus] = useState<"idle" | "listening" | "receiving" | "unavailable" | "transcribing">("idle");
   const [audioLevel, setAudioLevel] = useState(0);
   const [draftMessage, setDraftMessage] = useState("");
   const [draftSource, setDraftSource] = useState<"ai" | "heuristic" | "">("");
@@ -195,6 +198,10 @@ export default function NewEncounterPage() {
     if (transcriptFeedbackRef.current) window.clearTimeout(transcriptFeedbackRef.current);
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
   }, []);
+
+  useEffect(() => {
+    transcriptStatusRef.current = transcriptStatus;
+  }, [transcriptStatus]);
 
   useEffect(() => {
     void removeExpiredLocalRecordings().catch(() => {});
@@ -260,6 +267,32 @@ export default function NewEncounterPage() {
     setInterimTranscript("");
     setForm((current) => ({ ...current, transcript: cleaned }));
     return cleaned;
+  }
+
+  async function maybeTranscribeFromServer(blob: Blob, cleanedTranscript: string) {
+    const needsServer =
+      cleanedTranscript.trim().length < 20 ||
+      transcriptStatusRef.current === "unavailable" ||
+      !liveTranscriptReceivedRef.current;
+    if (!needsServer) return cleanedTranscript;
+
+    setTranscriptStatus("transcribing");
+    const result = await transcribeEncounterAudioBlob(blob, { language: "en" });
+    if (result.transcript) {
+      finalTranscriptRef.current = result.transcript;
+      setForm((current) => ({ ...current, transcript: result.transcript }));
+      setTranscriptStatus("idle");
+      return result.transcript;
+    }
+
+    setTranscriptStatus("unavailable");
+    if (result.unavailable === "ai_not_configured") {
+      setDraftMessage("Live speech-to-text is unavailable here. Paste or type a transcript, or configure AI Gateway for server transcription.");
+    } else {
+      setDraftMessage("Could not transcribe this recording automatically. Paste or type what was said.");
+    }
+    setDraftSource("");
+    return cleanedTranscript;
   }
 
   async function generateMeetingContext(transcript = finalTranscriptRef.current || form.transcript) {
@@ -412,6 +445,7 @@ export default function NewEncounterPage() {
   }
 
   function startTranscript() {
+    liveTranscriptReceivedRef.current = false;
     const speechWindow = window as typeof window & {
       SpeechRecognition?: new () => SpeechRecognitionLike;
       webkitSpeechRecognition?: new () => SpeechRecognitionLike;
@@ -443,6 +477,7 @@ export default function NewEncounterPage() {
           interim += `${interim ? " " : ""}${text}`;
         }
       }
+      if (interim || finalTranscriptRef.current) liveTranscriptReceivedRef.current = true;
       if (finalTranscriptRef.current) {
         const cleaned = cleanLiveTranscript(finalTranscriptRef.current);
         finalTranscriptRef.current = cleaned;
@@ -531,18 +566,19 @@ export default function NewEncounterPage() {
     }
   }
 
-  function stopRecording() {
+  async function stopRecording() {
     if (recordingStateRef.current === "stopped") return;
     recordingStateRef.current = "stopped";
     const exactSeconds = recordedFramesRef.current / sampleRateRef.current;
     setSeconds(Math.max(0, Math.round(exactSeconds)));
-    const cleanedTranscript = finalizeTranscript();
+    let cleanedTranscript = finalizeTranscript();
     releaseRecorderResources();
     const blob = wavBlob(pcmChunksRef.current, sampleRateRef.current);
     audioBlobRef.current = blob;
     setRecordingSource("recorded");
     replaceAudioUrl(URL.createObjectURL(blob));
     setAudioLevel(0);
+    cleanedTranscript = await maybeTranscribeFromServer(blob, cleanedTranscript);
     if (cleanedTranscript) {
       window.setTimeout(() => generateMeetingContext(cleanedTranscript), 0);
     }
@@ -574,6 +610,15 @@ export default function NewEncounterPage() {
     replaceAudioUrl(url);
     setTranscriptOpen(true);
     setRecordingState("stopped");
+    finalTranscriptRef.current = "";
+    setForm((current) => ({ ...current, transcript: "" }));
+    setTranscriptStatus("transcribing");
+    setDraftMessage("Transcribing imported recording…");
+    const serverTranscript = await maybeTranscribeFromServer(file, "");
+    if (serverTranscript.trim().length >= 20) {
+      void generateMeetingContext(serverTranscript);
+      return;
+    }
     setTranscriptStatus("idle");
     setDraftMessage("Recording imported. Add or paste its transcript, then draft the meeting context.");
     const audio = new Audio(url);
@@ -790,7 +835,7 @@ export default function NewEncounterPage() {
               if (Number.isFinite(duration)) setSeconds(Math.round(duration));
             }}>Your browser does not support audio playback.</audio>}
             {transcriptOpen && <div className="live-transcript">
-              <header><div><strong>Live transcript</strong><small>{transcriptStatus === "receiving" ? "Receiving speech live" : transcriptStatus === "listening" ? "Listening for words…" : transcriptStatus === "unavailable" ? "Live transcription unavailable—audio is still recording" : "Editable meeting record"}</small></div></header>
+              <header><div><strong>Live transcript</strong><small>{transcriptStatus === "receiving" ? "Receiving speech live" : transcriptStatus === "listening" ? "Listening for words…" : transcriptStatus === "transcribing" ? "Transcribing recording…" : transcriptStatus === "unavailable" ? "Live transcription unavailable—audio is still recording" : "Editable meeting record"}</small></div></header>
               <textarea
                 ref={transcriptAreaRef}
                 aria-label="Live transcript"
@@ -812,7 +857,7 @@ export default function NewEncounterPage() {
                 }}
                 placeholder={transcriptSupported ? "Your transcript will appear here while you record…" : "Live transcription is unavailable in this browser. Paste or type the transcript here."}
               />
-              {!transcriptSupported && <small>Audio recording is working, but this browser could not provide live speech-to-text. You can type or paste a transcript here after recording.</small>}
+              {!transcriptSupported && <small>Audio recording is working, but this browser could not provide live speech-to-text. AfterMeet will transcribe the recording when you stop, or you can type or paste a transcript here.</small>}
               {draftMessage && <p className="encounter-draft-note"><span className="encounter-draft-label">{draftSource === "ai" ? "AI draft" : "Suggested draft"}</span>{draftMessage.replace(/^(AI draft|Suggested draft)[^—]*—\s*/, "")}{draftLoading ? " Generating…" : ""}</p>}
               {uncertainFields.length > 0 && <p className="encounter-draft-uncertain">Double-check: {uncertainFields.join(", ")}</p>}
             </div>}

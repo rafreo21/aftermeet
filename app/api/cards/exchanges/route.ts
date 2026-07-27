@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { createClient } from "../../../../lib/supabase/server";
+import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
 
-export async function GET() {
-  const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) {
+export async function GET(request: Request) {
+  const user = await resolveApiUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   }
 
+  const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase
     .from("card_exchanges")
     .select("id, visitor_name, visitor_email, visitor_company, visitor_role, note, status, created_at, cards(full_name, slug)")
@@ -24,11 +24,12 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) {
+  const user = await resolveApiUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   }
+
+  const supabase = await createApiSupabaseClient(request);
 
   const body = await request.json().catch(() => null) as { id?: string; status?: string } | null;
   const id = typeof body?.id === "string" ? body.id : "";

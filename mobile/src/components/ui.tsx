@@ -5,20 +5,84 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  type StyleProp,
   type TextStyle,
   View,
   type ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { ArrowLeft } from 'phosphor-react-native';
 
+import { useAppInsets, useTabBarHeight } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-export function Screen({ children, scroll = true, style }: PropsWithChildren<{ scroll?: boolean; style?: ViewStyle }>) {
-  const content = <View style={[styles.screenContent, style]}>{children}</View>;
+type ScreenProps = PropsWithChildren<{
+  scroll?: boolean;
+  style?: ViewStyle;
+  edges?: Array<'top' | 'bottom' | 'left' | 'right'>;
+  reserveTabBar?: boolean;
+}>;
+
+export function Screen({
+  children,
+  scroll = true,
+  style,
+  edges = ['top'],
+  reserveTabBar = true,
+}: ScreenProps) {
+  const insets = useAppInsets();
+  const tabBarHeight = useTabBarHeight();
+  const paddingTop = edges.includes('top') ? insets.top + spacing.x2 : 0;
+  const paddingBottom = (edges.includes('bottom') ? insets.bottom : 0)
+    + (reserveTabBar ? tabBarHeight : spacing.x6);
+
+  const content = (
+    <View
+      style={[
+        styles.screenContent,
+        { paddingTop, paddingBottom },
+        style,
+      ]}>
+      {children}
+    </View>
+  );
+
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      {scroll ? <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>{content}</ScrollView> : content}
-    </SafeAreaView>
+    <View style={styles.safe}>
+      {scroll ? (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {content}
+        </ScrollView>
+      ) : content}
+    </View>
+  );
+}
+
+export function ScreenFrame({
+  children,
+  style,
+  edges = ['top', 'bottom'],
+  paddingHorizontal = spacing.x5,
+}: PropsWithChildren<{
+  style?: ViewStyle;
+  edges?: Array<'top' | 'bottom' | 'left' | 'right'>;
+  paddingHorizontal?: number;
+}>) {
+  const insets = useAppInsets();
+
+  return (
+    <View
+      style={[
+        styles.safe,
+        {
+          paddingTop: edges.includes('top') ? insets.top + spacing.x2 : 0,
+          paddingBottom: edges.includes('bottom') ? insets.bottom + spacing.x5 : spacing.x5,
+          paddingHorizontal,
+        },
+        style,
+      ]}>
+      {children}
+    </View>
   );
 }
 
@@ -26,7 +90,7 @@ export function Eyebrow({ children }: PropsWithChildren) {
   return <Text style={styles.eyebrow}>{children}</Text>;
 }
 
-export function Title({ children, style }: PropsWithChildren<{ style?: TextStyle }>) {
+export function Title({ children, style }: PropsWithChildren<{ style?: StyleProp<TextStyle> }>) {
   return <Text style={[styles.title, style]}>{children}</Text>;
 }
 
@@ -36,6 +100,40 @@ export function Body({ children, style }: PropsWithChildren<{ style?: TextStyle 
 
 export function Panel({ children, style }: PropsWithChildren<{ style?: ViewStyle }>) {
   return <View style={[styles.panel, style]}>{children}</View>;
+}
+
+export function BackButton({ onPress, style }: { onPress?: () => void; style?: ViewStyle }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+      onPress={onPress ?? (() => router.back())}
+      style={[styles.backButton, style]}>
+      <ArrowLeft size={20} color={colors.ink} weight="bold" />
+    </Pressable>
+  );
+}
+
+export function PageHeader({
+  eyebrow,
+  title,
+  titleStyle,
+  onBack,
+}: {
+  eyebrow?: string;
+  title: string;
+  titleStyle?: StyleProp<TextStyle>;
+  onBack?: () => void;
+}) {
+  return (
+    <View style={styles.pageHeader}>
+      <BackButton onPress={onBack} />
+      <View style={styles.pageHeaderCopy}>
+        {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+        <Text style={[styles.title, styles.pageHeaderTitle, titleStyle]}>{title}</Text>
+      </View>
+    </View>
+  );
 }
 
 type ButtonProps = {
@@ -75,7 +173,7 @@ export function Button({ children, onPress, variant = 'primary', disabled, loadi
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   scroll: { flexGrow: 1 },
-  screenContent: { flex: 1, paddingHorizontal: spacing.x5, paddingBottom: 120, gap: spacing.x5 },
+  screenContent: { flex: 1, paddingHorizontal: spacing.x5, gap: spacing.x5 },
   eyebrow: { color: colors.muted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
   title: { color: colors.ink, fontSize: 40, lineHeight: 42, fontWeight: '700', letterSpacing: -1.5 },
   body: { color: colors.muted, fontSize: 15, lineHeight: 22 },
@@ -88,4 +186,18 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   buttonTextSecondary: { color: colors.ink },
   buttonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.x2 },
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    alignSelf: 'flex-start',
+  },
+  pageHeader: {
+    gap: spacing.x3,
+  },
+  pageHeaderCopy: { gap: spacing.x2 },
+  pageHeaderTitle: { fontSize: 32, lineHeight: 34, letterSpacing: -1.1 },
 });

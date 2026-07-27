@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { buildActionLinkContext } from "../../../../lib/action-links";
 import type { Contact } from "../../../../lib/contacts";
 import type { Encounter, EncounterAction } from "../../../../lib/encounters";
-import { getAppUser } from "../../../../lib/auth/context";
+import { resolveApiUser } from "../../../../lib/auth/api-request";
 import { generateOutboundDraft } from "../../../../lib/outbound-draft-server";
 import { supportsOutboundDraft } from "../../../../lib/outbound-habit";
 
@@ -23,7 +23,7 @@ function isContact(value: unknown): value is Contact {
 }
 
 export async function POST(request: Request) {
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
 
   const body = await request.json().catch(() => null) as {

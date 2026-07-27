@@ -1,7 +1,9 @@
 import type { MobileCard } from '@/features/card/types';
 
 export const defaultCard: MobileCard = {
+  id: 'preview-primary-card',
   slug: 'alex-morgan',
+  label: 'My primary card',
   name: 'Alex Morgan',
   role: 'Independent Consultant',
   company: 'Northstar Advisory',

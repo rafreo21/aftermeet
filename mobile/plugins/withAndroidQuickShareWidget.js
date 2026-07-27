@@ -2,17 +2,20 @@ const {
   AndroidConfig,
   withAndroidManifest,
   withDangerousMod,
+  withMainApplication,
 } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
 const RECEIVER = '.widget.QuickShareWidgetReceiver';
+const PREFS_NAME = 'aftermeet_widget';
+const PREFS_KEY_NAME = 'name';
+const PREFS_KEY_ROLE = 'role';
+const PREFS_KEY_COMPANY = 'company';
 
 function withWidgetManifest(config) {
   return withAndroidManifest(config, (mod) => {
-    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(
-      mod.modResults,
-    );
+    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(mod.modResults);
     application.receiver = application.receiver || [];
 
     if (!application.receiver.some((item) => item.$?.['android:name'] === RECEIVER)) {
@@ -24,9 +27,7 @@ function withWidgetManifest(config) {
         },
         'intent-filter': [
           {
-            action: [
-              { $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } },
-            ],
+            action: [{ $: { 'android:name': 'android.appwidget.action.APPWIDGET_UPDATE' } }],
           },
         ],
         'meta-data': [
@@ -39,6 +40,62 @@ function withWidgetManifest(config) {
         ],
       });
     }
+
+    const usesPermission = mod.modResults.manifest['uses-permission'] || [];
+    const nfcPermissions = [
+      'android.permission.NFC',
+    ];
+    nfcPermissions.forEach((permission) => {
+      if (!usesPermission.some((item) => item.$?.['android:name'] === permission)) {
+        usesPermission.push({ $: { 'android:name': permission } });
+      }
+    });
+    mod.modResults.manifest['uses-permission'] = usesPermission;
+
+    const mainApplication = application;
+    mainApplication['uses-feature'] = mainApplication['uses-feature'] || [];
+    if (!mainApplication['uses-feature'].some((item) => item.$?.['android:name'] === 'android.hardware.nfc')) {
+      mainApplication['uses-feature'].push({
+        $: {
+          'android:name': 'android.hardware.nfc',
+          'android:required': 'false',
+        },
+      });
+    }
+
+    return mod;
+  });
+}
+
+function addPackageToMainApplication(mainApplication, packageImport, packageInstance) {
+  if (mainApplication.includes(packageImport)) {
+    return mainApplication;
+  }
+
+  const importAnchor = 'import com.facebook.react.ReactApplication';
+  const packageAnchor = 'PackageList(this).packages';
+
+  let next = mainApplication.replace(
+    importAnchor,
+    `${importAnchor}\n${packageImport}`,
+  );
+
+  next = next.replace(
+    packageAnchor,
+    `${packageInstance}\n            ${packageAnchor}`,
+  );
+
+  return next;
+}
+
+function withWidgetModule(config) {
+  return withMainApplication(config, (mod) => {
+    const packageName = config.android?.package || 'com.aftermeet.app';
+    mod.modResults.contents = addPackageToMainApplication(
+      mod.modResults.contents,
+      `import ${packageName}.widget.QuickShareWidgetPackage`,
+      `packages.add(QuickShareWidgetPackage())`,
+    );
     return mod;
   });
 }
@@ -59,6 +116,70 @@ function withWidgetFiles(config) {
       fs.mkdirSync(xmlDir, { recursive: true });
 
       fs.writeFileSync(
+        path.join(kotlinDir, 'QuickShareWidgetBridge.kt'),
+        `package ${packageName}.widget
+
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
+
+class QuickShareWidgetBridge(private val reactContext: ReactApplicationContext) :
+  ReactContextBaseJavaModule(reactContext) {
+
+  override fun getName(): String = "QuickShareWidgetBridge"
+
+  @ReactMethod
+  fun updateWidget(payload: ReadableMap, promise: Promise) {
+    try {
+      val prefs = reactContext.getSharedPreferences("${PREFS_NAME}", Context.MODE_PRIVATE)
+      prefs.edit()
+        .putString("${PREFS_KEY_NAME}", payload.getString("name") ?: "My contact card")
+        .putString("${PREFS_KEY_ROLE}", payload.getString("role") ?: "")
+        .putString("${PREFS_KEY_COMPANY}", payload.getString("company") ?: "")
+        .apply()
+
+      val manager = AppWidgetManager.getInstance(reactContext)
+      val component = ComponentName(reactContext, QuickShareWidgetReceiver::class.java)
+      val ids = manager.getAppWidgetIds(component)
+      ids.forEach { id ->
+        QuickShareWidgetReceiver.renderWidget(reactContext, manager, id)
+      }
+      promise.resolve(null)
+    } catch (error: Exception) {
+      promise.reject("WIDGET_UPDATE_FAILED", error.message, error)
+    }
+  }
+}
+`,
+      );
+
+      fs.writeFileSync(
+        path.join(kotlinDir, 'QuickShareWidgetPackage.kt'),
+        `package ${packageName}.widget
+
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ViewManager
+
+class QuickShareWidgetPackage : ReactPackage {
+  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+    return listOf(QuickShareWidgetBridge(reactContext))
+  }
+
+  override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
+    return emptyList()
+  }
+}
+`,
+      );
+
+      fs.writeFileSync(
         path.join(kotlinDir, 'QuickShareWidgetReceiver.kt'),
         `package ${packageName}.widget
 
@@ -73,7 +194,17 @@ import ${packageName}.R
 
 class QuickShareWidgetReceiver : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-    ids.forEach { id ->
+    ids.forEach { id -> renderWidget(context, manager, id) }
+  }
+
+  companion object {
+    fun renderWidget(context: Context, manager: AppWidgetManager, id: Int) {
+      val prefs = context.getSharedPreferences("${PREFS_NAME}", Context.MODE_PRIVATE)
+      val name = prefs.getString("${PREFS_KEY_NAME}", "My contact card") ?: "My contact card"
+      val role = prefs.getString("${PREFS_KEY_ROLE}", "") ?: ""
+      val company = prefs.getString("${PREFS_KEY_COMPANY}", "") ?: ""
+      val subtitle = listOf(role, company).filter { it.isNotBlank() }.joinToString(" · ")
+
       val intent = Intent(Intent.ACTION_VIEW, Uri.parse("aftermeet://share-card")).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
       }
@@ -83,7 +214,13 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
+
       val views = RemoteViews(context.packageName, R.layout.aftermeet_quick_share_widget)
+      views.setTextViewText(R.id.aftermeet_widget_name, name)
+      views.setTextViewText(
+        R.id.aftermeet_widget_subtitle,
+        if (subtitle.isBlank()) "Tap to open your QR code" else subtitle
+      )
       views.setOnClickPendingIntent(R.id.aftermeet_widget_root, pendingIntent)
       views.setOnClickPendingIntent(R.id.aftermeet_widget_button, pendingIntent)
       manager.updateAppWidget(id, views)
@@ -112,6 +249,7 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
     android:textSize="11sp"
     android:textStyle="bold" />
   <TextView
+    android:id="@+id/aftermeet_widget_name"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:layout_marginTop="6dp"
@@ -119,6 +257,14 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
     android:textColor="#163300"
     android:textSize="21sp"
     android:textStyle="bold" />
+  <TextView
+    android:id="@+id/aftermeet_widget_subtitle"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:text="Tap to open your QR code"
+    android:textColor="#667363"
+    android:textSize="12sp" />
   <TextView
     android:id="@+id/aftermeet_widget_button"
     android:layout_width="wrap_content"
@@ -175,5 +321,5 @@ class QuickShareWidgetReceiver : AppWidgetProvider() {
 }
 
 module.exports = function withAndroidQuickShareWidget(config) {
-  return withWidgetFiles(withWidgetManifest(config));
+  return withWidgetModule(withWidgetFiles(withWidgetManifest(config)));
 };

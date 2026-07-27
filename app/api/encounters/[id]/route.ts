@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
 
-import { getAppUser } from "../../../../lib/auth/context";
+import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../../lib/encounters";
-import { createClient } from "../../../../lib/supabase/server";
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ preview: true }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase
     .from("encounters")
     .select("*")

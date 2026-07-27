@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 import {
   libraryCardFromRows,
   libraryCardToRow,
@@ -8,8 +9,6 @@ import {
   type CardRow,
 } from "../../../lib/cards-server";
 import type { LibraryCard } from "../../../lib/card-library";
-import { getAppUser } from "../../../lib/auth/context";
-import { createClient } from "../../../lib/supabase/server";
 
 const slugPattern = /^card-[a-f0-9]{16}$|^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const themePattern = /^#[0-9A-Fa-f]{6}$/;
@@ -21,7 +20,7 @@ function isLibraryCard(value: unknown): value is LibraryCard {
 }
 
 async function findExistingCard(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createApiSupabaseClient>>,
   workspaceId: string,
   card: LibraryCard,
 ) {
@@ -46,7 +45,7 @@ async function findExistingCard(
 }
 
 async function loadMethods(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createApiSupabaseClient>>,
   cardId: string,
 ) {
   const { data } = await supabase
@@ -58,14 +57,14 @@ async function loadMethods(
   return (data ?? []) as CardMethodRow[];
 }
 
-export async function GET() {
-  const user = await getAppUser();
+export async function GET(request: Request) {
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ cards: [], preview: true }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   let query = supabase
     .from("cards")
     .select("*")
@@ -93,7 +92,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     const body = await request.json().catch(() => null) as LibraryCard | null;
@@ -108,7 +107,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Complete the card name, slug, and theme before saving." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const existing = await findExistingCard(supabase, user.workspaceId, body);
   const status = existing?.status === "published" ? "published" : "draft";
   const row = {

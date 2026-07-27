@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { getAppUser } from "../../../../lib/auth/context";
+import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
 import { extractEncounterDraft } from "../../../../lib/encounter-extraction-server";
 
 export async function POST(request: Request) {
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) {
     return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   }

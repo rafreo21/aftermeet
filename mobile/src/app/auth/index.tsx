@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
-import { ArrowRight, EnvelopeSimple, X } from 'phosphor-react-native';
+import { ArrowRight, EnvelopeSimple } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Body, Button, Eyebrow, Screen, Title } from '@/components/ui';
+import { BrandMark } from '@/components/brand-mark';
+import { Body, Button, PageHeader, Screen } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
+import { consumeAuthReturnPath } from '@/features/encounters/capture-draft';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function AuthScreen() {
@@ -16,7 +18,11 @@ export default function AuthScreen() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (session) router.replace('/(tabs)');
+    if (!session) return;
+    void consumeAuthReturnPath().then((path) => {
+      if (path) router.replace(path as '/capture');
+      else router.replace('/(tabs)');
+    });
   }, [session]);
 
   async function submitEmail() {
@@ -36,19 +42,22 @@ export default function AuthScreen() {
     const result = await verifyEmailCode(email, code);
     setLoading(false);
     if (result.error) return setMessage(result.error);
-    router.replace('/(tabs)');
+    void consumeAuthReturnPath().then((path) => {
+      if (path) router.replace(path as '/capture');
+      else router.replace('/(tabs)');
+    });
   }
 
   return (
-    <Screen scroll={false} style={styles.screen}>
-      <View style={styles.top}>
-        <Eyebrow>Welcome</Eyebrow>
-        <Pressable onPress={() => router.back()} style={styles.close} accessibilityLabel="Close sign in">
-          <X size={20} color={colors.ink} />
-        </Pressable>
+    <Screen scroll={false} style={styles.screen} edges={['top', 'bottom']} reserveTabBar={false}>
+      <View style={styles.brandWrap}>
+        <BrandMark size={44} />
       </View>
-
-      <Title>{step === 'email' ? 'Sign in or sign up in seconds.' : 'Enter your sign-in code.'}</Title>
+      <PageHeader
+        eyebrow="Welcome"
+        title={step === 'email' ? 'Sign in or sign up in seconds.' : 'Enter your sign-in code.'}
+        titleStyle={styles.authTitle}
+      />
       <Body>
         {step === 'email'
           ? 'We’ll email you a 6-digit sign-in code.'
@@ -118,8 +127,8 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   screen: { justifyContent: 'center' },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  close: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radius.round, backgroundColor: colors.surface },
+  brandWrap: { alignItems: 'flex-start', marginBottom: spacing.x2 },
+  authTitle: { fontSize: 34, lineHeight: 36, letterSpacing: -1.2 },
   field: { minHeight: 54, paddingHorizontal: spacing.x4, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderWidth: 1, borderColor: colors.line, borderRadius: radius.medium, backgroundColor: colors.surface },
   input: { flex: 1, color: colors.ink, fontSize: 16 },
   codeInput: { letterSpacing: 8, fontSize: 24, fontWeight: '700', textAlign: 'center' },

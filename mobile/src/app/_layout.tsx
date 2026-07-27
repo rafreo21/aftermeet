@@ -1,5 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -8,8 +10,12 @@ import { CardProvider } from '@/features/card/card-context';
 import { colors } from '@/theme/tokens';
 
 export default function RootLayout() {
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(colors.canvas);
+  }, []);
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.canvas }}>
       <SafeAreaProvider>
         <AuthProvider>
           <CardProvider>
@@ -26,6 +32,8 @@ export default function RootLayout() {
               <Stack.Screen name="share-card" options={{ presentation: 'fullScreenModal' }} />
               <Stack.Screen name="scanner" options={{ presentation: 'fullScreenModal' }} />
               <Stack.Screen name="edit-card" />
+              <Stack.Screen name="capture" />
+              <Stack.Screen name="card-tools" />
             </Stack>
           </CardProvider>
         </AuthProvider>

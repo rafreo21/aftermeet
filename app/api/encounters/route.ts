@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { getAppUser } from "../../../lib/auth/context";
+import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../lib/encounters";
-import { createClient } from "../../../lib/supabase/server";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
 
-export async function GET() {
-  const user = await getAppUser();
+export async function GET(request: Request) {
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ encounters: [], preview: true }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase
     .from("encounters")
     .select("*")
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A valid encounter is required." }, { status: 400 });
   }
 
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ ok: true, preview: true }, { headers: { "Cache-Control": "private, no-store" } });
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
     audioLocation: "user_device",
   } : null;
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const { error } = await supabase.from("encounters").upsert({
     id: body.id,
     workspace_id: user.workspaceId,

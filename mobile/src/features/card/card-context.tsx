@@ -1,53 +1,132 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/features/auth/auth-context';
+import {
+  ACTIVE_CARD_KEY,
+  CARDS_STORAGE_KEY,
+  createMobileCard,
+  getActiveCardId,
+  LEGACY_CARD_KEY,
+  MAX_CARDS,
+  mobileCardToLibraryPayload,
+  remoteRowToMobileCard,
+} from '@/features/card/card-library';
+import { CARD_THEMES, normalizeThemeColor } from '@/features/card/theme-colors';
 import { defaultCard } from '@/features/card/default-card';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
 import { updateQuickShareWidget } from '@/features/card/widget-sync';
 import { readEnv } from '@/lib/env';
+import { mobileFetch } from '@/lib/mobile-api';
 import { getSupabase } from '@/lib/supabase';
 
-const STORAGE_KEY = 'aftermeet.mobile.card.v1';
-
 type CardValue = {
+  cards: MobileCard[];
   card: MobileCard;
+  activeCardId: string;
   loading: boolean;
   syncing: boolean;
   publishing: boolean;
   publishError: string;
   publicUrl: string;
+  canCreateCard: boolean;
+  getCardById: (id: string) => MobileCard | undefined;
+  cardPublicUrl: (card: MobileCard) => string;
+  isPrimaryCard: (id: string) => boolean;
+  setPrimaryCard: (id: string) => Promise<void>;
+  setActiveCard: (id: string) => Promise<void>;
+  createCard: (seed?: Partial<MobileCard>) => Promise<MobileCard | null>;
   updateCard: (changes: Partial<MobileCard>) => Promise<void>;
+  updateCardById: (id: string, changes: Partial<MobileCard>) => Promise<void>;
   addMethod: (method: ContactMethod) => Promise<void>;
   removeMethod: (id: string) => Promise<void>;
   sync: () => Promise<void>;
   publish: () => Promise<boolean>;
+  publishCard: (id?: string) => Promise<boolean>;
 };
 
 const CardContext = createContext<CardValue | null>(null);
 
+function normalizeCard(card: MobileCard): MobileCard {
+  return { ...card, theme: normalizeThemeColor(card.theme) };
+}
+
+function cardsSnapshot(cards: MobileCard[]) {
+  return JSON.stringify(cards.map(normalizeCard));
+}
+
+function mapStoredCards(raw: unknown): MobileCard[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_CARDS).map((item) => normalizeCard({ ...createMobileCard(), ...(item as MobileCard) }));
+}
+
 export function CardProvider({ children }: PropsWithChildren) {
   const { session } = useAuth();
-  const [card, setCard] = useState(defaultCard);
+  const [cards, setCards] = useState<MobileCard[]>([defaultCard]);
+  const [activeCardId, setActiveCardIdState] = useState(defaultCard.id || '');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
 
+  const cardsRef = useRef(cards);
+  const activeCardIdRef = useRef(activeCardId);
+  cardsRef.current = cards;
+  activeCardIdRef.current = activeCardId;
+
+  const activeCard = useMemo(
+    () => cards.find((item) => item.id === activeCardId) || cards[0] || defaultCard,
+    [activeCardId, cards],
+  );
+
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (stored) {
-        try { setCard({ ...defaultCard, ...JSON.parse(stored) }); } catch {}
+    Promise.all([
+      AsyncStorage.getItem(CARDS_STORAGE_KEY),
+      AsyncStorage.getItem(LEGACY_CARD_KEY),
+      AsyncStorage.getItem(ACTIVE_CARD_KEY),
+    ]).then(([storedCards, legacyCard, storedActiveId]) => {
+      let nextCards = mapStoredCards(storedCards ? JSON.parse(storedCards) : []);
+      if (!nextCards.length && legacyCard) {
+        try {
+          nextCards = [normalizeCard({ ...defaultCard, ...JSON.parse(legacyCard) as MobileCard })];
+        } catch {}
       }
+      if (!nextCards.length) nextCards = [defaultCard];
+      setCards(nextCards);
+      setActiveCardIdState(getActiveCardId(nextCards, storedActiveId));
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
-  const saveLocal = useCallback(async (next: MobileCard) => {
-    setCard(next);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    await updateQuickShareWidget(next);
+  const persistCards = useCallback(async (nextCards: MobileCard[], nextActiveId?: string) => {
+    const normalized = nextCards.map(normalizeCard);
+    const resolvedActiveId = nextActiveId ?? activeCardIdRef.current;
+    if (
+      resolvedActiveId === activeCardIdRef.current
+      && cardsSnapshot(normalized) === cardsSnapshot(cardsRef.current)
+    ) {
+      return;
+    }
+    setCards(normalized);
+    setActiveCardIdState(resolvedActiveId);
+    await AsyncStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(normalized));
+    await AsyncStorage.setItem(ACTIVE_CARD_KEY, resolvedActiveId);
+    const active = normalized.find((item) => item.id === resolvedActiveId) || normalized[0];
+    if (active) await updateQuickShareWidget(active);
   }, []);
+
+  const saveRemoteCard = useCallback(async (card: MobileCard) => {
+    if (!session?.access_token) return;
+    const response = await mobileFetch('/api/cards', session.access_token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mobileCardToLibraryPayload(card)),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || 'We couldn’t save this card.');
+    }
+  }, [session?.access_token]);
 
   const sync = useCallback(async () => {
     const supabase = getSupabase();
@@ -57,37 +136,74 @@ export function CardProvider({ children }: PropsWithChildren) {
       const { data: rawContext } = await supabase.rpc('get_my_app_context').single();
       const context = rawContext as { workspace_id?: string } | null;
       if (!context?.workspace_id) return;
-      const { data: remote } = await supabase.from('cards').select('*, card_methods(*)').eq('workspace_id', context.workspace_id).maybeSingle();
-      if (remote) {
-        await saveLocal({
-          id: remote.id,
-          slug: remote.slug,
-          name: remote.full_name,
-          role: remote.job_title || '',
-          company: remote.company || '',
-          bio: remote.bio || '',
-          theme: remote.theme_color,
-          photo: remote.profile_image_url || '',
-          companyLogo: remote.company_logo_url || '',
-          coverPhoto: remote.cover_image_url || '',
-          status: remote.status,
-          methods: (remote.card_methods || []).sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order).map((method: {
-            id: string; method_type: ContactMethod['type']; value: string; label: string;
-          }) => ({ id: method.id, type: method.method_type, value: method.value, label: method.label })),
-        });
+      const { data: remoteRows } = await supabase
+        .from('cards')
+        .select('*, card_methods(*)')
+        .eq('workspace_id', context.workspace_id)
+        .neq('status', 'archived')
+        .order('updated_at', { ascending: false })
+        .limit(MAX_CARDS);
+      if (remoteRows?.length) {
+        const remoteCards = remoteRows.map((row) => remoteRowToMobileCard(row));
+        const nextActiveId = getActiveCardId(remoteCards, activeCardIdRef.current);
+        await persistCards(remoteCards, nextActiveId);
       }
     } finally {
       setSyncing(false);
     }
-  }, [saveLocal, session]);
+  }, [persistCards, session]);
 
   useEffect(() => {
+    if (!session) return;
     const task = setTimeout(() => { void sync(); }, 0);
     return () => clearTimeout(task);
-  }, [sync]);
+  }, [session?.user?.id, sync]);
 
-  const publish = useCallback(async () => {
+  const setPrimaryCard = useCallback(async (id: string) => {
+    const currentCards = cardsRef.current;
+    if (!currentCards.some((item) => item.id === id)) return;
+    if (id === activeCardIdRef.current) return;
+    await persistCards(currentCards, id);
+  }, [persistCards]);
+
+  const createCard = useCallback(async (seed: Partial<MobileCard> = {}) => {
+    const currentCards = cardsRef.current;
+    if (currentCards.length >= MAX_CARDS) {
+      setPublishError('You can save a maximum of five cards.');
+      return null;
+    }
+    const palette = CARD_THEMES[currentCards.length % CARD_THEMES.length];
+    const card = createMobileCard({ theme: palette, ...seed });
+    const nextCards = [...currentCards, card];
+    await persistCards(nextCards, card.id!);
+    if (session?.access_token) {
+      try {
+        await saveRemoteCard(card);
+      } catch {
+        // Local card remains available even if sync fails.
+      }
+    }
+    return card;
+  }, [persistCards, saveRemoteCard, session?.access_token]);
+
+  const updateCardById = useCallback(async (id: string, changes: Partial<MobileCard>) => {
+    const current = cardsRef.current.find((item) => item.id === id);
+    if (!current) return;
+    const nextCard = normalizeCard({ ...current, ...changes, theme: normalizeThemeColor(changes.theme || current.theme) });
+    const nextCards = cardsRef.current.map((item) => (item.id === id ? nextCard : item));
+    await persistCards(nextCards);
+    if (session?.access_token) {
+      try {
+        await saveRemoteCard(nextCard);
+      } catch {
+        // Local edits remain available offline.
+      }
+    }
+  }, [persistCards, saveRemoteCard, session?.access_token]);
+
+  const publishCard = useCallback(async (id = activeCardId) => {
     const supabase = getSupabase();
+    const target = cards.find((item) => item.id === id) || activeCard;
     if (!supabase || !session) {
       setPublishError('Sign in to publish this card.');
       return false;
@@ -96,19 +212,19 @@ export function CardProvider({ children }: PropsWithChildren) {
     setPublishError('');
     try {
       const { data, error } = await supabase.rpc('publish_my_card', {
-        p_slug: card.slug,
-        p_full_name: card.name,
-        p_job_title: card.role,
-        p_company: card.company,
-        p_bio: card.bio,
-        p_theme_color: card.theme,
-        p_profile_image_url: card.photo,
-        p_company_logo_url: card.companyLogo,
-        p_cover_image_url: card.coverPhoto,
-        p_methods: card.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
+        p_slug: target.slug,
+        p_full_name: target.name,
+        p_job_title: target.role,
+        p_company: target.company,
+        p_bio: target.bio,
+        p_theme_color: normalizeThemeColor(target.theme),
+        p_profile_image_url: target.photo,
+        p_company_logo_url: target.companyLogo,
+        p_cover_image_url: target.coverPhoto,
+        p_methods: target.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
       });
       if (error) throw error;
-      await saveLocal({ ...card, id: String(data), status: 'published' });
+      await updateCardById(target.id!, { id: String(data), status: 'published' });
       return true;
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : 'Card publishing failed.');
@@ -116,24 +232,64 @@ export function CardProvider({ children }: PropsWithChildren) {
     } finally {
       setPublishing(false);
     }
-  }, [card, saveLocal, session]);
+  }, [activeCard, activeCardId, cards, session, updateCardById]);
+
+  const getCardById = useCallback(
+    (cardId: string) => cards.find((item) => item.id === cardId),
+    [cards],
+  );
+
+  const cardPublicUrl = useCallback((target: MobileCard) => {
+    const env = readEnv();
+    return `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`;
+  }, []);
 
   const value = useMemo<CardValue>(() => {
     const env = readEnv();
     return {
-      card,
+      cards,
+      card: activeCard,
+      activeCardId,
       loading,
       syncing,
       publishing,
       publishError,
-      publicUrl: `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${card.slug}`,
-      updateCard: async (changes) => saveLocal({ ...card, ...changes }),
-      addMethod: async (method) => saveLocal({ ...card, methods: [...card.methods.filter((item) => item.type !== method.type), method] }),
-      removeMethod: async (id) => saveLocal({ ...card, methods: card.methods.filter((item) => item.id !== id) }),
+      publicUrl: cardPublicUrl(activeCard),
+      canCreateCard: cards.length < MAX_CARDS,
+      getCardById,
+      cardPublicUrl,
+      isPrimaryCard: (id) => id === activeCardId,
+      setPrimaryCard,
+      setActiveCard: setPrimaryCard,
+      createCard,
+      updateCard: (changes) => updateCardById(activeCard.id!, changes),
+      updateCardById,
+      addMethod: async (method) => updateCardById(activeCard.id!, {
+        methods: [...activeCard.methods.filter((item) => item.type !== method.type), method],
+      }),
+      removeMethod: async (methodId) => updateCardById(activeCard.id!, {
+        methods: activeCard.methods.filter((item) => item.id !== methodId),
+      }),
       sync,
-      publish,
+      publish: () => publishCard(activeCardId),
+      publishCard,
     };
-  }, [card, loading, syncing, publishing, publishError, saveLocal, sync, publish]);
+  }, [
+    activeCard,
+    activeCardId,
+    cards,
+    createCard,
+    loading,
+    publishCard,
+    publishError,
+    publishing,
+    setPrimaryCard,
+    sync,
+    syncing,
+    updateCardById,
+    getCardById,
+    cardPublicUrl,
+  ]);
 
   return <CardContext.Provider value={value}>{children}</CardContext.Provider>;
 }

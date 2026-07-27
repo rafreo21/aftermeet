@@ -14,6 +14,7 @@ export type ContactMethod = {
 export type MobileCard = {
   id?: string;
   slug: string;
+  label: string;
   name: string;
   role: string;
   company: string;

@@ -1,42 +1,113 @@
 import { router } from 'expo-router';
-import { ArrowRight, QrCode, Sparkle, UserPlus } from 'phosphor-react-native';
+import { ArrowRight, CaretRight } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
+import { BrandMark } from '@/components/brand-mark';
+import { Body, Eyebrow, Screen, Title } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
 import { colors, radius, spacing } from '@/theme/tokens';
 
+const STEPS = [
+  {
+    num: '01',
+    title: 'Share or scan',
+    copy: 'Exchange details without requiring another app.',
+    route: '/share-card' as const,
+  },
+  {
+    num: '02',
+    title: 'Capture context',
+    copy: 'Record what mattered while the meeting is fresh.',
+    route: '/capture' as const,
+  },
+];
+
 export default function HomeScreen() {
   const { card } = useCard();
+
   return (
     <Screen>
-      <View style={styles.header}><Eyebrow>Good evening 👋</Eyebrow><Title>Ready for the next conversation?</Title><Body>Share your card, capture who you met, and keep every promise moving.</Body></View>
-      <Panel style={styles.hero}>
-        <View style={styles.heroIcon}><QrCode size={30} color={colors.ink} weight="bold" /></View>
-        <Text style={styles.heroTitle}>{card.name}</Text><Text style={styles.heroCopy}>Your card is published and ready to share.</Text>
-        <Button onPress={() => router.push('/share-card')}>Open sharing mode</Button>
-      </Panel>
-      <View style={styles.sectionHead}><Text style={styles.sectionTitle}>Today</Text><Text style={styles.count}>3</Text></View>
-      {[
-        { icon: Sparkle, title: 'Review AI follow-up', copy: 'Sarah · Coffee yesterday' },
-        { icon: UserPlus, title: 'Complete James’s details', copy: 'Scanned your card 2h ago' },
-      ].map(({ icon: Icon, title, copy }) => <Pressable key={title} style={styles.row}><View style={styles.rowIcon}><Icon size={20} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowCopy}>{copy}</Text></View><ArrowRight size={18} color={colors.muted} /></Pressable>)}
-      <Panel><Text style={styles.sectionTitle}>Recent people</Text><Body style={{ marginTop: 6 }}>Your relationship timeline will appear here as exchanges and encounters are captured.</Body></Panel>
+      <View style={styles.header}>
+        <View style={styles.brandRow}>
+          <BrandMark size={32} />
+          <Eyebrow>AfterMeet</Eyebrow>
+        </View>
+        <Title style={styles.title}>Share. Capture. Done.</Title>
+        <Body>The mobile app stays simple — share your card, then capture the meeting while it is fresh.</Body>
+      </View>
+
+      <View style={styles.steps}>
+        {STEPS.map((step, index) => (
+          <View key={step.num}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(step.route)}
+              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepNum}>{step.num}</Text>
+              </View>
+              <Text style={styles.stepTitle}>{step.title}</Text>
+              <Text style={styles.stepCopy}>{step.copy}</Text>
+              <View style={styles.stepAction}>
+                <Text style={styles.stepActionText}>Open</Text>
+                <CaretRight size={14} color={colors.accent} weight="bold" />
+              </View>
+            </Pressable>
+            {index < STEPS.length - 1 ? (
+              <View style={styles.connector}>
+                <ArrowRight size={16} color={colors.accent} weight="bold" />
+              </View>
+            ) : null}
+          </View>
+        ))}
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/share-card')}
+        style={styles.quickShare}>
+        <Text style={styles.quickEyebrow}>Primary card</Text>
+        <Text style={styles.quickTitle}>{card.label || card.name}</Text>
+        <Text style={styles.quickCopy}>{card.role}{card.company ? ` · ${card.company}` : ''}</Text>
+      </Pressable>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.x5, gap: spacing.x3 },
-  hero: { gap: spacing.x3, backgroundColor: colors.ink },
-  heroIcon: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center', borderRadius: radius.medium, backgroundColor: colors.accent },
-  heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800' },
-  heroCopy: { color: '#C5D3BF', marginBottom: spacing.x2 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
-  sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  count: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.round, backgroundColor: colors.accent, color: colors.ink, fontSize: 11, fontWeight: '900' },
-  row: { padding: spacing.x4, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderRadius: radius.medium, backgroundColor: colors.surface },
-  rowIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.small, backgroundColor: colors.surfaceMuted },
-  rowTitle: { color: colors.ink, fontWeight: '800' },
-  rowCopy: { marginTop: 3, color: colors.muted, fontSize: 12 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  title: { fontSize: 34, lineHeight: 36 },
+  steps: { gap: spacing.x2 },
+  stepCard: {
+    padding: spacing.x5,
+    borderRadius: radius.medium,
+    backgroundColor: colors.ink,
+    gap: spacing.x2,
+  },
+  stepCardPressed: { opacity: 0.92 },
+  stepBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
+  stepNum: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  stepTitle: { color: colors.white, fontSize: 22, fontWeight: '800' },
+  stepCopy: { color: '#C5D3BF', fontSize: 14, lineHeight: 20 },
+  stepAction: { marginTop: spacing.x2, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  stepActionText: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  connector: { alignItems: 'center', paddingVertical: 4 },
+  quickShare: {
+    padding: spacing.x5,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  quickEyebrow: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, textTransform: 'uppercase' },
+  quickTitle: { marginTop: 6, color: colors.ink, fontSize: 20, fontWeight: '800' },
+  quickCopy: { marginTop: 4, color: colors.muted, fontSize: 13, lineHeight: 18 },
 });
