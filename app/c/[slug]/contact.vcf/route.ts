@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { buildCardVcard } from "@/lib/vcard-export";
+import {
+  filterMethodsForCompanyVisibility,
+  publicCompanyField,
+} from "@/lib/card-company-display";
 
 type Params = Promise<{ slug: string }>;
 
@@ -26,15 +30,18 @@ export async function GET(request: Request, { params }: { params: Params }) {
   if (!card) return new Response("Contact card not found.", { status: 404 });
 
   const cardUrl = new URL(`/c/${slug}`, request.url).toString();
-  const methods = [...(card.card_methods || [])].sort(
-    (a, b) => a.sort_order - b.sort_order,
+  const showCompanyDetails = card.show_company_details ?? true;
+  const methods = filterMethodsForCompanyVisibility(
+    [...(card.card_methods || [])].sort((a, b) => a.sort_order - b.sort_order),
+    showCompanyDetails,
   );
   const { body, filename } = buildCardVcard({
     fullName: card.full_name,
     jobTitle: card.job_title,
-    company: card.company,
+    company: publicCompanyField(card.company, showCompanyDetails),
     bio: card.bio,
     cardUrl,
+    showCompanyDetails,
     methods: methods.map((method) => ({
       method_type: method.method_type,
       value: method.value,

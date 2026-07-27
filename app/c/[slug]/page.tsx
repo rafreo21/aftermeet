@@ -2,6 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import {
+  filterMethodsForCompanyVisibility,
+  publicCompanyField,
+  publicCompanyLogoUrl,
+} from "@/lib/card-company-display";
 import { PublicCardClient } from "./PublicCardClient";
 import "./public-card.css";
 
@@ -44,17 +49,20 @@ export default async function PublicCardPage({ params }: { params: Params }) {
   const methods = [...(card.card_methods || [])].sort(
     (a, b) => a.sort_order - b.sort_order,
   );
+  const showCompanyDetails = card.show_company_details ?? true;
   return (
     <PublicCardClient
       slug={slug}
       ownerName={card.full_name}
       jobTitle={card.job_title}
-      company={card.company}
+      company={publicCompanyField(card.company, showCompanyDetails)}
+      companyLogoUrl={publicCompanyLogoUrl(card.company_logo_url, showCompanyDetails)}
+      showCompanyDetails={showCompanyDetails}
       bio={card.bio}
       coverImageUrl={card.cover_image_url}
       profileImageUrl={card.profile_image_url}
       themeColor={card.theme_color}
-      methods={methods}
+      methods={filterMethodsForCompanyVisibility(methods, showCompanyDetails)}
     />
   );
 }

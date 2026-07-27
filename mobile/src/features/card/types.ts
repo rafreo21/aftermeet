@@ -23,7 +23,7 @@ export type MobileCard = {
   photo: string;
   companyLogo: string;
   coverPhoto: string;
-  showCompanyLogo: boolean;
+  showCompanyDetails: boolean;
   status: 'draft' | 'published';
   methods: ContactMethod[];
 };

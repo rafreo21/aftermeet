@@ -15,6 +15,7 @@ export type CardVcardInput = {
   bio?: string | null;
   cardUrl: string;
   methods: CardVcardMethod[];
+  showCompanyDetails?: boolean;
   scannedAt?: Date;
 };
 
@@ -80,6 +81,10 @@ function appendLabeledUrl(lines: string[], itemIndex: number, label: string, hre
 
 export function buildCardVcard(input: CardVcardInput) {
   const whenWeMetNote = buildWhenWeMetNote(input.cardUrl, input.scannedAt);
+  const showCompany = input.showCompanyDetails ?? true;
+  const methods = showCompany
+    ? input.methods
+    : input.methods.filter((method) => method.method_type !== "website");
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
@@ -89,13 +94,13 @@ export function buildCardVcard(input: CardVcardInput) {
   ];
 
   if (input.jobTitle?.trim()) lines.push(`TITLE:${escapeVcard(input.jobTitle.trim())}`);
-  if (input.company?.trim()) lines.push(`ORG:${escapeVcard(input.company.trim())}`);
+  if (showCompany && input.company?.trim()) lines.push(`ORG:${escapeVcard(input.company.trim())}`);
 
   const labeledUrls: Array<{ label: string; href: string }> = [];
   let primaryWebsite: string | null = null;
   let itemIndex = 1;
 
-  for (const method of input.methods) {
+  for (const method of methods) {
     const value = method.value.trim();
     if (!value) continue;
 

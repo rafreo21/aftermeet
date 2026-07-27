@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     p_profile_image_url: typeof body?.photo === "string" ? body.photo : "",
     p_company_logo_url: typeof body?.companyLogo === "string" ? body.companyLogo : "",
     p_cover_image_url: typeof body?.coverPhoto === "string" ? body.coverPhoto : "",
+    p_show_company_details: body?.showCompanyDetails !== false,
     p_methods: safeMethods,
   });
 

@@ -13,6 +13,7 @@ export type CardRow = {
   profile_image_url: string;
   company_logo_url: string;
   cover_image_url: string;
+  show_company_details: boolean;
   status: "draft" | "published" | "archived";
   published_at: string | null;
   created_at: string;
@@ -47,6 +48,7 @@ export function libraryCardFromRows(card: CardRow, methods: CardMethodRow[]): Li
     photo: card.profile_image_url,
     companyLogo: card.company_logo_url,
     coverPhoto: card.cover_image_url,
+    showCompanyDetails: card.show_company_details ?? true,
     methods: [...methods]
       .sort((left, right) => left.sort_order - right.sort_order)
       .map((method, index) => ({
@@ -79,6 +81,7 @@ export function libraryCardToRow(
     profile_image_url: card.photo,
     company_logo_url: card.companyLogo,
     cover_image_url: card.coverPhoto,
+    show_company_details: card.showCompanyDetails ?? true,
     status,
     updated_at: new Date().toISOString(),
   };

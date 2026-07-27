@@ -74,3 +74,21 @@ test("buildCardVcard exports every social link with labels for phone contacts", 
   assert.match(body, /item3\.URL:https:\/\/tiktok\.com\/@alexm/);
   assert.match(body, /item4\.URL:https:\/\/linkedin\.com\/in\/alex-morgan/);
 });
+
+test("buildCardVcard omits company fields when company details are hidden", () => {
+  const { body } = buildCardVcard({
+    fullName: "Alex Morgan",
+    cardUrl: "https://aftermeet.app/c/alex",
+    company: "Northstar Advisory",
+    showCompanyDetails: false,
+    methods: [
+      { method_type: "email", value: "alex@example.com" },
+      { method_type: "website", value: "https://northstar.example" },
+      { method_type: "linkedin", value: "alex-morgan" },
+    ],
+  });
+
+  assert.doesNotMatch(body, /ORG:/);
+  assert.doesNotMatch(body, /URL:https:\/\/northstar\.example/);
+  assert.match(body, /item1\.URL:https:\/\/linkedin\.com\/in\/alex-morgan/);
+});

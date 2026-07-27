@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, CheckCircle, Image as ImageIcon, Palette, UserCircle, ListChecks } from 'phosphor-react-native';
+import { Check, Image as ImageIcon, Palette, UserCircle, ListChecks } from 'phosphor-react-native';
 import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
@@ -341,13 +341,13 @@ export default function EditCardScreen() {
 
               <View style={styles.reviewOption}>
                 <View style={styles.reviewOptionCopy}>
-                  <Text style={styles.reviewOptionTitle}>Company logo</Text>
-                  <Text style={styles.reviewOptionHint}>Show your logo on the card cover</Text>
+                  <Text style={styles.reviewOptionTitle}>Company details</Text>
+                  <Text style={styles.reviewOptionHint}>Show your logo, company name, and website on the card</Text>
                 </View>
                 <Switch
-                  accessibilityLabel="Show company logo"
-                  value={draft.showCompanyLogo !== false}
-                  onValueChange={(value) => updateField('showCompanyLogo', value)}
+                  accessibilityLabel="Show company details"
+                  value={draft.showCompanyDetails !== false}
+                  onValueChange={(value) => updateField('showCompanyDetails', value)}
                   trackColor={{ false: colors.line, true: colors.accent }}
                   thumbColor={colors.surface}
                 />
@@ -370,7 +370,6 @@ export default function EditCardScreen() {
             </Button>
           ) : (
             <Button style={{ flex: 1 }} loading={publishing} onPress={() => void publish()}>
-              <CheckCircle size={18} color={colors.ink} weight="fill" />
               Save and publish
             </Button>
           )}

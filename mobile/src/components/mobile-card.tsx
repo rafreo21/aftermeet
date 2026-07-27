@@ -3,6 +3,7 @@ import { ArrowUpRight, EnvelopeSimple, Globe, Phone, UserCircle } from 'phosphor
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { openContactMethod } from '@/features/card/contact-actions';
+import { cardWithCompanyVisibility, showsCompanyDetails } from '@/features/card/company-display';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -14,35 +15,37 @@ const icons: Partial<Record<ContactMethod['type'], typeof EnvelopeSimple>> = {
 };
 
 export function MobileCardPreview({ card, compact = false }: { card: MobileCard; compact?: boolean }) {
-  const initials = card.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const visible = cardWithCompanyVisibility(card);
+  const showCompany = showsCompanyDetails(card);
+  const initials = visible.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   return (
     <View style={styles.card}>
-      <View style={[styles.cover, { backgroundColor: card.theme }]}>
-        {card.coverPhoto ? <Image alt="" source={card.coverPhoto} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
-        <View style={styles.companyRow}>
-          {card.showCompanyLogo !== false ? (
+      <View style={[styles.cover, { backgroundColor: visible.theme }]}>
+        {visible.coverPhoto ? <Image alt="" source={visible.coverPhoto} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
+        {showCompany && (visible.companyLogo || visible.company) ? (
+          <View style={styles.companyRow}>
             <View style={styles.logo}>
-              {card.companyLogo ? (
-                <Image alt={`${card.company} logo`} source={card.companyLogo} style={styles.fill} />
+              {visible.companyLogo ? (
+                <Image alt={`${visible.company} logo`} source={visible.companyLogo} style={styles.fill} />
               ) : (
-                <Text style={styles.logoText}>{card.company[0] || 'A'}</Text>
+                <Text style={styles.logoText}>{visible.company[0] || 'A'}</Text>
               )}
             </View>
-          ) : null}
-          <Text style={styles.company}>{card.company}</Text>
-        </View>
+            {visible.company ? <Text style={styles.company}>{visible.company}</Text> : null}
+          </View>
+        ) : null}
       </View>
       <View style={styles.body}>
-        <View style={styles.avatar}>{card.photo ? <Image alt={card.name} source={card.photo} style={styles.fill} /> : <Text style={styles.avatarText}>{initials}</Text>}</View>
-        <Text style={styles.name}>{card.name}</Text>
-        <Text style={styles.role}>{card.role}{card.company ? ` · ${card.company}` : ''}</Text>
-        {!compact && <Text style={styles.bio}>{card.bio}</Text>}
+        <View style={styles.avatar}>{visible.photo ? <Image alt={visible.name} source={visible.photo} style={styles.fill} /> : <Text style={styles.avatarText}>{initials}</Text>}</View>
+        <Text style={styles.name}>{visible.name}</Text>
+        <Text style={styles.role}>{visible.role}{visible.company ? ` · ${visible.company}` : ''}</Text>
+        {!compact && visible.bio ? <Text style={styles.bio}>{visible.bio}</Text> : null}
         <View style={styles.methods}>
-          {card.methods.slice(0, compact ? 2 : undefined).map((method) => {
+          {visible.methods.slice(0, compact ? 2 : undefined).map((method) => {
             const Icon = icons[method.type] || UserCircle;
             return (
               <Pressable key={method.id} onPress={() => openContactMethod(method)} style={({ pressed }) => [styles.method, pressed && styles.pressed]}>
-                <View style={[styles.methodIcon, { backgroundColor: card.theme }]}><Icon size={18} color={colors.ink} weight="bold" /></View>
+                <View style={[styles.methodIcon, { backgroundColor: visible.theme }]}><Icon size={18} color={colors.ink} weight="bold" /></View>
                 <View style={styles.methodCopy}><Text style={styles.methodLabel}>{method.label}</Text><Text numberOfLines={1} style={styles.methodValue}>{method.value}</Text></View>
                 <ArrowUpRight size={17} color={colors.muted} />
               </Pressable>

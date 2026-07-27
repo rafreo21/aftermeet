@@ -12,7 +12,7 @@ export const defaultCard: MobileCard = {
   photo: '',
   companyLogo: '',
   coverPhoto: '',
-  showCompanyLogo: true,
+  showCompanyDetails: true,
   status: 'published',
   methods: [
     { id: 'email', type: 'email', value: 'alex@example.com', label: 'Work email' },

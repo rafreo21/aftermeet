@@ -27,6 +27,8 @@ function PublicCardView({
   ownerName,
   jobTitle,
   company,
+  companyLogoUrl,
+  showCompanyDetails,
   bio,
   coverImageUrl,
   profileImageUrl,
@@ -37,6 +39,8 @@ function PublicCardView({
   ownerName: string;
   jobTitle: string | null;
   company: string | null;
+  companyLogoUrl: string | null;
+  showCompanyDetails: boolean;
   bio: string | null;
   coverImageUrl: string | null;
   profileImageUrl: string | null;
@@ -48,6 +52,16 @@ function PublicCardView({
     <>
       <div className="public-card-cover">
         {coverImageUrl ? <img src={coverImageUrl} alt="" /> : null}
+        {showCompanyDetails && (companyLogoUrl || company) ? (
+          <div className="public-card-company-row">
+            {companyLogoUrl ? (
+              <img src={companyLogoUrl} alt="" className="public-card-company-logo" />
+            ) : company ? (
+              <span className="public-card-company-mark">{company[0]}</span>
+            ) : null}
+            {company ? <span className="public-card-company-name">{company}</span> : null}
+          </div>
+        ) : null}
       </div>
       <div className="public-card-content">
         <div className="public-card-avatar">
@@ -114,6 +128,8 @@ export function PublicCardClient({
   ownerName,
   jobTitle,
   company,
+  companyLogoUrl,
+  showCompanyDetails,
   bio,
   coverImageUrl,
   profileImageUrl,
@@ -124,6 +140,8 @@ export function PublicCardClient({
   ownerName: string;
   jobTitle: string | null;
   company: string | null;
+  companyLogoUrl: string | null;
+  showCompanyDetails: boolean;
   bio: string | null;
   coverImageUrl: string | null;
   profileImageUrl: string | null;
@@ -224,6 +242,8 @@ export function PublicCardClient({
           ownerName={ownerName}
           jobTitle={jobTitle}
           company={company}
+          companyLogoUrl={companyLogoUrl}
+          showCompanyDetails={showCompanyDetails}
           bio={bio}
           coverImageUrl={coverImageUrl}
           profileImageUrl={profileImageUrl}

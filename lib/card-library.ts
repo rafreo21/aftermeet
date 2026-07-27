@@ -21,6 +21,7 @@ export type LibraryCard = {
   photo: string;
   companyLogo: string;
   coverPhoto: string;
+  showCompanyDetails?: boolean;
   methods: LibraryMethod[];
   createdAt: string;
   updatedAt: string;

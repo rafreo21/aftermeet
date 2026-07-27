@@ -49,7 +49,12 @@ type CardValue = {
 const CardContext = createContext<CardValue | null>(null);
 
 function normalizeCard(card: MobileCard): MobileCard {
-  return { ...card, theme: normalizeThemeColor(card.theme) };
+  const showCompanyDetails = card.showCompanyDetails ?? (card as { showCompanyLogo?: boolean }).showCompanyLogo ?? true;
+  return {
+    ...card,
+    showCompanyDetails,
+    theme: normalizeThemeColor(card.theme),
+  };
 }
 
 function cardsSnapshot(cards: MobileCard[]) {
@@ -220,8 +225,9 @@ export function CardProvider({ children }: PropsWithChildren) {
         p_bio: target.bio,
         p_theme_color: normalizeThemeColor(target.theme),
         p_profile_image_url: target.photo,
-        p_company_logo_url: target.showCompanyLogo !== false ? target.companyLogo : '',
+        p_company_logo_url: target.showCompanyDetails !== false ? target.companyLogo : '',
         p_cover_image_url: target.coverPhoto,
+        p_show_company_details: target.showCompanyDetails !== false,
         p_methods: target.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
       });
       if (error) throw error;
