@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { Button } from "../../components/Button";
-import { VisitorSignInPrompt } from "../../components/VisitorSignInPrompt";
 import { TextField } from "../../components/FormField";
 
 export function PublicExchangeForm({
   slug,
   ownerName,
+  onSent,
 }: {
   slug: string;
   ownerName: string;
+  onSent?: (visitorEmail: string) => void;
 }) {
   const [showRole, setShowRole] = useState(false);
   const [showCompany, setShowCompany] = useState(false);
@@ -23,8 +23,6 @@ export function PublicExchangeForm({
   const [visitorRole, setVisitorRole] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [exchangeId, setExchangeId] = useState("");
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -59,24 +57,12 @@ export function PublicExchangeForm({
         setError(typeof payload.error === "string" ? payload.error : "We couldn’t send your details.");
         return;
       }
-      setSent(true);
-      if (typeof payload.exchangeId === "string") setExchangeId(payload.exchangeId);
+      onSent?.(visitorEmail.trim());
     } catch {
       setError("We couldn’t reach AfterMeet. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (sent) {
-    return (
-      <div className="public-exchange-success" aria-live="polite">
-        <CheckCircleIcon size={28} weight="fill" />
-        <strong>Details sent to {ownerName}</strong>
-        <p>Want to remember who you meet? Create a light AfterMeet account.</p>
-        <VisitorSignInPrompt slug={slug} ownerName={ownerName} exchangeId={exchangeId} compact />
-      </div>
-    );
   }
 
   return (

@@ -477,6 +477,61 @@
   font-size: 13px;
 }
 
+.public-app-download {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  padding: 20px;
+  display: grid;
+  place-items: center;
+  background: rgba(22, 51, 0, .42);
+  backdrop-filter: blur(4px);
+}
+
+.public-app-download-card {
+  width: min(100%, 380px);
+  padding: 28px 24px;
+  display: grid;
+  gap: 16px;
+  border-radius: 18px;
+  background: #fff;
+  text-align: center;
+}
+
+.public-app-download-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #f1f4ef;
+  color: #163300;
+}
+
+.public-app-download-card h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -.03em;
+}
+
+.public-app-download-card p {
+  margin: 0;
+  color: #64705f;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.public-app-download-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.public-app-download-close {
+  width: 100%;
+  text-align: center;
+}
+
 @media (max-width: 520px) {
   .public-exchange-grid { grid-template-columns: 1fr; }
 }

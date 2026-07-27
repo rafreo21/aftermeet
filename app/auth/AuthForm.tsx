@@ -109,6 +109,8 @@ export function AuthForm({
         return;
       }
 
+      await supabase.rpc("link_people_connections_for_email");
+
       if (onboardingStatus !== "completed") {
         window.location.assign(visitorIntent ? visitorOnboardingPath(visitorIntent) : "/onboarding");
         return;

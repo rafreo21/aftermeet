@@ -85,6 +85,8 @@ export async function GET(request: NextRequest) {
     return redirectToAuth(request, "provisioning");
   }
 
+  await supabase.rpc("link_people_connections_for_email");
+
   if (onboardingStatus !== "completed") {
     const destination = intent ? visitorOnboardingPath(intent) : "/onboarding";
     return redirectWithSession(request, sessionResponse, destination);

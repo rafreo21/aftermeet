@@ -61,7 +61,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!supabase || !session) return;
     supabase.rpc('provision_personal_workspace').then(() => {
-      // Provisioning is idempotent and ensures every signed-in user can sync.
+      void supabase.rpc('link_people_connections_for_email');
     });
   }, [session, supabase]);
 

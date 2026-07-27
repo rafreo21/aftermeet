@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { provisionVisitorFromExchange } from "@/lib/visitor-provision-server";
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const slug = typeof body?.slug === "string" ? body.slug.trim() : "";
@@ -52,6 +54,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Confirm you agree to share your details." }, { status: 400 });
     }
     return NextResponse.json({ error: "We couldn’t send your details. Try again in a moment." }, { status: 500 });
+  }
+
+  if (visitorEmail) {
+    await provisionVisitorFromExchange({
+      email: visitorEmail,
+      displayName: visitorName,
+      exchangeId: String(data),
+    });
   }
 
   return NextResponse.json({ ok: true, exchangeId: data }, { status: 201 });

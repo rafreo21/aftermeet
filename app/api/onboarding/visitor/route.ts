@@ -38,5 +38,7 @@ export async function POST(request: Request) {
     await supabase.rpc("link_people_connection_from_scan", { p_slug: intent.slug });
   }
 
+  await supabase.rpc("link_people_connections_for_email");
+
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
 }
