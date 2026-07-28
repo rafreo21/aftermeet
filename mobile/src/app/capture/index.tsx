@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 
 import { Body, Button, PageHeader, ScreenFrame } from '@/components/ui';
+import { GreenHeroCard } from '@/components/green-hero-card';
 import { CaptureDeleteSheet } from '@/components/capture-delete-sheet';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
@@ -208,25 +209,18 @@ export default function CaptureHomeScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void loadHome(true)} tintColor={colors.ink} />
           }>
-          <View style={styles.hero}>
-            <View style={styles.heroIcon}>
-              <Microphone size={28} color={colors.white} weight="fill" />
-            </View>
-            <Text style={styles.heroTitle}>Capture while it is fresh</Text>
-            <Body style={styles.heroCopy}>
-              Record the meeting, pull out private notes and a shared summary, then add a follow-up before you forget.
-            </Body>
-            <Button onPress={() => void beginFreshCapture()}>
-              Begin capture
-            </Button>
-          </View>
+          <GreenHeroCard
+            icon={<Microphone size={28} color={colors.white} weight="fill" />}
+            title="Capture while it is fresh"
+            copy="Record the meeting, pull out private notes and a shared summary, then add a follow-up before you forget."
+            primaryLabel="Begin capture"
+            onPrimary={() => void beginFreshCapture()}
+            secondaryLabel={session ? undefined : 'Sign in to sync'}
+            onSecondary={session ? undefined : () => router.push('/auth')}
+          />
 
-          {!session ? (
-            <View style={styles.signInBanner}>
-              <Text style={styles.signInTitle}>Sign in to sync captures</Text>
-              <Body style={styles.signInCopy}>You can still capture locally. Sign in to see previous contexts across devices.</Body>
-              <Button variant="secondary" onPress={() => router.push('/auth')}>Sign in</Button>
-            </View>
+          {!session && drafts.length ? (
+            <Text style={styles.localNote}>Saved on this device only · Sign in to sync across devices</Text>
           ) : null}
 
           <View style={styles.tabs}>
@@ -378,40 +372,21 @@ export default function CaptureHomeScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
-  header: { paddingHorizontal: spacing.x5 },
+  header: { paddingHorizontal: spacing.x5, marginBottom: spacing.x2 },
   title: { fontSize: 30, lineHeight: 32 },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: spacing.x5,
     paddingBottom: spacing.x6,
+    paddingTop: spacing.x2,
     gap: spacing.x3,
   },
-  hero: {
-    gap: spacing.x3,
-    padding: spacing.x5,
-    borderRadius: radius.large,
-    backgroundColor: colors.ink,
+  localNote: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(135, 234, 92, 0.18)',
-  },
-  heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800', lineHeight: 28 },
-  heroCopy: { color: '#C5D3BF', lineHeight: 22 },
-  signInBanner: {
-    gap: spacing.x3,
-    padding: spacing.x5,
-    borderRadius: radius.large,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-  },
-  signInTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  signInCopy: { lineHeight: 20 },
   tabs: {
     flexDirection: 'row',
     gap: spacing.x2,

@@ -1,7 +1,13 @@
 import type { MobileCard } from '@/features/card/types';
 
+export const PREVIEW_CARD_ID = 'preview-primary-card';
+
+export function isPreviewCard(card: Pick<MobileCard, 'id'>) {
+  return card.id === PREVIEW_CARD_ID;
+}
+
 export const defaultCard: MobileCard = {
-  id: 'preview-primary-card',
+  id: PREVIEW_CARD_ID,
   slug: 'alex-morgan',
   label: 'My primary card',
   name: 'Alex Morgan',

@@ -8,6 +8,7 @@ import { describeOtpDeliveryError } from '@/lib/otp-delivery-error';
 import { completeAuthSessionFromUrl, readLaunchAuthUrl } from '@/lib/auth-session-url';
 import { readMobileAuthRedirectUris } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
+import { consumeAuthReturnPath } from '@/features/encounters/capture-draft';
 
 type AuthValue = {
   session: Session | null;
@@ -37,15 +38,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setLoading(false);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
-      if (nextSession) router.replace('/(tabs)');
+      if (event === 'SIGNED_IN' && nextSession) {
+        void consumeAuthReturnPath().then((path) => {
+          if (path) router.replace(path as '/capture');
+          else router.replace('/(tabs)');
+        });
+      }
     });
 
     async function handleUrl(url: string | null) {
       if (!url || !supabase) return;
       const result = await completeAuthSessionFromUrl(supabase, url);
-      if (result.ok) router.replace('/(tabs)');
+      if (result.ok) {
+        void consumeAuthReturnPath().then((path) => {
+          if (path) router.replace(path as '/capture');
+          else router.replace('/(tabs)');
+        });
+      }
     }
 
     readLaunchAuthUrl().then(handleUrl);

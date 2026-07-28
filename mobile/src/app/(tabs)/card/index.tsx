@@ -4,8 +4,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { GreenHeroCard } from '@/components/green-hero-card';
 
-import { Body, Button, Eyebrow, Panel, Title } from '@/components/ui';
+import { Body, Button, Eyebrow, Title } from '@/components/ui';
+import { useAuth } from '@/features/auth/auth-context';
 import { MAX_CARDS } from '@/features/card/card-library';
 import { useCard } from '@/features/card/card-context';
 import { themeForegroundColor } from '@/features/card/theme-colors';
@@ -13,10 +15,27 @@ import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function CardLibraryScreen() {
+  const { session } = useAuth();
   const { cards, activeCardId, syncing, canCreateCard, createCard, setPrimaryCard } = useCard();
   const insets = useAppInsets();
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const hasCards = cards.length > 0;
+
+  async function startCreateCard(label?: string) {
+    try {
+      const created = await createCard(label ? { label } : undefined);
+      if (created) router.push(`/edit-card?id=${created.id}`);
+      else {
+        setErrorMessage('You can save a maximum of five cards.');
+        setErrorSheetOpen(true);
+      }
+    } catch (caught) {
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not create a card.');
+      setErrorSheetOpen(true);
+    }
+  }
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
@@ -25,9 +44,15 @@ export default function CardLibraryScreen() {
           <View style={styles.topBar}>
             <View style={styles.headerCopy}>
               <Eyebrow>{syncing ? 'Syncing…' : 'My cards'}</Eyebrow>
-              <Title style={styles.title}>Choose a card to open</Title>
+              <Title style={styles.title}>
+                {session ? 'Choose a card to open' : hasCards ? 'Your cards on this device' : 'Create your first card'}
+              </Title>
               <Body>
-                You can create up to {MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.
+                {session
+                  ? `You can create up to ${MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.`
+                  : hasCards
+                    ? 'Sign in to publish and sync your cards across devices.'
+                    : 'Build your card locally, then sign in when you are ready to publish and share it.'}
               </Body>
             </View>
             <Pressable
@@ -45,82 +70,80 @@ export default function CardLibraryScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
-          <View style={styles.grid}>
-            {cards.map((item, index) => {
-              const isPrimary = item.id === activeCardId;
-              return (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  onPress={() => {
-                    void setPrimaryCard(item.id!);
-                    router.push(`/card/${item.id}`);
-                  }}
-                  style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
-                  <View style={[styles.cover, { backgroundColor: item.theme }]}>
-                    <Text style={[styles.coverLetter, { color: themeForegroundColor(item.theme) }]}>{item.company[0] || item.name[0] || 'A'}</Text>
-                  </View>
-                  <View style={styles.tileBody}>
-                    <Text style={styles.cardNumber}>Card {index + 1}</Text>
-                    <Text style={styles.cardLabel}>{item.label || `Card ${index + 1}`}</Text>
-                    <Text style={styles.cardName}>{item.name || 'Finish setting up this card'}</Text>
-                    <View style={styles.metaRow}>
-                      <Text style={styles.cardStatus}>{item.status === 'published' ? 'Published' : 'Draft'}</Text>
-                      {isPrimary ? <Text style={styles.primaryBadge}>Primary</Text> : null}
+          {!session && !hasCards ? (
+            <GreenHeroCard
+              icon={<IdentificationCard size={28} color={colors.white} weight="fill" />}
+              title="Create your first card"
+              copy="Add your name, role, and contact methods. Sign in when you are ready to publish."
+              primaryLabel="Create card"
+              onPrimary={() => void startCreateCard()}
+              secondaryLabel="Sign in"
+              onSecondary={() => router.push('/auth')}
+            />
+          ) : null}
+
+          {!session && hasCards ? (
+            <Text style={styles.localNote}>Saved on this device only · Sign in to publish and sync</Text>
+          ) : null}
+
+          {hasCards ? (
+            <View style={styles.grid}>
+              {cards.map((item, index) => {
+                const isPrimary = item.id === activeCardId;
+                return (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      void setPrimaryCard(item.id!);
+                      router.push(`/card/${item.id}`);
+                    }}
+                    style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
+                    <View style={[styles.cover, { backgroundColor: item.theme }]}>
+                      <Text style={[styles.coverLetter, { color: themeForegroundColor(item.theme) }]}>
+                        {item.company[0] || item.name[0] || 'A'}
+                      </Text>
                     </View>
+                    <View style={styles.tileBody}>
+                      <Text style={styles.cardNumber}>Card {index + 1}</Text>
+                      <Text style={styles.cardLabel}>{item.label || `Card ${index + 1}`}</Text>
+                      <Text style={styles.cardName}>{item.name || 'Finish setting up this card'}</Text>
+                      <View style={styles.metaRow}>
+                        <Text style={styles.cardStatus}>{item.status === 'published' ? 'Published' : 'Draft'}</Text>
+                        {isPrimary ? <Text style={styles.primaryBadge}>Primary</Text> : null}
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+
+              {canCreateCard ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void startCreateCard(`Card ${cards.length + 1}`)}
+                  style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
+                  <View style={styles.addIcon}>
+                    <Plus size={24} color={colors.ink} weight="bold" />
                   </View>
+                  <Text style={styles.addTitle}>{session ? 'Create another card' : 'Create another card'}</Text>
+                  <Text style={styles.addCopy}>{MAX_CARDS - cards.length} remaining</Text>
                 </Pressable>
-              );
-            })}
+              ) : null}
+            </View>
+          ) : null}
 
-            {canCreateCard ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={async () => {
-                  try {
-                    const created = await createCard({ label: `Card ${cards.length + 1}` });
-                    if (created) router.push(`/edit-card?id=${created.id}`);
-                    else {
-                      setErrorMessage('You can save a maximum of five cards.');
-                      setErrorSheetOpen(true);
-                    }
-                  } catch (caught) {
-                    setErrorMessage(caught instanceof Error ? caught.message : 'Could not create a card.');
-                    setErrorSheetOpen(true);
-                  }
-                }}
-                style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
-                <View style={styles.addIcon}>
-                  <Plus size={24} color={colors.ink} weight="bold" />
-                </View>
-                <Text style={styles.addTitle}>Create another card</Text>
-                <Text style={styles.addCopy}>{MAX_CARDS - cards.length} remaining</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          {session && !hasCards ? (
+            <GreenHeroCard
+              icon={<IdentificationCard size={28} color={colors.white} weight="fill" />}
+              title="Create your first card"
+              copy="Add your identity and the ways people can reach you."
+              primaryLabel="Create your first card"
+              onPrimary={() => void startCreateCard()}
+            />
+          ) : null}
 
-          {!cards.length ? (
-            <Panel style={styles.empty}>
-              <IdentificationCard size={32} color={colors.ink} weight="bold" />
-              <Text style={styles.emptyTitle}>Create your first card</Text>
-              <Body>Add your identity and the ways people can reach you.</Body>
-              <Button
-                onPress={async () => {
-                  try {
-                    const created = await createCard();
-                    if (created) router.push(`/edit-card?id=${created.id}`);
-                    else {
-                      setErrorMessage('Could not create a card right now.');
-                      setErrorSheetOpen(true);
-                    }
-                  } catch (caught) {
-                    setErrorMessage(caught instanceof Error ? caught.message : 'Could not create a card.');
-                    setErrorSheetOpen(true);
-                  }
-                }}>
-                Create your first card
-              </Button>
-            </Panel>
+          {!session && hasCards ? (
+            <Button onPress={() => router.push('/auth')}>Sign in to publish</Button>
           ) : null}
         </ScrollView>
       </View>
@@ -161,12 +184,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  scroll: { flex: 1, marginTop: spacing.x4 },
+  scroll: { flex: 1, marginTop: spacing.x2 },
   scrollContent: {
     paddingHorizontal: spacing.x5,
-    gap: spacing.x4,
+    gap: spacing.x3,
   },
-  grid: { gap: spacing.x4 },
+  localNote: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  grid: { gap: spacing.x3 },
   cardTile: {
     overflow: 'hidden',
     borderRadius: radius.medium,
@@ -220,6 +249,4 @@ const styles = StyleSheet.create({
   },
   addTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   addCopy: { color: colors.muted, fontSize: 12 },
-  empty: { alignItems: 'flex-start', gap: spacing.x3 },
-  emptyTitle: { color: colors.ink, fontSize: 20, fontWeight: '800' },
 });

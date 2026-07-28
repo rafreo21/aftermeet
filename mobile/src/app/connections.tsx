@@ -12,10 +12,10 @@ import {
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import {
-  ConnectionsHeaderSkeleton,
   ConnectionsListSkeleton,
 } from '@/components/skeleton';
 import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
+import { GreenHeroCard } from '@/components/green-hero-card';
 import { useAuth } from '@/features/auth/auth-context';
 import { connectionAvatarUrl } from '@/features/connections/connection-public-card';
 import {
@@ -144,7 +144,6 @@ export default function ConnectionsScreen() {
   }
 
   const hasConnections = connections.length > 0;
-  const showDirectoryChrome = session && (loading || hasConnections);
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
@@ -163,54 +162,48 @@ export default function ConnectionsScreen() {
             ) : null}
           </View>
 
-          {loading && !hasConnections ? (
-            <ConnectionsHeaderSkeleton />
-          ) : showDirectoryChrome ? (
-            <>
-              <View style={styles.headerCopy}>
-                <Eyebrow>Connections</Eyebrow>
-                <Text style={styles.title}>People you’ve met</Text>
-                <Body>Cards you saved and people who shared their details with you.</Body>
+          <View style={styles.headerCopy}>
+            <Eyebrow>Connections</Eyebrow>
+            <Text style={styles.title}>People you’ve met</Text>
+            <Body>Cards you saved and people who shared their details with you.</Body>
+          </View>
+
+          {session && hasConnections ? (
+            <View style={styles.searchRow}>
+              <View style={styles.searchField}>
+                <MagnifyingGlass size={18} color={colors.muted} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search connections"
+                  placeholderTextColor={colors.muted}
+                  style={styles.searchInput}
+                />
               </View>
-              <View style={styles.searchRow}>
-                <View style={styles.searchField}>
-                  <MagnifyingGlass size={18} color={colors.muted} />
-                  <TextInput
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Search connections"
-                    placeholderTextColor={colors.muted}
-                    style={styles.searchInput}
-                  />
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Sort connections"
-                  onPress={() => setSortOpen(true)}
-                  style={styles.sortButton}>
-                  <SortAscending size={20} color={colors.ink} weight="bold" />
-                </Pressable>
-              </View>
-            </>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sort connections"
+                onPress={() => setSortOpen(true)}
+                style={styles.sortButton}>
+                <SortAscending size={20} color={colors.ink} weight="bold" />
+              </Pressable>
+            </View>
           ) : null}
         </View>
 
         <ScrollView
-          style={[styles.scroll, !showDirectoryChrome && styles.scrollFlush]}
+          style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {!session ? (
-            <View style={styles.hero}>
-              <View style={styles.heroIcon}>
-                <UsersThree size={28} color={colors.white} weight="fill" />
-              </View>
-              <Text style={styles.heroTitle}>Sign in to see connections</Text>
-              <Body style={styles.heroCopy}>
-                Save cards you scan and people who share their details with you.
-              </Body>
-              <Button onPress={() => router.push('/auth')}>Sign in</Button>
-            </View>
+            <GreenHeroCard
+              icon={<UsersThree size={28} color={colors.white} weight="fill" />}
+              title="Sign in to see connections"
+              copy="Save cards you scan and people who share their details with you."
+              primaryLabel="Sign in"
+              onPrimary={() => router.push('/auth')}
+            />
           ) : loading ? (
             <ConnectionsListSkeleton count={6} />
           ) : hasConnections ? (
@@ -230,16 +223,13 @@ export default function ConnectionsScreen() {
               ) : null}
             </View>
           ) : (
-            <View style={styles.hero}>
-              <View style={styles.heroIcon}>
-                <UsersThree size={28} color={colors.white} weight="fill" />
-              </View>
-              <Text style={styles.heroTitle}>No connections yet</Text>
-              <Body style={styles.heroCopy}>
-                Scan a card or add someone manually to start building your network.
-              </Body>
-              <Button onPress={() => setAddOpen(true)}>Add connection</Button>
-            </View>
+            <GreenHeroCard
+              icon={<UsersThree size={28} color={colors.white} weight="fill" />}
+              title="No connections yet"
+              copy="Scan a card or add someone manually to start building your network."
+              primaryLabel="Add connection"
+              onPrimary={() => setAddOpen(true)}
+            />
           )}
         </ScrollView>
       </View>
@@ -309,7 +299,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surface,
   },
-  headerCopy: { gap: spacing.x2 },
+  headerCopy: { gap: spacing.x2, marginBottom: spacing.x2 },
   title: {
     color: colors.ink,
     fontSize: 28,
@@ -345,25 +335,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  scroll: { flex: 1, marginTop: spacing.x3 },
-  scrollFlush: { marginTop: 0 },
-  scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
-  hero: {
-    gap: spacing.x3,
-    padding: spacing.x5,
-    borderRadius: radius.large,
-    backgroundColor: colors.ink,
-  },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(135, 234, 92, 0.18)',
-  },
-  heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800', lineHeight: 28 },
-  heroCopy: { color: '#C5D3BF', lineHeight: 22 },
+  scroll: { flex: 1, marginTop: spacing.x2 },
+  scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3, paddingTop: spacing.x2 },
   list: { gap: spacing.x2 },
   enrichingCopy: { color: colors.muted, fontSize: 12, textAlign: 'center', marginBottom: spacing.x1 },
   row: {

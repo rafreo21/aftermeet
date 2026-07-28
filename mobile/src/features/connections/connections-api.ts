@@ -135,6 +135,48 @@ export async function enrichConnectionPhotos(accessToken: string, connections: C
   });
 }
 
+export async function registerScannedCard(accessToken: string, slug: string): Promise<ConnectionItem | null> {
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) throw new Error('This QR code is not a valid AfterMeet card.');
+
+  const response = await mobileFetch('/api/people/connections', accessToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug: normalized }),
+  });
+  const payload = await response.json() as { error?: string; connectionId?: string };
+  if (!response.ok) {
+    throw new Error(payload.error || 'Could not save this card to your connections.');
+  }
+
+  if (payload.connectionId) {
+    return {
+      id: `met-${payload.connectionId}`,
+      sourceId: payload.connectionId,
+      name: '',
+      subtitle: '',
+      source: 'met',
+      cardSlug: normalized,
+    };
+  }
+
+  const connections = await fetchAllConnectionsMerged(accessToken);
+  return connections.find((item) => (
+    item.source === 'met' && item.cardSlug?.trim().toLowerCase() === normalized
+  )) ?? null;
+}
+
+export async function connectionFromScannedSlug(accessToken: string, slug: string) {
+  const normalized = slug.trim().toLowerCase();
+  const connections = await fetchAllConnectionsMerged(accessToken);
+  const existing = connections.find((item) => (
+    item.cardSlug?.trim().toLowerCase() === normalized
+  ));
+  if (existing) return existing;
+
+  return registerScannedCard(accessToken, normalized);
+}
+
 export async function fetchAllConnectionsMerged(accessToken: string): Promise<ConnectionItem[]> {
   const [people, exchanges, contacts] = await Promise.all([
     fetchPeopleConnections(accessToken).catch(() => [] as PeopleConnection[]),

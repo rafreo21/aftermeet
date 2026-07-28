@@ -13,7 +13,7 @@ import {
   remoteRowToMobileCard,
 } from '@/features/card/card-library';
 import { CARD_THEMES, normalizeThemeColor } from '@/features/card/theme-colors';
-import { defaultCard } from '@/features/card/default-card';
+import { isPreviewCard } from '@/features/card/default-card';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
 import { syncCardToolsForCard } from '@/features/card/card-tools-sync';
 import { uploadCardImagesForPublish } from '@/features/card/card-image-upload';
@@ -68,10 +68,14 @@ function mapStoredCards(raw: unknown): MobileCard[] {
   return raw.slice(0, MAX_CARDS).map((item) => normalizeCard({ ...createMobileCard(), ...(item as MobileCard) }));
 }
 
+function withoutPreviewCards(items: MobileCard[]) {
+  return items.filter((item) => !isPreviewCard(item));
+}
+
 export function CardProvider({ children }: PropsWithChildren) {
   const { session } = useAuth();
-  const [cards, setCards] = useState<MobileCard[]>([defaultCard]);
-  const [activeCardId, setActiveCardIdState] = useState(defaultCard.id || '');
+  const [cards, setCards] = useState<MobileCard[]>([]);
+  const [activeCardId, setActiveCardIdState] = useState('');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -82,9 +86,11 @@ export function CardProvider({ children }: PropsWithChildren) {
   cardsRef.current = cards;
   activeCardIdRef.current = activeCardId;
 
+  const visibleCards = useMemo(() => withoutPreviewCards(cards), [cards]);
+
   const activeCard = useMemo(
-    () => cards.find((item) => item.id === activeCardId) || cards[0] || defaultCard,
-    [activeCardId, cards],
+    () => visibleCards.find((item) => item.id === activeCardId) || visibleCards[0] || createMobileCard(),
+    [activeCardId, visibleCards],
   );
 
   useEffect(() => {
@@ -93,13 +99,13 @@ export function CardProvider({ children }: PropsWithChildren) {
       AsyncStorage.getItem(LEGACY_CARD_KEY),
       AsyncStorage.getItem(ACTIVE_CARD_KEY),
     ]).then(([storedCards, legacyCard, storedActiveId]) => {
-      let nextCards = mapStoredCards(storedCards ? JSON.parse(storedCards) : []);
+      let nextCards = withoutPreviewCards(mapStoredCards(storedCards ? JSON.parse(storedCards) : []));
       if (!nextCards.length && legacyCard) {
         try {
-          nextCards = [normalizeCard({ ...defaultCard, ...JSON.parse(legacyCard) as MobileCard })];
+          const legacy = normalizeCard({ ...createMobileCard(), ...JSON.parse(legacyCard) as MobileCard });
+          if (!isPreviewCard(legacy)) nextCards = [legacy];
         } catch {}
       }
-      if (!nextCards.length) nextCards = [defaultCard];
       setCards(nextCards);
       setActiveCardIdState(getActiveCardId(nextCards, storedActiveId));
       setLoading(false);
@@ -190,11 +196,28 @@ export function CardProvider({ children }: PropsWithChildren) {
         const remoteCards = remoteRows.map((row) => remoteRowToMobileCard(row));
         const nextActiveId = getActiveCardId(remoteCards, activeCardIdRef.current);
         await persistCards(remoteCards, nextActiveId);
+        return;
+      }
+
+      const localCards = withoutPreviewCards(cardsRef.current);
+      if (!localCards.length || !session.access_token) return;
+
+      const uploaded: MobileCard[] = [];
+      for (const card of localCards) {
+        try {
+          uploaded.push(await saveRemoteCard(card));
+        } catch {
+          uploaded.push(card);
+        }
+      }
+      if (uploaded.length) {
+        const nextActiveId = getActiveCardId(uploaded, activeCardIdRef.current);
+        await persistCards(uploaded, nextActiveId);
       }
     } finally {
       setSyncing(false);
     }
-  }, [persistCards, session]);
+  }, [persistCards, saveRemoteCard, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -360,7 +383,7 @@ export function CardProvider({ children }: PropsWithChildren) {
   const value = useMemo<CardValue>(() => {
     const env = readEnv();
     return {
-      cards,
+      cards: visibleCards,
       card: activeCard,
       activeCardId,
       loading,
@@ -368,7 +391,7 @@ export function CardProvider({ children }: PropsWithChildren) {
       publishing,
       publishError,
       publicUrl: cardPublicUrl(activeCard),
-      canCreateCard: cards.length < MAX_CARDS,
+      canCreateCard: visibleCards.length < MAX_CARDS,
       getCardById,
       cardPublicUrl,
       isPrimaryCard: (id) => id === activeCardId,
@@ -391,7 +414,7 @@ export function CardProvider({ children }: PropsWithChildren) {
   }, [
     activeCard,
     activeCardId,
-    cards,
+    visibleCards,
     createCard,
     deleteCard,
     loading,

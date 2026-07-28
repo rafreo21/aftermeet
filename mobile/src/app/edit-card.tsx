@@ -12,6 +12,7 @@ import { Body, Button, PageHeader } from '@/components/ui';
 import { useAppInsets } from '@/lib/safe-area';
 import { useCard } from '@/features/card/card-context';
 import { describePublishError } from '@/features/card/publish-card';
+import { setAuthReturnPath } from '@/features/encounters/capture-draft';
 import { CARD_THEMES, normalizeThemeColor, themeForegroundColor, themeMatches } from '@/features/card/theme-colors';
 import type { MobileCard } from '@/features/card/types';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -132,6 +133,15 @@ export default function EditCardScreen() {
       quality: 0.82,
     });
     if (!result.canceled) updateField(key, result.assets[0].uri);
+  }
+
+  const needsSignIn = sheetTitle === 'Sign in required';
+
+  async function goSignInToPublish() {
+    closeSheet();
+    const cardId = draft.id || id;
+    await setAuthReturnPath(cardId ? `/edit-card?id=${encodeURIComponent(cardId)}` : '/edit-card');
+    router.push('/auth');
   }
 
   async function publish() {
@@ -422,9 +432,13 @@ export default function EditCardScreen() {
         title={sheetTitle || 'Publish failed'}
         message={sheetMessage}
         detail={sheetDetail}
-        primaryLabel="Try again"
+        primaryLabel={needsSignIn ? 'Sign in' : 'Try again'}
         secondaryLabel="Close"
         onPrimary={() => {
+          if (needsSignIn) {
+            void goSignInToPublish();
+            return;
+          }
           closeSheet();
           void publish();
         }}

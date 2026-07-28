@@ -32,10 +32,10 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createApiSupabaseClient(request);
-  const { error } = await supabase.rpc("link_people_connection_from_scan", { p_slug: slug });
+  const { data, error } = await supabase.rpc("link_people_connection_from_scan", { p_slug: slug });
   if (error) {
     return NextResponse.json({ error: "We couldn’t link that card to your people list." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ ok: true, connectionId: data }, { headers: { "Cache-Control": "private, no-store" } });
 }

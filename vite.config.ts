@@ -72,7 +72,10 @@ export default defineConfig(async () => {
       : undefined,
     optimizeDeps: {
       // Deep CSR icon imports churn often during development and can stale the dep cache.
-      exclude: ["@phosphor-icons/react"],
+      exclude: ["@phosphor-icons/react", "@resvg/resvg-js", "sharp"],
+    },
+    ssr: {
+      external: ["@resvg/resvg-js", "sharp"],
     },
     plugins: [
       vinext(),
