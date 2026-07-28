@@ -76,6 +76,9 @@ export function validateMethod(method: ContactMethod) {
   if (method.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
     return 'Enter a valid email address.';
   }
+  if ((method.type === 'phone' || method.type === 'whatsapp') && value.replace(/\D/g, '').length < 8) {
+    return 'Enter a valid phone number with country code.';
+  }
   if (['website', 'link', 'calendly'].includes(method.type)) {
     try {
       new URL(value);

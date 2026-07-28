@@ -12,6 +12,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ encounters: [], preview: true }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
+  const url = new URL(request.url);
+  const contactId = url.searchParams.get("contactId")?.trim() || "";
+  const sourceId = url.searchParams.get("sourceId")?.trim() || "";
+  const exchangeId = url.searchParams.get("exchangeId")?.trim() || "";
+  const email = url.searchParams.get("email")?.trim().toLowerCase() || "";
+
   const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase
     .from("encounters")
@@ -24,8 +30,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "We couldn’t load your encounters." }, { status: 500 });
   }
 
+  let encounters = (data ?? []).map((row) => encounterFromApi(row));
+  if (contactId || sourceId || exchangeId || email) {
+    encounters = encounters.filter((encounter) => {
+      if (contactId && encounter.contactId === contactId) return true;
+      if (sourceId && encounter.contactId === sourceId) return true;
+      if (exchangeId && encounter.exchangeId === exchangeId) return true;
+      if (email && encounter.personEmail.trim().toLowerCase() === email) return true;
+      return false;
+    });
+  }
+
   return NextResponse.json({
-    encounters: (data ?? []).map((row) => encounterFromApi(row)),
+    encounters,
   }, { headers: { "Cache-Control": "private, no-store" } });
 }
 

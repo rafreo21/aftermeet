@@ -3,7 +3,7 @@ import type { LocalRecordingMetadata } from "./local-recordings";
 export type EncounterAction = {
   id: string;
   title: string;
-  channel: "email" | "linkedin" | "call" | "meeting" | "send" | "other";
+  channel: "email" | "linkedin" | "call" | "meeting" | "send" | "whatsapp" | "other";
   owner: "me" | "guest";
   dueAt: string;
   status: "open" | "completed" | "snoozed";

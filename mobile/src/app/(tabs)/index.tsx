@@ -1,9 +1,16 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { CaretRight } from 'phosphor-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandMark } from '@/components/brand-mark';
+import { FollowUpCell } from '@/components/follow-up-cell';
+import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
+import { FollowUpsSheet } from '@/components/follow-ups-sheet';
 import { Body, Eyebrow, Title } from '@/components/ui';
+import { useAuth } from '@/features/auth/auth-context';
+import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -30,6 +37,46 @@ const STEPS = [
 
 export default function HomeScreen() {
   const insets = useAppInsets();
+  const { session } = useAuth();
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [loadingFollowUps, setLoadingFollowUps] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const {
+    runFollowUp,
+    markComplete,
+    completingId,
+    missingOpen,
+    missingExecution,
+    missingLoading,
+    googleConnected,
+    closeMissing,
+    requestMissingField,
+    draftTailoredEmail,
+    draftPreferredEmail,
+  } = useFollowUpActions(session?.access_token);
+
+  const loadFollowUps = useCallback(async () => {
+    if (!session?.access_token) {
+      setFollowUps([]);
+      return;
+    }
+    setLoadingFollowUps(true);
+    try {
+      setFollowUps(await fetchFollowUps(session.access_token));
+    } catch {
+      setFollowUps([]);
+    } finally {
+      setLoadingFollowUps(false);
+    }
+  }, [session?.access_token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadFollowUps();
+    }, [loadFollowUps]),
+  );
+
+  const preview = useMemo(() => followUps.slice(0, 3), [followUps]);
 
   return (
     <View style={styles.safe}>
@@ -49,6 +96,39 @@ export default function HomeScreen() {
         <Body style={styles.lead}>
           Share your card, capture the meeting, and keep track of the people you meet.
         </Body>
+
+        {session ? (
+          <View style={styles.followUpsSection}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>Follow-ups</Text>
+              {followUps.length > 3 ? (
+                <Pressable accessibilityRole="button" onPress={() => setSheetOpen(true)}>
+                  <Text style={styles.viewAll}>View all</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {loadingFollowUps ? (
+              <ActivityIndicator color={colors.ink} />
+            ) : preview.length ? (
+              <View style={styles.followUpList}>
+                {preview.map((item) => (
+                  <FollowUpCell
+                    key={`${item.encounterId}-${item.actionId}`}
+                    item={item}
+                    onPress={() => runFollowUp(item)}
+                    onComplete={() => void markComplete(item, loadFollowUps)}
+                    completing={completingId === `${item.encounterId}-${item.actionId}`}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Body style={styles.emptyFollowUps}>
+                Open actions from your captures will show up here after you save a follow-up.
+              </Body>
+            )}
+          </View>
+        ) : null}
 
         <View style={styles.steps}>
           {STEPS.map((step) => (
@@ -70,6 +150,26 @@ export default function HomeScreen() {
           ))}
         </View>
       </ScrollView>
+
+      <FollowUpsSheet
+        visible={sheetOpen}
+        items={followUps}
+        onClose={() => setSheetOpen(false)}
+        onPressItem={(item) => runFollowUp(item)}
+        onCompleteItem={(item) => void markComplete(item, loadFollowUps)}
+        completingId={completingId}
+      />
+
+      <FollowUpMissingSheet
+        visible={missingOpen}
+        execution={missingExecution}
+        loading={missingLoading}
+        googleConnected={googleConnected}
+        onClose={closeMissing}
+        onRequest={() => void requestMissingField()}
+        onDraftTailoredEmail={(preferGmail) => void draftTailoredEmail(preferGmail)}
+        onDraftPreferredEmail={(preferGmail) => void draftPreferredEmail(preferGmail)}
+      />
     </View>
   );
 }
@@ -94,6 +194,16 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 34, lineHeight: 36 },
   lead: { marginTop: -spacing.x2 },
+  followUpsSection: { gap: spacing.x3 },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
+  viewAll: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  followUpList: { gap: spacing.x3 },
+  emptyFollowUps: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   steps: { gap: spacing.x2 },
   stepCard: {
     padding: spacing.x5,

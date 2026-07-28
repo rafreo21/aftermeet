@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { CaretRight } from 'phosphor-react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { colors, spacing } from '@/theme/tokens';
@@ -14,6 +15,18 @@ export default function SettingsScreen() {
         <Title>Settings</Title>
         <Body>Manage your account, synchronization and mobile capabilities.</Body>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/settings/connected-accounts')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <Text style={styles.label}>Connected accounts</Text>
+          <Text style={styles.linkHint}>Google, Microsoft, and future integrations</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
       <Panel>
         <Text style={styles.label}>Account</Text>
         <Text style={styles.value}>{session?.user.email || 'Preview mode'}</Text>
@@ -35,4 +48,17 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   value: { marginTop: 8, color: colors.ink, fontSize: 17, fontWeight: '800' },
   hint: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 },
+  linkPanel: {
+    minHeight: 72,
+    padding: spacing.x5,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.x3,
+  },
+  linkPanelPressed: { opacity: 0.82 },
+  linkCopy: { flex: 1, gap: 6 },
+  linkHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
 });

@@ -6,6 +6,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { BottomSheet } from '@/components/bottom-sheet';
+import { PhoneInput } from '@/components/phone-input';
 import { Button } from '@/components/ui';
 import {
   fieldLabel,
@@ -184,14 +185,21 @@ export function MethodListEditor({ methods, onChange }: MethodListEditorProps) {
           <>
             <View style={styles.sheetField}>
               <Text style={styles.sheetLabel}>{fieldLabel(editing.type)}</Text>
-              <TextInput
-                value={editing.value}
-                onChangeText={(value) => setEditing({ ...editing, value })}
-                placeholder={METHOD_META[editing.type].placeholder}
-                placeholderTextColor={colors.muted}
-                autoCapitalize="none"
-                style={styles.sheetInput}
-              />
+              {editing.type === 'phone' || editing.type === 'whatsapp' ? (
+                <PhoneInput
+                  value={editing.value}
+                  onChange={(value) => setEditing({ ...editing, value })}
+                />
+              ) : (
+                <TextInput
+                  value={editing.value}
+                  onChangeText={(value) => setEditing({ ...editing, value })}
+                  placeholder={METHOD_META[editing.type].placeholder}
+                  placeholderTextColor={colors.muted}
+                  autoCapitalize="none"
+                  style={styles.sheetInput}
+                />
+              )}
             </View>
             <View style={styles.sheetField}>
               <Text style={styles.sheetLabel}>Button label</Text>

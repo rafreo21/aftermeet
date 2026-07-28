@@ -22,6 +22,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 
 import { BottomSheet } from '@/components/bottom-sheet';
+import { PhoneInput } from '@/components/phone-input';
 import { RecordingPlayback } from '@/components/recording-playback';
 import { Body, Button } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
@@ -50,6 +51,8 @@ type CaptureInteractionStepProps = {
   loadingExchanges: boolean;
   onLinkExchange: (exchange: InboundExchange) => void;
   onEnsureAuth: () => Promise<string | null>;
+  getPriorMeetingCount?: (email: string) => number;
+  knownConnectionEmails?: string[];
 };
 
 function formatContactLine(person: GatherPerson) {
@@ -87,15 +90,10 @@ function PersonFields({
         autoComplete="email"
         style={styles.input}
       />
-      <Text style={styles.label}>Phone (optional)</Text>
-      <TextInput
+      <PhoneInput
+        label="Phone (optional)"
         value={person.phone}
-        onChangeText={(value) => onChange({ phone: value })}
-        placeholder="+44 …"
-        placeholderTextColor={colors.muted}
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        style={styles.input}
+        onChange={(value) => onChange({ phone: value })}
       />
       <Text style={styles.label}>LinkedIn (optional)</Text>
       <TextInput
@@ -158,6 +156,8 @@ export function CaptureInteractionStep({
   loadingExchanges,
   onLinkExchange,
   onEnsureAuth,
+  getPriorMeetingCount,
+  knownConnectionEmails = [],
 }: CaptureInteractionStepProps) {
   const { card, publicUrl } = useCard();
   const [consentSheetOpen, setConsentSheetOpen] = useState(false);
@@ -387,7 +387,17 @@ export function CaptureInteractionStep({
 
         {people.length ? (
           <View style={styles.peopleList}>
-            {people.map((person) => (
+            {people.map((person) => {
+              const email = person.email.trim().toLowerCase();
+              const priorCount = getPriorMeetingCount?.(person.email) ?? 0;
+              const knownConnection = email && knownConnectionEmails.includes(email);
+              const metBeforeLabel = priorCount > 0
+                ? `You've met before · ${priorCount} conversation${priorCount === 1 ? '' : 's'}`
+                : knownConnection
+                  ? 'Already in your connections'
+                  : null;
+
+              return (
               <View key={person.id} style={styles.personCard}>
                 <CheckCircle size={20} color={colors.ink} weight="fill" />
                 <View style={styles.personCopy}>
@@ -395,6 +405,9 @@ export function CaptureInteractionStep({
                   <Text style={styles.personMeta}>{formatContactLine(person) || 'Contact saved'}</Text>
                   {person.exchangeId ? (
                     <Text style={styles.personBadge}>From card scan</Text>
+                  ) : null}
+                  {metBeforeLabel ? (
+                    <Text style={styles.personHistoryBadge}>{metBeforeLabel}</Text>
                   ) : null}
                 </View>
                 <View style={styles.personActions}>
@@ -414,7 +427,8 @@ export function CaptureInteractionStep({
                   </Pressable>
                 </View>
               </View>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyPeople}>
@@ -676,6 +690,7 @@ const styles = StyleSheet.create({
   personName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   personMeta: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   personBadge: { marginTop: 2, color: colors.ink, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  personHistoryBadge: { marginTop: 2, color: colors.accent, fontSize: 11, fontWeight: '700' },
   personActions: { flexDirection: 'row', gap: spacing.x2 },
   iconButton: {
     width: 34,

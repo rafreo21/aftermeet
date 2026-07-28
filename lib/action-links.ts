@@ -13,6 +13,7 @@ export type ActionLinkContext = {
   personEmail: string;
   phone?: string;
   linkedinUrl?: string;
+  whatsappUrl?: string;
   encounterTitle?: string;
 };
 
@@ -30,6 +31,7 @@ export function channelLabel(channel: EncounterAction["channel"]) {
     case "email": return "Email";
     case "meeting": return "Meeting";
     case "send": return "Send file";
+    case "whatsapp": return "WhatsApp";
     default: return "Follow-up";
   }
 }
@@ -43,6 +45,7 @@ export function buildActionLinkContext(
     personEmail: contact?.email || encounter.personEmail || "",
     phone: contact?.phone,
     linkedinUrl: contact?.linkedinUrl,
+    whatsappUrl: contact && "whatsappUrl" in contact ? String(contact.whatsappUrl || "") : undefined,
     encounterTitle: encounter.title,
   };
 }
@@ -155,6 +158,19 @@ export function resolveActionLink(
         label: "Schedule in Google Calendar",
         external: true,
       };
+    }
+    case "whatsapp": {
+      const href = context.whatsappUrl?.trim()
+        || (context.phone ? `https://wa.me/${normalizePhone(context.phone).replace(/^\+/, "")}` : "");
+      if (!href) {
+        return {
+          href: "",
+          label: "WhatsApp",
+          external: true,
+          unavailableReason: "Add their WhatsApp on their card to message them.",
+        };
+      }
+      return { href, label: "Open WhatsApp", external: true };
     }
     case "send": {
       const sendBody = `${body}\n\nAttach your file in Gmail, or open Google Drive to share it.`;

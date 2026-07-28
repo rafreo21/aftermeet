@@ -14,13 +14,16 @@ for arg in "$@"; do
 done
 
 cd "$ROOT"
-APK="$ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
+APK="$ROOT/android/app/build/outputs/apk/release/app-release.apk"
 
 if [[ "$REBUILD" == "1" || ! -f "$APK" ]]; then
-  echo "Building AfterMeet dev client (native + JS bundle baked in for first launch)…"
+  echo "Building AfterMeet standalone release APK (JS bundle embedded — no Metro required)…"
   echo "This can take several minutes on a clean rebuild."
-  npx expo prebuild --platform android --clean
-  npx expo run:android --no-install
+  if [[ "$REBUILD" == "1" ]]; then
+    npx expo prebuild --platform android --clean
+  fi
+  # Use Gradle directly — expo run:android waits on Metro and may try to launch an emulator.
+  (cd "$ROOT/android" && ./gradlew assembleRelease)
 fi
 
 echo "Waiting for Android device…"
@@ -34,12 +37,12 @@ done
 
 echo "Installing $APK"
 adb install -r -d "$APK"
-adb reverse tcp:8081 tcp:8081
 adb shell am start -n com.aftermeet.app/.MainActivity
 echo ""
 echo "Done."
-echo "  Build label in app: Capture home footer (v1.0.1 build 2)."
-echo "  For live JS updates while developing, run in another terminal:"
+echo "  Standalone build — opens without Metro on your Mac."
+echo "  Sign in with rafreo21@gmail.com to receive a 6-digit OTP (Resend sandbox)."
+echo "  For live JS reload while developing:"
 echo "    npm run android:dev"
 echo "  Force a fresh native rebuild anytime:"
 echo "    npm run android:rebuild"

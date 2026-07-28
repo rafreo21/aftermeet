@@ -7,7 +7,7 @@ export type GatherPerson = {
   exchangeId?: string;
 };
 
-export const MAX_GATHER_PEOPLE = 5;
+export const MAX_GATHER_PEOPLE = 10;
 
 function createId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {

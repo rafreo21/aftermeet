@@ -15,7 +15,7 @@ export type EncounterDraft = {
   sharedSummary: string;
   privateNotes: string;
   followUp: string;
-  followUpType: 'email' | 'linkedin' | 'call' | 'meeting' | 'send' | 'other';
+  followUpType: 'email' | 'linkedin' | 'call' | 'meeting' | 'send' | 'whatsapp' | 'other';
 };
 
 export type EncounterAction = {
@@ -201,7 +201,7 @@ export function buildEncounterPayload(input: {
       title: input.followUp.trim(),
       channel: input.followUpType,
       owner: 'me',
-      dueAt: input.dueAt?.trim() || now,
+      dueAt: input.dueAt?.trim() || '',
       status: 'open',
     }] : [],
     status: input.status || 'draft',

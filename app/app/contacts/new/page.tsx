@@ -7,6 +7,7 @@ import { AppShell } from "../../../components/AppShell";
 import { ActiveCampaignField, defaultCampaignId } from "../../../components/ActiveCampaignField";
 import { Button, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
+import { PhoneField } from "../../../components/PhoneField";
 import {
   capturedProfileFullName,
   contactDisplayName,
@@ -99,7 +100,7 @@ export default function NewContactPage() {
       <form className="contact-form-card" onSubmit={save}>
         <header><span className="step-pill">Meeting capture</span><h1>Who did you meet?</h1><p>Keep it lightweight. Context and the next action are more valuable than completing every field.</p></header>
         <TextField label="Full name" value={form.fullName} onChange={(e) => update("fullName", e.target.value)} autoComplete="name" error={error} />
-        <div className="field-row two"><TextField label="Email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} /><TextField label="Phone" type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} /></div>
+        <div className="field-row two"><TextField label="Email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} /><PhoneField label="Phone" value={form.phone} onChange={(value) => update("phone", value)} /></div>
         <TextField label="LinkedIn profile" value={form.linkedinUrl} onChange={(e) => update("linkedinUrl", e.target.value)} placeholder="https://www.linkedin.com/in/username" />
         <ActiveCampaignField value={campaignId} onChange={setCampaignId} />
         <div className="field-row two"><TextField label="Role" value={form.role} onChange={(e) => update("role", e.target.value)} /><TextField label="Company" value={form.company} onChange={(e) => update("company", e.target.value)} /></div>

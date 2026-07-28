@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import QRCode from 'react-native-qrcode-svg';
 
 import { BottomSheet } from '@/components/bottom-sheet';
+import { PhoneInput } from '@/components/phone-input';
 import { Body, Button } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
 import type { CaptureWizardDraft } from '@/features/encounters/capture-draft';
@@ -96,15 +97,10 @@ function PersonFields({
         autoComplete="email"
         style={styles.input}
       />
-      <Text style={styles.label}>Phone (optional)</Text>
-      <TextInput
+      <PhoneInput
+        label="Phone (optional)"
         value={person.phone}
-        onChangeText={(value) => onChange({ phone: value })}
-        placeholder="+44 …"
-        placeholderTextColor={colors.muted}
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        style={styles.input}
+        onChange={(value) => onChange({ phone: value })}
       />
       <Text style={styles.label}>LinkedIn (optional)</Text>
       <TextInput

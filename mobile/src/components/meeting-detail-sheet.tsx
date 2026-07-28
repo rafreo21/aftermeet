@@ -1,0 +1,115 @@
+import { CheckCircle, Microphone } from 'phosphor-react-native';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { BottomSheet } from '@/components/bottom-sheet';
+import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
+import { FollowUpCell } from '@/components/follow-up-cell';
+import { RecordingPlayback } from '@/components/recording-playback';
+import { Body } from '@/components/ui';
+import type { EncounterPayload } from '@/features/encounters/encounter-api';
+import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import { formatMeetingDate } from '@/lib/due-date';
+import { colors, radius, spacing } from '@/theme/tokens';
+
+type MeetingDetailSheetProps = {
+  visible: boolean;
+  encounter: EncounterPayload | null;
+  recordingUri?: string | null;
+  followUps: FollowUpItem[];
+  onClose: () => void;
+  onPressFollowUp: (item: FollowUpItem) => void;
+  onCompleteFollowUp: (item: FollowUpItem) => void;
+};
+
+export function MeetingDetailSheet({
+  visible,
+  encounter,
+  recordingUri,
+  followUps,
+  onClose,
+  onPressFollowUp,
+  onCompleteFollowUp,
+}: MeetingDetailSheetProps) {
+  if (!encounter) return null;
+
+  const consentLabel = encounter.consent?.confirmed
+    ? `${encounter.consent.method === 'written' ? 'Written' : 'Verbal'} consent confirmed`
+    : 'Consent not recorded';
+
+  return (
+    <BottomSheet
+      visible={visible}
+      title={encounter.title.trim() || formatMeetingDate(encounter.startedAt)}
+      onClose={onClose}>
+      <View style={styles.metaRow}>
+        <Text style={styles.meta}>{formatMeetingDate(encounter.startedAt)}</Text>
+        <View style={styles.consentBadge}>
+          {encounter.consent?.confirmed ? (
+            <CheckCircle size={14} color={colors.ink} weight="fill" />
+          ) : (
+            <Microphone size={14} color={colors.muted} weight="bold" />
+          )}
+          <Text style={styles.consentText}>{consentLabel}</Text>
+        </View>
+      </View>
+
+      {recordingUri ? (
+        <RecordingPlayback uri={recordingUri} durationSeconds={encounter.durationSeconds} />
+      ) : null}
+
+      {encounter.sharedSummary.trim() ? (
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Meeting context</Text>
+          <Body>{encounter.sharedSummary.trim()}</Body>
+        </View>
+      ) : null}
+
+      {encounter.transcript.trim() ? (
+        <CollapsibleTranscriptSection value={encounter.transcript} defaultOpen={false} />
+      ) : null}
+
+      {encounter.personName.trim() ? (
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>People in this conversation</Text>
+          <Text style={styles.peopleLine}>{encounter.personName.trim()}</Text>
+        </View>
+      ) : null}
+
+      {followUps.length ? (
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Follow-ups</Text>
+          <View style={styles.list}>
+            {followUps.map((item) => (
+              <FollowUpCell
+                key={`${item.encounterId}-${item.actionId}`}
+                item={item}
+                onPress={() => onPressFollowUp(item)}
+                onComplete={() => onCompleteFollowUp(item)}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </BottomSheet>
+  );
+}
+
+const styles = StyleSheet.create({
+  metaRow: { gap: spacing.x2 },
+  meta: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  consentBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x2,
+    paddingHorizontal: spacing.x3,
+    paddingVertical: spacing.x2,
+    borderRadius: radius.round,
+    backgroundColor: colors.surfaceMuted,
+  },
+  consentText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
+  block: { gap: spacing.x2 },
+  blockTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  peopleLine: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 },
+  list: { gap: spacing.x3 },
+});

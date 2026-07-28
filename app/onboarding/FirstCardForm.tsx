@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { Button } from "../components/Button";
 import { TextField } from "../components/FormField";
+import { PhoneField } from "../components/PhoneField";
 import { createLibraryCard } from "../../lib/card-library";
 import { upsertLibraryCard } from "../../lib/card-library";
 import { queueCardSync } from "../../lib/card-library-sync";
@@ -94,7 +95,7 @@ export function FirstCardForm({ initialName, initialEmail }: { initialName: stri
         <TextField label="Job title" name="role" autoComplete="organization-title" placeholder="Founder, Designer, Consultant…" value={role} onChange={(event) => setRole(event.target.value)} />
         <TextField label="Company" name="company" autoComplete="organization" placeholder="Optional" value={company} onChange={(event) => setCompany(event.target.value)} />
         <TextField label="Email" name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-        <TextField label="Phone" name="phone" type="tel" autoComplete="tel" placeholder="Optional" value={phone} onChange={(event) => setPhone(event.target.value)} />
+        <PhoneField label="Phone" value={phone} onChange={setPhone} />
         <div className="onboarding-theme-picker">
           <span>Brand colour</span>
           <div className="onboarding-theme-swatches">

@@ -138,8 +138,10 @@
     },
     "extra": {
       "publicCardBaseUrl": "https://aftermeet-beta.vercel.app",
-    "buildNumber": 3,
-    "buildStamp": "2026-07-27-gather"
+      "supabaseUrl": "https://tgpzxgrvdmmwnodxrooh.supabase.co",
+      "supabaseAnonKey": "sb_publishable_pKxGkQpYza-qmBXOMrP7qQ_D4BfJ3Uj",
+      "buildNumber": 4,
+      "buildStamp": "2026-07-28-standalone"
     }
   }
 }

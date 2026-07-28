@@ -7,6 +7,7 @@ import { BuildingsIcon } from "@phosphor-icons/react/dist/csr/Buildings";
 import { Button } from "../../components/Button";
 import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { TextField } from "../../components/FormField";
+import { PhoneField } from "../../components/PhoneField";
 import { themeForegroundColor } from "@/lib/theme-contrast";
 
 type OptionalField = "x" | "instagram" | "tiktok" | "linkedin" | "role" | "company";
@@ -149,14 +150,11 @@ export function PublicExchangeForm({
         autoComplete="email"
         required
       />
-      <TextField
+      <PhoneField
         id="exchange-phone"
         label="Phone number (optional)"
-        type="tel"
         value={visitorPhone}
-        onChange={(event) => setVisitorPhone(event.target.value)}
-        autoComplete="tel"
-        placeholder="+1 555 000 0000"
+        onChange={setVisitorPhone}
       />
 
       <div className="public-exchange-optional">

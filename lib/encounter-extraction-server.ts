@@ -17,7 +17,7 @@ const extractionSchema = z.object({
   sharedSummary: z.string().describe("3-6 intelligent sentences summarizing what was discussed, decided, and who owns what next. Safe to share with everyone in the meeting."),
   privateNotes: z.string().describe("Leave empty."),
   followUp: z.string().describe("One concrete next action sentence, or empty if none"),
-  followUpType: z.enum(["email", "linkedin", "call", "meeting", "send", "other"]),
+  followUpType: z.enum(["email", "linkedin", "call", "meeting", "send", "whatsapp", "other"]),
   uncertainFields: z.array(z.string()).describe("Field names where the transcript is ambiguous"),
 });
 

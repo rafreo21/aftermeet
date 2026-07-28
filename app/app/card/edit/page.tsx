@@ -39,6 +39,7 @@ import { YoutubeLogoIcon } from "@phosphor-icons/react/dist/csr/YoutubeLogo";
 import { AppShell } from "../../../components/AppShell";
 import { Button, IconButton, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
+import { PhoneField } from "../../../components/PhoneField";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
 import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from "../../../../lib/theme-contrast";
@@ -425,7 +426,16 @@ export default function CardEditor() {
                     <IconButton aria-label="Close editor" onClick={() => setEditing(null)}><XIcon /></IconButton>
                   </header>
                   <div className="method-inline-fields">
-                    <TextField autoFocus label={fieldLabel(editing.type)} placeholder={methodMeta[editing.type].placeholder} value={editing.value} onChange={(e) => { setMethodError(""); setEditing({ ...editing, value: e.target.value }); }} error={methodError} />
+                    {editing.type === "phone" || editing.type === "whatsapp" ? (
+                      <PhoneField
+                        label={fieldLabel(editing.type)}
+                        value={editing.value}
+                        onChange={(value) => { setMethodError(""); setEditing({ ...editing, value }); }}
+                        error={methodError}
+                      />
+                    ) : (
+                      <TextField autoFocus label={fieldLabel(editing.type)} placeholder={methodMeta[editing.type].placeholder} value={editing.value} onChange={(e) => { setMethodError(""); setEditing({ ...editing, value: e.target.value }); }} error={methodError} />
+                    )}
                     <TextField label="Display label" hint="Optional" value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} />
                     <div><p>Suggested labels</p><div className="label-suggestions">{suggestionsFor(editing.type).map((label) => (
                       <button

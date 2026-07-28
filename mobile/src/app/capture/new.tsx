@@ -16,6 +16,7 @@ import { CaptureContextStep } from '@/components/capture-context-step';
 import { CaptureErrorSheet } from '@/components/capture-error-sheet';
 import { CaptureInteractionStep } from '@/components/capture-interaction-step';
 import { CaptureLeaveSheet } from '@/components/capture-leave-sheet';
+import { FollowUpDuePicker } from '@/components/follow-up-due-picker';
 import { CaptureStepIndicator } from '@/components/capture-step-indicator';
 import { Body, Button, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
@@ -32,6 +33,10 @@ import {
 import {
   applyExtractionDraft,
 } from '@/features/encounters/extraction-helpers';
+import {
+  fetchAllConnectionsMerged,
+  type ConnectionItem,
+} from '@/features/connections/connections-api';
 import {
   createGatherPerson,
   formatPeopleNames,
@@ -55,6 +60,7 @@ import {
   uploadEncounterRecording,
   type InboundExchange,
 } from '@/features/encounters/encounter-api';
+import { fetchEncounterRecords } from '@/features/follow-ups/follow-up-api';
 import { useCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/use-capture-recorder';
 import { normalizeTranscriptForExtraction } from '@/lib/transcript-cleanup';
 import { useAppInsets } from '@/lib/safe-area';
@@ -65,6 +71,7 @@ const CHANNELS = [
   { id: 'email', label: 'Email' },
   { id: 'linkedin', label: 'LinkedIn' },
   { id: 'call', label: 'Call' },
+  { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'meeting', label: 'Meeting' },
   { id: 'send', label: 'Send' },
   { id: 'other', label: 'Other' },
@@ -92,6 +99,8 @@ export default function CaptureWizardScreen() {
   const generationKickoffRef = useRef('');
   const dismissedErrorRef = useRef('');
   const hydratedRef = useRef(false);
+  const [connections, setConnections] = useState<ConnectionItem[]>([]);
+  const [priorMeetingCounts, setPriorMeetingCounts] = useState<Record<string, number>>({});
   const [draftReady, setDraftReady] = useState(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -105,6 +114,22 @@ export default function CaptureWizardScreen() {
       return unchanged ? current : next;
     });
   }, []);
+
+  const getPriorMeetingCount = useCallback((email: string) => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return 0;
+    return priorMeetingCounts[normalized] ?? 0;
+  }, [priorMeetingCounts]);
+
+  function resolveContactIdForDraft(current: CaptureWizardDraft) {
+    const email = current.personEmail.trim().toLowerCase();
+    const exchangeId = current.exchangeId?.trim();
+    const match = connections.find((connection) => (
+      (email && connection.email?.trim().toLowerCase() === email)
+      || (exchangeId && connection.source === 'inbound' && connection.sourceId === exchangeId)
+    ));
+    return match?.id || current.contactId || '';
+  }
 
   const handleTranscriptChange = useCallback((transcript: string) => {
     updateDraft({ transcript });
@@ -440,6 +465,41 @@ export default function CaptureWizardScreen() {
   }, [draft.step, session?.access_token]);
 
   useEffect(() => {
+    if (!session?.access_token) {
+      setConnections([]);
+      setPriorMeetingCounts({});
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.all([
+      fetchAllConnectionsMerged(session.access_token),
+      fetchEncounterRecords(session.access_token),
+    ])
+      .then(([nextConnections, encounters]) => {
+        if (cancelled) return;
+        setConnections(nextConnections);
+        const counts: Record<string, number> = {};
+        for (const encounter of encounters) {
+          const email = encounter.personEmail.trim().toLowerCase();
+          if (!email) continue;
+          counts[email] = (counts[email] ?? 0) + 1;
+        }
+        setPriorMeetingCounts(counts);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConnections([]);
+          setPriorMeetingCounts({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.access_token]);
+
+  useEffect(() => {
     if (!params.exchange || !exchanges.length) return;
     const match = exchanges.find((item) => item.id === params.exchange);
     if (match) linkExchange(match);
@@ -513,7 +573,7 @@ export default function CaptureWizardScreen() {
         title: draft.title,
         personName: draft.personName,
         personEmail: draft.personEmail,
-        contactId: draft.contactId || undefined,
+        contactId: resolveContactIdForDraft(draft) || undefined,
         exchangeId: draft.exchangeId || undefined,
         sharedSummary: draft.sharedSummary,
         privateNotes: '',
@@ -581,6 +641,8 @@ export default function CaptureWizardScreen() {
               loadingExchanges={loadingExchanges}
               onLinkExchange={linkExchange}
               onEnsureAuth={ensureAuth}
+              getPriorMeetingCount={getPriorMeetingCount}
+              knownConnectionEmails={connections.map((connection) => connection.email?.trim().toLowerCase() || '').filter(Boolean)}
             />
           ) : null}
 
@@ -632,13 +694,9 @@ export default function CaptureWizardScreen() {
                   </Pressable>
                 ))}
               </View>
-              <Text style={styles.label}>Due date (optional)</Text>
-              <TextInput
-                value={draft.dueAt}
-                onChangeText={(value) => updateDraft({ dueAt: value })}
-                placeholder="2026-07-30"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
+              <FollowUpDuePicker
+                dueAt={draft.dueAt}
+                onChange={(dueAt) => updateDraft({ dueAt })}
               />
             </View>
           ) : null}

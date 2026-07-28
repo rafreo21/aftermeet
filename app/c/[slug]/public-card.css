@@ -625,3 +625,60 @@
 @media (max-width: 520px) {
   .public-exchange-grid { grid-template-columns: 1fr; }
 }
+
+.phone-field {
+  display: grid;
+  grid-template-columns: minmax(150px, 38%) 1fr;
+  gap: 10px;
+  align-items: stretch;
+}
+.phone-field-error .phone-field-country,
+.phone-field-error input {
+  border-color: #b42318;
+}
+.phone-field-country {
+  position: relative;
+  min-height: 48px;
+  border: 1px solid #d5d9d3;
+  border-radius: 10px;
+  background: white;
+}
+.phone-field-country select {
+  appearance: none;
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  padding: 0 34px 0 12px;
+  color: #0e0f0c;
+  font-size: 14px;
+  font-weight: 700;
+}
+.phone-field-country svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #6b7168;
+}
+.phone-field input {
+  min-height: 48px;
+  width: 100%;
+  border: 1px solid #d5d9d3;
+  border-radius: 10px;
+  background: white;
+  padding: 0 14px;
+  color: #0e0f0c;
+  font-size: 16px;
+  outline: none;
+}
+.phone-field input:focus {
+  border-color: #163300;
+  box-shadow: 0 0 0 4px rgba(174, 184, 170, 0.45);
+}
+@media (max-width: 520px) {
+  .phone-field { grid-template-columns: 1fr; }
+}
+

@@ -33,10 +33,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!supabase) return;
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+
+    const sessionTimeout = setTimeout(() => setLoading(false), 5000);
 
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
@@ -65,6 +69,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
 
     return () => {
+      clearTimeout(sessionTimeout);
       data.subscription.unsubscribe();
       linking.remove();
     };
