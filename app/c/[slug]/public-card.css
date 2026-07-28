@@ -628,7 +628,7 @@
 
 .phone-field {
   display: grid;
-  grid-template-columns: minmax(150px, 38%) 1fr;
+  grid-template-columns: minmax(108px, 34%) 1fr;
   gap: 10px;
   align-items: stretch;
 }
@@ -677,8 +677,5 @@
 .phone-field input:focus {
   border-color: #163300;
   box-shadow: 0 0 0 4px rgba(174, 184, 170, 0.45);
-}
-@media (max-width: 520px) {
-  .phone-field { grid-template-columns: 1fr; }
 }
 

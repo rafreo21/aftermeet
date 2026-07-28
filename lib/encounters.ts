@@ -7,6 +7,8 @@ export type EncounterAction = {
   owner: "me" | "guest";
   dueAt: string;
   status: "open" | "completed" | "snoozed";
+  assigneeName?: string;
+  assigneeEmail?: string;
   outboundDraft?: OutboundDraft;
 };
 

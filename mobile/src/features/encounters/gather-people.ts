@@ -63,6 +63,13 @@ export function formatPeopleNames(people: GatherPerson[]) {
   return people.map((person) => person.name.trim()).filter(Boolean).join(', ');
 }
 
+export function formatPrimaryContactLine(person: GatherPerson) {
+  if (person.email.trim()) return person.email.trim();
+  if (person.phone.trim()) return person.phone.trim();
+  if (person.linkedIn.trim()) return person.linkedIn.trim();
+  return '';
+}
+
 export function primaryPersonEmail(people: GatherPerson[]) {
   return people.find((person) => person.email.includes('@'))?.email.trim() ?? '';
 }

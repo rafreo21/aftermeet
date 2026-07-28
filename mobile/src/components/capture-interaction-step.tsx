@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import {
+  CaretDown,
   CaretRight,
+  CaretUp,
   CheckCircle,
   IdentificationCard,
   Microphone,
@@ -30,6 +32,7 @@ import type { CaptureWizardDraft } from '@/features/encounters/capture-draft';
 import type { InboundExchange } from '@/features/encounters/encounter-api';
 import {
   createGatherPerson,
+  formatPrimaryContactLine,
   MAX_GATHER_PEOPLE,
   syncLegacyPersonFields,
   type GatherPerson,
@@ -55,8 +58,65 @@ type CaptureInteractionStepProps = {
   knownConnectionEmails?: string[];
 };
 
-function formatContactLine(person: GatherPerson) {
-  return [person.email.trim(), person.phone.trim()].filter(Boolean).join(' · ');
+function metBeforeLabelForPerson(
+  person: GatherPerson,
+  getPriorMeetingCount?: (email: string) => number,
+  knownConnectionEmails: string[] = [],
+) {
+  const email = person.email.trim().toLowerCase();
+  const priorCount = getPriorMeetingCount?.(person.email) ?? 0;
+  const knownConnection = email && knownConnectionEmails.includes(email);
+  if (priorCount > 0) {
+    return `You've met before · ${priorCount} conversation${priorCount === 1 ? '' : 's'}`;
+  }
+  if (knownConnection) return 'Already in your connections';
+  return null;
+}
+
+function MeetingPersonCard({
+  person,
+  metBeforeLabel,
+  onEdit,
+  onRemove,
+}: {
+  person: GatherPerson;
+  metBeforeLabel: string | null;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const contactLine = formatPrimaryContactLine(person);
+
+  return (
+    <View style={styles.personCard}>
+      <CheckCircle size={20} color={colors.ink} weight="fill" />
+      <View style={styles.personCopy}>
+        <Text style={styles.personName}>{person.name.trim()}</Text>
+        {contactLine ? <Text style={styles.personMeta}>{contactLine}</Text> : null}
+        {person.exchangeId ? (
+          <Text style={styles.personBadge}>From card scan</Text>
+        ) : null}
+        {metBeforeLabel ? (
+          <Text style={styles.personHistoryBadge}>{metBeforeLabel}</Text>
+        ) : null}
+      </View>
+      <View style={styles.personActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${person.name}`}
+          onPress={onEdit}
+          style={styles.iconButton}>
+          <PencilSimple size={15} color={colors.ink} weight="bold" />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${person.name}`}
+          onPress={onRemove}
+          style={styles.iconButton}>
+          <Trash size={15} color={colors.danger} weight="bold" />
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 function PersonFields({
@@ -164,9 +224,11 @@ export function CaptureInteractionStep({
   const [manualOpen, setManualOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [scansOpen, setScansOpen] = useState(false);
+  const [peopleSheetOpen, setPeopleSheetOpen] = useState(false);
   const [personError, setPersonError] = useState('');
   const [formPerson, setFormPerson] = useState<GatherPerson>(createGatherPerson());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [liveTranscriptOpen, setLiveTranscriptOpen] = useState(true);
 
   const people = draft.people ?? [];
   const atCapacity = people.length >= MAX_GATHER_PEOPLE;
@@ -339,33 +401,47 @@ export function CaptureInteractionStep({
 
           {showLiveTranscript ? (
             <View style={styles.liveTranscriptPanel}>
-              <View style={styles.liveTranscriptHead}>
-                <Text style={styles.liveTranscriptTitle}>Live transcript</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: liveTranscriptOpen }}
+                onPress={() => setLiveTranscriptOpen((open) => !open)}
+                style={styles.liveTranscriptHead}>
+                <View style={styles.liveTranscriptHeadCopy}>
+                  <Text style={styles.liveTranscriptTitle}>Live transcript</Text>
+                  <Text style={styles.liveTranscriptHint}>{liveTranscriptHint}</Text>
+                </View>
                 {isTranscribingImport ? (
                   <ActivityIndicator color={colors.ink} size="small" />
-                ) : null}
-              </View>
-              <Text style={styles.liveTranscriptHint}>{liveTranscriptHint}</Text>
-              <TextInput
-                value={recorder.displayTranscript}
-                onChangeText={recorder.updateTranscriptFromUser}
-                placeholder={
-                  isTranscribingImport
-                    ? 'Words will appear here as we transcribe your import…'
-                    : 'Your transcript appears here while you record, or paste one manually…'
-                }
-                placeholderTextColor={colors.muted}
-                multiline
-                scrollEnabled
-                style={styles.liveTranscriptField}
-              />
-              {recorder.serverTranscribePhase === 'failed' ? (
-                <View style={styles.transcribeFailRow}>
-                  <Text style={styles.transcribeFailText}>{recorder.serverTranscribeError}</Text>
-                  <Button variant="secondary" onPress={() => void recorder.retryTranscription()}>
-                    Retry transcription
-                  </Button>
-                </View>
+                ) : liveTranscriptOpen ? (
+                  <CaretUp size={16} color={colors.ink} weight="bold" />
+                ) : (
+                  <CaretDown size={16} color={colors.ink} weight="bold" />
+                )}
+              </Pressable>
+              {liveTranscriptOpen ? (
+                <>
+                  <TextInput
+                    value={recorder.displayTranscript}
+                    onChangeText={recorder.updateTranscriptFromUser}
+                    placeholder={
+                      isTranscribingImport
+                        ? 'Words will appear here as we transcribe your import…'
+                        : 'Your transcript appears here while you record, or paste one manually…'
+                    }
+                    placeholderTextColor={colors.muted}
+                    multiline
+                    scrollEnabled
+                    style={styles.liveTranscriptField}
+                  />
+                  {recorder.serverTranscribePhase === 'failed' ? (
+                    <View style={styles.transcribeFailRow}>
+                      <Text style={styles.transcribeFailText}>{recorder.serverTranscribeError}</Text>
+                      <Button variant="secondary" onPress={() => void recorder.retryTranscription()}>
+                        Retry transcription
+                      </Button>
+                    </View>
+                  ) : null}
+                </>
               ) : null}
             </View>
           ) : null}
@@ -387,48 +463,23 @@ export function CaptureInteractionStep({
 
         {people.length ? (
           <View style={styles.peopleList}>
-            {people.map((person) => {
-              const email = person.email.trim().toLowerCase();
-              const priorCount = getPriorMeetingCount?.(person.email) ?? 0;
-              const knownConnection = email && knownConnectionEmails.includes(email);
-              const metBeforeLabel = priorCount > 0
-                ? `You've met before · ${priorCount} conversation${priorCount === 1 ? '' : 's'}`
-                : knownConnection
-                  ? 'Already in your connections'
-                  : null;
-
-              return (
-              <View key={person.id} style={styles.personCard}>
-                <CheckCircle size={20} color={colors.ink} weight="fill" />
-                <View style={styles.personCopy}>
-                  <Text style={styles.personName}>{person.name.trim()}</Text>
-                  <Text style={styles.personMeta}>{formatContactLine(person) || 'Contact saved'}</Text>
-                  {person.exchangeId ? (
-                    <Text style={styles.personBadge}>From card scan</Text>
-                  ) : null}
-                  {metBeforeLabel ? (
-                    <Text style={styles.personHistoryBadge}>{metBeforeLabel}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.personActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit ${person.name}`}
-                    onPress={() => openManualSheet(person)}
-                    style={styles.iconButton}>
-                    <PencilSimple size={15} color={colors.ink} weight="bold" />
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${person.name}`}
-                    onPress={() => removePerson(person.id)}
-                    style={styles.iconButton}>
-                    <Trash size={15} color={colors.danger} weight="bold" />
-                  </Pressable>
-                </View>
-              </View>
-              );
-            })}
+            <MeetingPersonCard
+              person={people[0]}
+              metBeforeLabel={metBeforeLabelForPerson(people[0], getPriorMeetingCount, knownConnectionEmails)}
+              onEdit={() => openManualSheet(people[0])}
+              onRemove={() => removePerson(people[0].id)}
+            />
+            {people.length > 1 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setPeopleSheetOpen(true)}
+                style={styles.viewAllPeople}>
+                <Text style={styles.viewAllPeopleText}>
+                  View all {people.length} people
+                </Text>
+                <CaretRight size={14} color={colors.inkSoft} weight="bold" />
+              </Pressable>
+            ) : null}
           </View>
         ) : (
           <View style={styles.emptyPeople}>
@@ -581,6 +632,26 @@ export function CaptureInteractionStep({
           <Body style={styles.centerCopy}>No recent scans yet. Share your QR and new submissions appear here.</Body>
         )}
       </BottomSheet>
+
+      <BottomSheet
+        visible={peopleSheetOpen}
+        title={`In this meeting (${people.length})`}
+        onClose={() => setPeopleSheetOpen(false)}>
+        <View style={styles.peopleList}>
+          {people.map((person) => (
+            <MeetingPersonCard
+              key={person.id}
+              person={person}
+              metBeforeLabel={metBeforeLabelForPerson(person, getPriorMeetingCount, knownConnectionEmails)}
+              onEdit={() => {
+                setPeopleSheetOpen(false);
+                openManualSheet(person);
+              }}
+              onRemove={() => removePerson(person.id)}
+            />
+          ))}
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -647,7 +718,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.x3,
   },
+  liveTranscriptHeadCopy: { flex: 1, gap: 2 },
   liveTranscriptTitle: {
     color: colors.ink,
     fontSize: 12,
@@ -690,7 +763,19 @@ const styles = StyleSheet.create({
   personName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   personMeta: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   personBadge: { marginTop: 2, color: colors.ink, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
-  personHistoryBadge: { marginTop: 2, color: colors.accent, fontSize: 11, fontWeight: '700' },
+  personHistoryBadge: { marginTop: 2, color: colors.inkSoft, fontSize: 11, fontWeight: '800' },
+  viewAllPeople: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.x1,
+    paddingVertical: spacing.x3,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  viewAllPeopleText: { color: colors.inkSoft, fontSize: 13, fontWeight: '800' },
   personActions: { flexDirection: 'row', gap: spacing.x2 },
   iconButton: {
     width: 34,

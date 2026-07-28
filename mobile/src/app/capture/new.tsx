@@ -573,6 +573,7 @@ export default function CaptureWizardScreen() {
         title: draft.title,
         personName: draft.personName,
         personEmail: draft.personEmail,
+        people: draft.people,
         contactId: resolveContactIdForDraft(draft) || undefined,
         exchangeId: draft.exchangeId || undefined,
         sharedSummary: draft.sharedSummary,
@@ -670,6 +671,23 @@ export default function CaptureWizardScreen() {
                 <Text style={styles.blockTitle}>What happens next?</Text>
               </View>
               <Body>Add an optional follow-up, then save and review before anything is shared.</Body>
+              {(draft.people ?? []).length > 1 ? (
+                <View style={styles.followUpPeopleWrap}>
+                  <Text style={styles.label}>Applies to everyone</Text>
+                  <Text style={styles.fieldHint}>
+                    One reminder per person — same action, tracked separately for each attendee.
+                  </Text>
+                  <View style={styles.followUpPeopleRow}>
+                    {(draft.people ?? []).map((person) => (
+                      <View key={person.id} style={styles.followUpPersonChip}>
+                        <Text style={styles.followUpPersonChipText}>
+                          {person.name.trim() || 'Guest'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
               <Text style={styles.label}>Follow-up action</Text>
               <TextInput
                 value={draft.followUp}
@@ -830,6 +848,17 @@ const styles = StyleSheet.create({
   exchangeMeta: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   exchangeSelected: { color: colors.ink, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   emptyCopy: { color: colors.muted, fontSize: 13, lineHeight: 20 },
+  followUpPeopleWrap: { gap: spacing.x2 },
+  followUpPeopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
+  followUpPersonChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.round,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  followUpPersonChipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   channelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   channelChip: {
     paddingHorizontal: 12,

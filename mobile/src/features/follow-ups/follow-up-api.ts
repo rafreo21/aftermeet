@@ -92,8 +92,12 @@ export function followUpsForPerson(items: FollowUpItem[], personName: string, pe
   const email = personEmail?.trim().toLowerCase() || '';
   const name = personName.trim().toLowerCase();
   return items.filter((item) => {
-    if (email && item.personEmail.trim().toLowerCase() === email) return true;
-    return item.personName.trim().toLowerCase().includes(name) || name.includes(item.personName.trim().toLowerCase());
+    const itemEmail = item.personEmail.trim().toLowerCase();
+    const itemName = item.personName.trim().toLowerCase();
+    if (email && itemEmail && itemEmail === email) return true;
+    if (!name || !itemName) return false;
+    if (itemName === name) return true;
+    return itemName.includes(name) || name.includes(itemName);
   });
 }
 

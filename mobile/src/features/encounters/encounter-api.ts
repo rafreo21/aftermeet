@@ -25,6 +25,8 @@ export type EncounterAction = {
   owner: 'me' | 'guest';
   dueAt: string;
   status: 'open' | 'completed' | 'snoozed';
+  assigneeName?: string;
+  assigneeEmail?: string;
 };
 
 export type EncounterPayload = {
@@ -159,6 +161,7 @@ export function buildEncounterPayload(input: {
   title: string;
   personName: string;
   personEmail?: string;
+  people?: Array<{ name: string; email?: string }>;
   contactId?: string;
   exchangeId?: string;
   sharedSummary: string;
@@ -176,6 +179,36 @@ export function buildEncounterPayload(input: {
   const now = new Date().toISOString();
   const durationSeconds = Math.max(0, Math.round(input.durationSeconds ?? 0));
   const startedAt = input.startedAt || new Date(Date.now() - durationSeconds * 1000).toISOString();
+  const followUpTitle = input.followUp.trim();
+  const meetingPeople = (input.people ?? [])
+    .map((person) => ({
+      name: person.name.trim(),
+      email: person.email?.trim() ?? '',
+    }))
+    .filter((person) => person.name.length >= 2);
+
+  const actions: EncounterAction[] = followUpTitle
+    ? (meetingPeople.length > 1
+      ? meetingPeople.map((person) => ({
+        id: createId(),
+        title: followUpTitle,
+        channel: input.followUpType,
+        owner: 'me' as const,
+        dueAt: input.dueAt?.trim() || '',
+        status: 'open' as const,
+        assigneeName: person.name,
+        assigneeEmail: person.email,
+      }))
+      : [{
+        id: createId(),
+        title: followUpTitle,
+        channel: input.followUpType,
+        owner: 'me' as const,
+        dueAt: input.dueAt?.trim() || '',
+        status: 'open' as const,
+      }])
+    : [];
+
   return {
     id: input.id || createId(),
     title: input.title.trim() || `Meeting with ${input.personName.trim() || 'someone new'}`,
@@ -196,14 +229,7 @@ export function buildEncounterPayload(input: {
     privateNotes: input.privateNotes.trim(),
     sharedSummary: input.sharedSummary.trim(),
     recording: input.recording,
-    actions: input.followUp.trim() ? [{
-      id: createId(),
-      title: input.followUp.trim(),
-      channel: input.followUpType,
-      owner: 'me',
-      dueAt: input.dueAt?.trim() || '',
-      status: 'open',
-    }] : [],
+    actions,
     status: input.status || 'draft',
     shareToken: input.shareToken || createId().replace(/-/g, ''),
   };
