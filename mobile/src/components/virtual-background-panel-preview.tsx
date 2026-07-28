@@ -12,35 +12,41 @@ type VirtualBackgroundPanelPreviewProps = {
   panelWidth?: number;
 };
 
-/** Matches export panel proportions: left text, centered QR, centered scan label. */
+/** Side-by-side panel: copy left, branded QR right, scan line bottom-left. */
 export function VirtualBackgroundPanelPreview({
   name,
   subtitle,
   cardUrl,
   slug,
   accessToken,
-  panelWidth = 228,
+  panelWidth = 240,
 }: VirtualBackgroundPanelPreviewProps) {
-  const scale = panelWidth / 380;
+  const scale = panelWidth / 360;
   const pad = Math.round(28 * scale);
-  const qrSize = Math.round(220 * scale);
-  const textGapBeforeQr = Math.round(20 * scale);
-  const scanGapAfterQr = Math.round(14 * scale);
-  const nameFontSize = Math.max(12, Math.round(30 * scale));
+  const qrSize = Math.max(56, Math.round(120 * scale));
+  const panelHeight = Math.round(168 * scale);
+  const nameFontSize = Math.max(12, Math.round(28 * scale));
   const subtitleFontSize = Math.max(10, Math.round(18 * scale));
-  const scanFontSize = Math.max(9, Math.round(16 * scale));
+  const scanFontSize = Math.max(9, Math.round(14 * scale));
 
   return (
-    <View style={[styles.panel, { width: panelWidth, padding: pad }]}>
-      <Text style={[styles.name, { fontSize: nameFontSize }]} numberOfLines={2}>
-        {name}
-      </Text>
-      {subtitle ? (
-        <Text style={[styles.subtitle, { fontSize: subtitleFontSize }]} numberOfLines={2}>
-          {subtitle}
-        </Text>
-      ) : null}
-      <View style={[styles.qrRow, { marginTop: textGapBeforeQr }]}>
+    <View style={[styles.panel, { width: panelWidth, minHeight: panelHeight, padding: pad }]}>
+      <View style={styles.row}>
+        <View style={[styles.copy, { minHeight: qrSize }]}>
+          <View style={styles.heading}>
+            <Text style={[styles.name, { fontSize: nameFontSize }]} numberOfLines={2}>
+              {name}
+            </Text>
+            {subtitle ? (
+              <Text style={[styles.subtitle, { fontSize: subtitleFontSize }]} numberOfLines={2}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          <Text style={[styles.scanLabel, { fontSize: scanFontSize }]}>
+            Scan to save my contact
+          </Text>
+        </View>
         <BrandedQrPreview
           cardUrl={cardUrl}
           slug={slug}
@@ -49,13 +55,6 @@ export function VirtualBackgroundPanelPreview({
           style={styles.qr}
         />
       </View>
-      <Text
-        style={[
-          styles.scanLabel,
-          { fontSize: scanFontSize, marginTop: scanGapAfterQr },
-        ]}>
-        Scan to save my contact
-      </Text>
     </View>
   );
 }
@@ -65,27 +64,32 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.94)',
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  copy: {
+    flex: 1,
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  heading: {
+    gap: 2,
+  },
   name: {
     color: colors.ink,
     fontWeight: '800',
-    textAlign: 'left',
   },
   subtitle: {
     color: colors.muted,
-    marginTop: 2,
-    textAlign: 'left',
-  },
-  qrRow: {
-    width: '100%',
-    alignItems: 'center',
   },
   qr: {
     borderRadius: 10,
+    flexShrink: 0,
   },
   scanLabel: {
     color: colors.muted,
-    fontWeight: '700',
-    textAlign: 'center',
-    width: '100%',
+    fontWeight: '600',
   },
 });

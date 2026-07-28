@@ -4,39 +4,36 @@ type VirtualBackgroundProfile = {
   showCompany?: boolean;
 };
 
-/** Canonical layout for the top-right contact panel (matches 1920×1080 export). */
+/** Side-by-side panel: copy on the left, branded QR on the right (matches original design). */
 export const VIRTUAL_BG_PANEL = {
   canvasWidth: 1920,
   canvasHeight: 1080,
-  x: 1510,
-  y: 48,
-  width: 380,
+  x: 1460,
+  y: 72,
+  width: 360,
+  height: 168,
   pad: 28,
-  qrSize: 220,
-  nameFontSize: 30,
+  qrSize: 120,
+  nameFontSize: 28,
   subtitleFontSize: 18,
-  scanFontSize: 16,
-  nameTop: 32,
-  subtitleTop: 72,
-  textGapBeforeQr: 20,
-  scanGapAfterQr: 14,
-  bottomPad: 24,
+  scanFontSize: 14,
+  radius: 20,
 } as const;
 
 export type VirtualBackgroundLayout = {
   subtitle: string;
-  panelHeight: number;
+  nameX: number;
   nameY: number;
   subtitleY: number;
-  qrX: number;
-  qrY: number;
   scanX: number;
   scanY: number;
+  qrX: number;
+  qrY: number;
   preview: {
-    qrSize: number;
+    panelWidth: number;
+    panelHeight: number;
     pad: number;
-    textGapBeforeQr: number;
-    scanGapAfterQr: number;
+    qrSize: number;
     nameFontSize: number;
     subtitleFontSize: number;
     scanFontSize: number;
@@ -45,47 +42,39 @@ export type VirtualBackgroundLayout = {
 
 export function buildVirtualBackgroundLayout(
   profile: VirtualBackgroundProfile,
-  previewPanelWidth = 228,
+  previewPanelWidth = 240,
 ): VirtualBackgroundLayout {
   const role = profile.role.trim();
   const company = profile.showCompany !== false ? profile.company.trim() : "";
   const subtitle = [role, company].filter(Boolean).join(" · ");
-  const hasSubtitle = Boolean(subtitle);
 
-  const qrTop = hasSubtitle
-    ? VIRTUAL_BG_PANEL.subtitleTop + 28 + VIRTUAL_BG_PANEL.textGapBeforeQr
-    : VIRTUAL_BG_PANEL.nameTop + 34 + VIRTUAL_BG_PANEL.textGapBeforeQr;
+  const qrX =
+    VIRTUAL_BG_PANEL.x + VIRTUAL_BG_PANEL.width - VIRTUAL_BG_PANEL.pad - VIRTUAL_BG_PANEL.qrSize;
+  const qrY =
+    VIRTUAL_BG_PANEL.y + Math.round((VIRTUAL_BG_PANEL.height - VIRTUAL_BG_PANEL.qrSize) / 2);
 
-  const panelHeight =
-    qrTop +
-    VIRTUAL_BG_PANEL.qrSize +
-    VIRTUAL_BG_PANEL.scanGapAfterQr +
-    18 +
-    VIRTUAL_BG_PANEL.bottomPad;
-
-  const qrX = VIRTUAL_BG_PANEL.x + Math.round((VIRTUAL_BG_PANEL.width - VIRTUAL_BG_PANEL.qrSize) / 2);
-  const qrY = VIRTUAL_BG_PANEL.y + qrTop;
-  const scanX = VIRTUAL_BG_PANEL.x + Math.round(VIRTUAL_BG_PANEL.width / 2);
-  const scanY = qrY + VIRTUAL_BG_PANEL.qrSize + VIRTUAL_BG_PANEL.scanGapAfterQr + 14;
-  const nameY = VIRTUAL_BG_PANEL.y + VIRTUAL_BG_PANEL.nameTop + 24;
-  const subtitleY = VIRTUAL_BG_PANEL.y + VIRTUAL_BG_PANEL.subtitleTop + 14;
+  const nameX = VIRTUAL_BG_PANEL.x + VIRTUAL_BG_PANEL.pad;
+  const nameY = VIRTUAL_BG_PANEL.y + 46;
+  const subtitleY = VIRTUAL_BG_PANEL.y + 80;
+  const scanX = nameX;
+  const scanY = VIRTUAL_BG_PANEL.y + VIRTUAL_BG_PANEL.height - 22;
 
   const scale = previewPanelWidth / VIRTUAL_BG_PANEL.width;
 
   return {
     subtitle,
-    panelHeight,
+    nameX,
     nameY,
     subtitleY,
-    qrX,
-    qrY,
     scanX,
     scanY,
+    qrX,
+    qrY,
     preview: {
-      qrSize: Math.round(VIRTUAL_BG_PANEL.qrSize * scale),
+      panelWidth: previewPanelWidth,
+      panelHeight: Math.round(VIRTUAL_BG_PANEL.height * scale),
       pad: Math.round(VIRTUAL_BG_PANEL.pad * scale),
-      textGapBeforeQr: Math.round(VIRTUAL_BG_PANEL.textGapBeforeQr * scale),
-      scanGapAfterQr: Math.round(VIRTUAL_BG_PANEL.scanGapAfterQr * scale),
+      qrSize: Math.max(56, Math.round(VIRTUAL_BG_PANEL.qrSize * scale)),
       nameFontSize: Math.max(12, Math.round(VIRTUAL_BG_PANEL.nameFontSize * scale)),
       subtitleFontSize: Math.max(10, Math.round(VIRTUAL_BG_PANEL.subtitleFontSize * scale)),
       scanFontSize: Math.max(9, Math.round(VIRTUAL_BG_PANEL.scanFontSize * scale)),

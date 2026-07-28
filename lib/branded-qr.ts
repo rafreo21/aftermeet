@@ -46,8 +46,8 @@ export async function buildBrandedQrPngBuffer(cardUrl: string, size = 1024) {
     loadAfterMeetLogoBuffer(),
   ]);
 
-  const logoSize = Math.round(size * 0.22);
-  const badgePadding = Math.max(4, Math.round(size * 0.012));
+  const logoSize = Math.round(size * 0.24);
+  const badgePadding = Math.max(5, Math.round(size * 0.014));
   const badgeSize = logoSize + badgePadding * 2;
   const logoBadge = await sharp(logoBuffer)
     .resize(logoSize, logoSize, {

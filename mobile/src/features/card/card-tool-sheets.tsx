@@ -676,7 +676,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backgroundPreview: {
-    minHeight: 168,
     borderRadius: radius.medium,
     padding: spacing.x4,
     justifyContent: 'flex-start',

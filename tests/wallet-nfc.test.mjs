@@ -45,7 +45,7 @@ test("html email signature includes structured layout and card link", async () =
   assert.match(html, /data:image\/png;base64,abc/);
 });
 
-test("virtual background svg includes name and centered branded qr overlay", async () => {
+test("virtual background svg uses side-by-side layout with embedded font and branded qr", async () => {
   const { buildVirtualBackgroundSvg } = await import("../lib/share-assets.ts");
   const svg = await buildVirtualBackgroundSvg({
     name: "Alex Morgan",
@@ -55,9 +55,9 @@ test("virtual background svg includes name and centered branded qr overlay", asy
     themeColor: "#9FE870",
   });
   assert.match(svg, /Alex Morgan/);
-  assert.match(svg, /1920/);
-  assert.match(svg, /width="220"/);
-  assert.match(svg, /text-anchor="middle">Scan to save my contact/);
+  assert.match(svg, /font-family="Inter/);
+  assert.match(svg, /Scan to save my contact/);
+  assert.match(svg, /width="120"/);
   assert.match(svg, /data:image\/png;base64,/);
 });
 

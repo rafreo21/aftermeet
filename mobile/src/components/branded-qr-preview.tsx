@@ -19,8 +19,8 @@ function LocalBrandedQr({ value, size }: { value: string; size: number }) {
     return <Text style={styles.placeholder}>QR</Text>;
   }
 
-  const logoSize = Math.max(14, Math.round(size * 0.22));
-  const badgeSize = logoSize + 6;
+  const logoSize = Math.max(14, Math.round(size * 0.24));
+  const badgeSize = logoSize + 8;
 
   return (
     <View style={[styles.frame, { width: size, height: size }]}>
