@@ -1,6 +1,7 @@
 import { mobileFetch } from '@/lib/mobile-api';
 
 import { lookupPublishedCardSlug } from './connection-card-loader';
+import type { SavedDirectoryContact } from './connection-directory';
 import {
   connectionAvatarUrl,
   fetchPublicConnectionCard,
@@ -55,6 +56,9 @@ type ContactRow = {
   phone?: string;
   company?: string;
   role?: string;
+  exchangeId?: string;
+  legacyId?: string;
+  linkedinUrl?: string;
 };
 
 function subtitle(role?: string, company?: string, fallback = 'Connected through AfterMeet') {
@@ -75,13 +79,24 @@ export async function fetchPeopleConnections(accessToken: string) {
   return payload.connections ?? [];
 }
 
-export async function fetchContacts(accessToken: string) {
+export async function fetchContacts(accessToken: string): Promise<SavedDirectoryContact[]> {
   const response = await mobileFetch('/api/contacts', accessToken);
   const payload = await response.json() as { contacts?: ContactRow[]; error?: string };
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load your contacts.');
   }
-  return payload.contacts ?? [];
+  return (payload.contacts ?? []).map((contact) => ({
+    id: contact.id,
+    firstName: contact.firstName?.trim() || 'Contact',
+    lastName: contact.lastName?.trim() || '',
+    email: contact.email?.trim() || '',
+    phone: contact.phone?.trim() || undefined,
+    linkedinUrl: contact.linkedinUrl?.trim() || undefined,
+    company: contact.company?.trim() || '',
+    role: contact.role?.trim() || '',
+    exchangeId: contact.exchangeId,
+    legacyId: contact.legacyId,
+  }));
 }
 
 export async function fetchInboundExchanges(accessToken: string) {
@@ -93,7 +108,7 @@ export async function fetchInboundExchanges(accessToken: string) {
   return payload.exchanges ?? [];
 }
 
-async function enrichConnectionPhotos(accessToken: string, connections: ConnectionItem[]) {
+export async function enrichConnectionPhotos(accessToken: string, connections: ConnectionItem[]) {
   const withSlugs = await Promise.all(connections.map(async (connection) => {
     if (connection.cardSlug?.trim()) return connection;
     if (!connection.email?.trim()) return connection;
@@ -118,11 +133,11 @@ async function enrichConnectionPhotos(accessToken: string, connections: Connecti
   });
 }
 
-export async function fetchAllConnections(accessToken: string): Promise<ConnectionItem[]> {
+export async function fetchAllConnectionsMerged(accessToken: string): Promise<ConnectionItem[]> {
   const [people, exchanges, contacts] = await Promise.all([
     fetchPeopleConnections(accessToken).catch(() => [] as PeopleConnection[]),
     fetchInboundExchanges(accessToken).catch(() => [] as InboundExchange[]),
-    fetchContacts(accessToken).catch(() => [] as ContactRow[]),
+    fetchContacts(accessToken).catch(() => [] as SavedDirectoryContact[]),
   ]);
 
   const merged = new Map<string, ConnectionItem>();
@@ -138,6 +153,7 @@ export async function fetchAllConnections(accessToken: string): Promise<Connecti
       source: 'met',
       cardSlug: row.cardSlug?.trim() || undefined,
       connectedAt: row.connectedAt,
+      photoUrl: connectionAvatarUrl({ name, email: row.personEmail?.trim() || undefined } as ConnectionItem),
     };
     merged.set(mergeKey(name, item.email), item);
   }
@@ -155,6 +171,7 @@ export async function fetchAllConnections(accessToken: string): Promise<Connecti
       phone: exchange.visitor_phone?.trim() || undefined,
       source: 'inbound',
       connectedAt: exchange.created_at,
+      photoUrl: connectionAvatarUrl({ name, email: exchange.visitor_email?.trim() || undefined } as ConnectionItem),
     };
     const key = mergeKey(name, item.email);
     if (!merged.has(key)) merged.set(key, item);
@@ -170,13 +187,50 @@ export async function fetchAllConnections(accessToken: string): Promise<Connecti
       email: contact.email?.trim() || undefined,
       phone: contact.phone?.trim() || undefined,
       source: 'contact',
+      photoUrl: connectionAvatarUrl({ name, email: contact.email?.trim() || undefined } as ConnectionItem),
     };
     const key = mergeKey(name, item.email);
     if (!merged.has(key)) merged.set(key, item);
   }
 
-  const connections = Array.from(merged.values());
+  return Array.from(merged.values());
+}
+
+export async function fetchAllConnections(accessToken: string): Promise<ConnectionItem[]> {
+  const connections = await fetchAllConnectionsMerged(accessToken);
   return enrichConnectionPhotos(accessToken, connections);
+}
+
+export async function createManualContact(
+  accessToken: string,
+  input: { name: string; email?: string; role?: string; company?: string },
+) {
+  const trimmedName = input.name.trim();
+  if (!trimmedName) throw new Error('Enter a name to save this connection.');
+
+  const parts = trimmedName.split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || 'Contact';
+  const lastName = parts.slice(1).join(' ');
+  const id = `manual-${Date.now()}`;
+
+  const response = await mobileFetch('/api/contacts', accessToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id,
+      firstName,
+      lastName,
+      email: input.email?.trim() || '',
+      company: input.company?.trim() || '',
+      role: input.role?.trim() || '',
+      source: 'manual',
+    }),
+  });
+  const payload = await response.json() as { error?: string; contact?: ContactRow };
+  if (!response.ok) {
+    throw new Error(payload.error || 'Could not save this connection.');
+  }
+  return payload.contact;
 }
 
 export function sortConnections(connections: ConnectionItem[], sort: ConnectionSort) {

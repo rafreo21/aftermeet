@@ -45,14 +45,15 @@ type ToolRowProps = {
   title: string;
   subtitle: string;
   onPress: () => void;
+  isLast?: boolean;
 };
 
-function ToolRow({ icon, title, subtitle, onPress }: ToolRowProps) {
+function ToolRow({ icon, title, subtitle, onPress, isLast = false }: ToolRowProps) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.toolRow, pressed && styles.toolRowPressed]}>
+      style={({ pressed }) => [styles.toolRow, isLast && styles.toolRowLast, pressed && styles.toolRowPressed]}>
       <View style={styles.toolIcon}>{icon}</View>
       <View style={styles.toolCopy}>
         <Text style={styles.toolTitle}>{title}</Text>
@@ -327,6 +328,7 @@ export default function CardToolsScreen() {
               title="Virtual background"
               subtitle="Meeting background with your card QR"
               onPress={() => openSheet('background')}
+              isLast
             />
           </Panel>
         </ScrollView>
@@ -449,6 +451,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.x4,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
+  },
+  toolRowLast: {
+    borderBottomWidth: 0,
   },
   toolRowPressed: { opacity: 0.72 },
   toolIcon: {

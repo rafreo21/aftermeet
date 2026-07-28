@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
 import { IdentificationCard, Plus, Scan } from 'phosphor-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 
 import { Body, Button, Eyebrow, Panel, Title } from '@/components/ui';
 import { MAX_CARDS } from '@/features/card/card-library';
@@ -12,6 +15,8 @@ import { colors, radius, spacing } from '@/theme/tokens';
 export default function CardLibraryScreen() {
   const { cards, activeCardId, syncing, canCreateCard, createCard, setPrimaryCard } = useCard();
   const insets = useAppInsets();
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
@@ -72,8 +77,17 @@ export default function CardLibraryScreen() {
               <Pressable
                 accessibilityRole="button"
                 onPress={async () => {
-                  const created = await createCard({ label: `Card ${cards.length + 1}` });
-                  if (created) router.push(`/edit-card?id=${created.id}`);
+                  try {
+                    const created = await createCard({ label: `Card ${cards.length + 1}` });
+                    if (created) router.push(`/edit-card?id=${created.id}`);
+                    else {
+                      setErrorMessage('You can save a maximum of five cards.');
+                      setErrorSheetOpen(true);
+                    }
+                  } catch (caught) {
+                    setErrorMessage(caught instanceof Error ? caught.message : 'Could not create a card.');
+                    setErrorSheetOpen(true);
+                  }
                 }}
                 style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}>
                 <View style={styles.addIcon}>
@@ -92,8 +106,17 @@ export default function CardLibraryScreen() {
               <Body>Add your identity and the ways people can reach you.</Body>
               <Button
                 onPress={async () => {
-                  const created = await createCard();
-                  if (created) router.push(`/edit-card?id=${created.id}`);
+                  try {
+                    const created = await createCard();
+                    if (created) router.push(`/edit-card?id=${created.id}`);
+                    else {
+                      setErrorMessage('Could not create a card right now.');
+                      setErrorSheetOpen(true);
+                    }
+                  } catch (caught) {
+                    setErrorMessage(caught instanceof Error ? caught.message : 'Could not create a card.');
+                    setErrorSheetOpen(true);
+                  }
                 }}>
                 Create your first card
               </Button>
@@ -101,6 +124,15 @@ export default function CardLibraryScreen() {
           ) : null}
         </ScrollView>
       </View>
+
+      <OutcomeErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={() => {
+          setErrorSheetOpen(false);
+          setErrorMessage('');
+        }}
+      />
     </View>
   );
 }

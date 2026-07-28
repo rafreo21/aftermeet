@@ -9,7 +9,6 @@ import {
 } from 'phosphor-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,6 +19,8 @@ import {
 
 import { Body, Button, PageHeader, ScreenFrame } from '@/components/ui';
 import { CaptureDeleteSheet } from '@/components/capture-delete-sheet';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { CaptureListSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import {
   createFreshCaptureDraft,
@@ -95,7 +96,8 @@ export default function CaptureHomeScreen() {
   const [drafts, setDrafts] = useState<CaptureDraftSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<EncounterSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -114,7 +116,8 @@ export default function CaptureHomeScreen() {
   const loadHome = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
-    setError('');
+    setErrorSheetOpen(false);
+    setErrorMessage('');
 
     try {
       const draftList = await listCaptureDrafts();
@@ -127,7 +130,8 @@ export default function CaptureHomeScreen() {
         setEncounters([]);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load captures.');
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not load captures.');
+      setErrorSheetOpen(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -165,14 +169,16 @@ export default function CaptureHomeScreen() {
   async function confirmDeleteEncounter() {
     if (!deleteTarget || !session?.access_token) return;
     setDeleting(true);
-    setError('');
+    setErrorSheetOpen(false);
+    setErrorMessage('');
     try {
       await deleteEncounter(session.access_token, deleteTarget.id);
       await deleteLocalRecording(deleteTarget.id);
       setEncounters((current) => current.filter((item) => item.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not delete this capture.');
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not delete this capture.');
+      setErrorSheetOpen(true);
     } finally {
       setDeleting(false);
     }
@@ -242,14 +248,7 @@ export default function CaptureHomeScreen() {
             </Pressable>
           </View>
 
-          {loading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color={colors.ink} />
-              <Text style={styles.loadingCopy}>Loading your captures…</Text>
-            </View>
-          ) : null}
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {loading ? <CaptureListSkeleton count={4} /> : null}
 
           {tab === 'drafts' ? (
             <>
@@ -364,6 +363,15 @@ export default function CaptureHomeScreen() {
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => void confirmDeleteEncounter()}
       />
+
+      <OutcomeErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={() => {
+          setErrorSheetOpen(false);
+          setErrorMessage('');
+        }}
+      />
     </ScreenFrame>
   );
 }
@@ -426,9 +434,6 @@ const styles = StyleSheet.create({
   },
   tabLabel: { color: colors.muted, fontSize: 13, fontWeight: '800' },
   tabLabelActive: { color: colors.ink },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3, paddingVertical: spacing.x4 },
-  loadingCopy: { color: colors.muted, fontSize: 14 },
-  error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
   emptyCard: {
     alignItems: 'flex-start',
     gap: spacing.x3,

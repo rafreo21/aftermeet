@@ -120,7 +120,12 @@ export function CardProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(normalized));
     await AsyncStorage.setItem(ACTIVE_CARD_KEY, resolvedActiveId);
     const active = normalized.find((item) => item.id === resolvedActiveId) || normalized[0];
-    if (active) await syncCardToolsForCard(active, undefined, session?.access_token);
+    if (active) {
+      const env = readEnv();
+      const urlForCard = (target: MobileCard) =>
+        `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`;
+      await syncCardToolsForCard(normalized, urlForCard, session?.access_token, active);
+    }
   }, [session?.access_token]);
 
   const saveRemoteCard = useCallback(async (card: MobileCard, options?: { strictImages?: boolean }) => {
@@ -245,7 +250,12 @@ export function CardProvider({ children }: PropsWithChildren) {
       }
       if (nextCard.status === 'published') {
         const synced = cardsRef.current.find((item) => item.id === id) || nextCard;
-        await syncCardToolsForCard(synced, undefined, session.access_token);
+        await syncCardToolsForCard(
+          cardsRef.current,
+          (target) => `${readEnv()?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`,
+          session.access_token,
+          synced,
+        );
       }
     }
   }, [persistCards, saveRemoteCard, session?.access_token]);

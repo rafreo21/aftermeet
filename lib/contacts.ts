@@ -17,6 +17,7 @@ export type Contact = {
   source?: ContactSource;
   exchangeId?: string;
   campaignId?: string;
+  legacyId?: string;
 };
 
 export const CONTACTS_STORAGE_KEY = "aftermeet-contacts-v1";

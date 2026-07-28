@@ -1,14 +1,18 @@
 import type { CaptureWizardDraft } from '@/features/encounters/capture-draft';
 import { Body, Button } from '@/components/ui';
 import { colors, radius, spacing } from '@/theme/tokens';
-import { Sparkle } from 'phosphor-react-native';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Sparkle, TextAlignLeft } from 'phosphor-react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+
+type ContextTab = 'context' | 'transcript';
 
 type CaptureContextStepProps = {
   draft: CaptureWizardDraft;
   onDraftChange: (changes: Partial<CaptureWizardDraft>) => void;
   refreshing: boolean;
   isGenerating: boolean;
+  isTranscribing?: boolean;
   generationError?: string;
   onRefresh: () => void;
   uncertainFields: string[];
@@ -19,83 +23,152 @@ export function CaptureContextStep({
   onDraftChange,
   refreshing,
   isGenerating,
+  isTranscribing = false,
   generationError,
   onRefresh,
   uncertainFields,
 }: CaptureContextStepProps) {
+  const [tab, setTab] = useState<ContextTab>('context');
   const waitingForDraft = isGenerating && !draft.title.trim() && !draft.sharedSummary.trim();
   const people = draft.people ?? [];
 
   return (
-    <View style={styles.block}>
-      <View style={styles.blockHead}>
-        <Sparkle size={18} color={colors.ink} weight="fill" />
-        <Text style={styles.blockTitle}>Meeting context</Text>
+    <View style={styles.wrapper}>
+      <View style={styles.tabs}>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === 'context' }}
+          onPress={() => setTab('context')}
+          style={[styles.tab, tab === 'context' && styles.tabActive]}>
+          <Sparkle size={16} color={tab === 'context' ? colors.ink : colors.muted} weight="fill" />
+          <Text style={[styles.tabLabel, tab === 'context' && styles.tabLabelActive]}>Meeting context</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === 'transcript' }}
+          onPress={() => setTab('transcript')}
+          style={[styles.tab, tab === 'transcript' && styles.tabActive]}>
+          <TextAlignLeft size={16} color={tab === 'transcript' ? colors.ink : colors.muted} weight="bold" />
+          <Text style={[styles.tabLabel, tab === 'transcript' && styles.tabLabelActive]}>Transcript</Text>
+          {isTranscribing ? <View style={styles.tabDot} /> : null}
+        </Pressable>
       </View>
-      <Body>
-        We draft a meeting title and share summary from your transcript. Edit either field before you continue.
-      </Body>
 
-      {waitingForDraft ? (
-        <View style={styles.statusRow}>
-          <ActivityIndicator color={colors.ink} size="small" />
-          <Text style={styles.statusCopy}>Drafting title and summary…</Text>
-        </View>
-      ) : null}
+      {tab === 'context' ? (
+        <View style={styles.block}>
+          <Body>
+            We draft a meeting title and share summary from your transcript. Edit either field before you continue.
+          </Body>
 
-      {generationError && !draft.title.trim() && !draft.sharedSummary.trim() ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorTitle}>Could not draft context</Text>
-          <Text style={styles.errorBody}>{generationError}</Text>
-        </View>
-      ) : null}
+          {waitingForDraft ? (
+            <View style={styles.statusRow}>
+              <ActivityIndicator color={colors.ink} size="small" />
+              <Text style={styles.statusCopy}>Drafting title and summary…</Text>
+            </View>
+          ) : null}
 
-      {uncertainFields.length > 0 ? (
-        <Text style={styles.uncertain}>Double-check: {uncertainFields.join(', ')}</Text>
-      ) : null}
+          {uncertainFields.length > 0 ? (
+            <Text style={styles.uncertain}>Double-check: {uncertainFields.join(', ')}</Text>
+          ) : null}
 
-      {people.length ? (
-        <View style={styles.peopleWrap}>
-          <Text style={styles.label}>In this meeting</Text>
-          <View style={styles.peopleRow}>
-            {people.map((person) => (
-              <View key={person.id} style={styles.personChip}>
-                <Text style={styles.personChipText}>{person.name.trim() || 'Guest'}</Text>
+          {people.length ? (
+            <View style={styles.peopleWrap}>
+              <Text style={styles.label}>In this meeting</Text>
+              <View style={styles.peopleRow}>
+                {people.map((person) => (
+                  <View key={person.id} style={styles.personChip}>
+                    <Text style={styles.personChipText}>{person.name.trim() || 'Guest'}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-        </View>
-      ) : null}
+            </View>
+          ) : null}
 
-      <Text style={styles.label}>Meeting title</Text>
-      <TextInput
-        value={draft.title}
-        onChangeText={(value) => onDraftChange({ title: value })}
-        placeholder="Product sync with design and eng"
-        placeholderTextColor={colors.muted}
-        style={styles.input}
-      />
-      <Text style={styles.label}>Share summary</Text>
-      <Text style={styles.fieldHint}>
-        A clear recap of what was discussed — safe to send to everyone in the room.
-      </Text>
-      <TextInput
-        value={draft.sharedSummary}
-        onChangeText={(value) => onDraftChange({ sharedSummary: value })}
-        placeholder="What you discussed, decided, and who owns what next…"
-        placeholderTextColor={colors.muted}
-        multiline
-        scrollEnabled
-        style={[styles.input, styles.summaryField]}
-      />
-      <Button variant="secondary" loading={refreshing} onPress={onRefresh}>
-        Refresh suggestions
-      </Button>
+          <Text style={styles.label}>Meeting title</Text>
+          <TextInput
+            value={draft.title}
+            onChangeText={(value) => onDraftChange({ title: value })}
+            placeholder="Product sync with design and eng"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+          />
+          <Text style={styles.label}>Share summary</Text>
+          <Text style={styles.fieldHint}>
+            A clear recap of what was discussed — safe to send to everyone in the room.
+          </Text>
+          <TextInput
+            value={draft.sharedSummary}
+            onChangeText={(value) => onDraftChange({ sharedSummary: value })}
+            placeholder="What you discussed, decided, and who owns what next…"
+            placeholderTextColor={colors.muted}
+            multiline
+            scrollEnabled
+            style={[styles.input, styles.summaryField]}
+          />
+          <Button variant="secondary" loading={refreshing} onPress={onRefresh}>
+            Refresh suggestions
+          </Button>
+        </View>
+      ) : (
+        <View style={styles.block}>
+          <Body>
+            This is your private meeting record. Edit it if names or details need correcting before sharing context.
+          </Body>
+          {isTranscribing ? (
+            <View style={styles.statusRow}>
+              <ActivityIndicator color={colors.ink} size="small" />
+              <Text style={styles.statusCopy}>Still transcribing your recording…</Text>
+            </View>
+          ) : null}
+          <TextInput
+            value={draft.transcript}
+            onChangeText={(value) => onDraftChange({ transcript: value })}
+            placeholder="Transcript appears here after recording or import…"
+            placeholderTextColor={colors.muted}
+            multiline
+            scrollEnabled
+            style={[styles.input, styles.transcriptField]}
+          />
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: { gap: spacing.x4 },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.x2,
+    padding: spacing.x1,
+    borderRadius: radius.round,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.x2,
+    paddingVertical: spacing.x3,
+    paddingHorizontal: spacing.x3,
+    borderRadius: radius.round,
+  },
+  tabActive: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  tabLabel: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  tabLabelActive: { color: colors.ink, fontWeight: '800' },
+  tabDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
   block: {
     gap: spacing.x4,
     padding: spacing.x5,
@@ -104,8 +177,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  blockHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
-  blockTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   fieldHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   peopleWrap: { gap: spacing.x2 },
@@ -130,6 +201,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   summaryField: { minHeight: 180, maxHeight: 260, paddingTop: spacing.x3, textAlignVertical: 'top' },
+  transcriptField: { minHeight: 280, maxHeight: 400, paddingTop: spacing.x3, textAlignVertical: 'top' },
   uncertain: { color: colors.danger, fontSize: 12, lineHeight: 18 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   statusCopy: { color: colors.muted, fontSize: 13 },

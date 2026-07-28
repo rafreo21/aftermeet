@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { RecordingPlayback } from '@/components/recording-playback';
+import { ConnectionDetailSkeleton } from '@/components/skeleton';
 import { Body, Button, PageHeader, Panel, Screen } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -36,8 +39,10 @@ export default function CaptureDetailScreen() {
   const [encounter, setEncounter] = useState<EncounterPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successSheetOpen, setSuccessSheetOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(true);
 
@@ -94,7 +99,10 @@ export default function CaptureDetailScreen() {
         }
         setRecordingUri(uri);
       })
-      .catch((caught) => setError(caught instanceof Error ? caught.message : 'Could not load this meeting.'))
+      .catch((caught) => {
+        setErrorMessage(caught instanceof Error ? caught.message : 'Could not load this meeting.');
+        setErrorSheetOpen(true);
+      })
       .finally(() => {
         setLoading(false);
         setRecordingLoading(false);
@@ -111,13 +119,14 @@ export default function CaptureDetailScreen() {
   async function persist(next: EncounterPayload) {
     if (!session?.access_token) return;
     setSaving(true);
-    setError('');
     try {
       await saveEncounter(session.access_token, next);
       setEncounter(next);
-      setMessage('Changes saved.');
+      setSuccessMessage('Changes saved.');
+      setSuccessSheetOpen(true);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save changes.');
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not save changes.');
+      setErrorSheetOpen(true);
     } finally {
       setSaving(false);
     }
@@ -135,16 +144,17 @@ export default function CaptureDetailScreen() {
   async function copyFollowUpDraft() {
     if (!session?.access_token || !encounter) return;
     setSaving(true);
-    setError('');
     try {
       const body = await generateOutboundDraft(session.access_token, encounter);
       if (body) {
         const Clipboard = await import('expo-clipboard');
         await Clipboard.setStringAsync(body);
-        setMessage('Follow-up draft copied.');
+        setSuccessMessage('Follow-up draft copied.');
+        setSuccessSheetOpen(true);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not draft a follow-up.');
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not draft a follow-up.');
+      setErrorSheetOpen(true);
     } finally {
       setSaving(false);
     }
@@ -153,7 +163,8 @@ export default function CaptureDetailScreen() {
   if (loading) {
     return (
       <Screen edges={['top', 'bottom']} reserveTabBar={false}>
-        <ActivityIndicator color={colors.ink} style={{ marginTop: spacing.x8 }} />
+        <PageHeader eyebrow="Previous capture" title="Loading capture" titleStyle={styles.title} />
+        <ConnectionDetailSkeleton />
       </Screen>
     );
   }
@@ -162,9 +173,17 @@ export default function CaptureDetailScreen() {
     return (
       <Screen edges={['top', 'bottom']} reserveTabBar={false}>
         <PageHeader eyebrow="Previous" title="Meeting not available" titleStyle={styles.title} />
-        <Body>{error || 'Sign in to view this meeting.'}</Body>
+        <Body>{errorMessage || 'Sign in to view this meeting.'}</Body>
         {!session ? <Button onPress={() => router.push('/auth')}>Sign in</Button> : null}
         <Button variant="secondary" onPress={() => router.back()}>Go back</Button>
+        <OutcomeErrorSheet
+          visible={errorSheetOpen}
+          message={errorMessage}
+          onClose={() => {
+            setErrorSheetOpen(false);
+            setErrorMessage('');
+          }}
+        />
       </Screen>
     );
   }
@@ -250,8 +269,23 @@ export default function CaptureDetailScreen() {
         <Button variant="ghost" onPress={() => router.replace('/capture')}>Done</Button>
       </View>
 
-      {message ? <Text style={styles.success}>{message}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <OutcomeErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={() => {
+          setErrorSheetOpen(false);
+          setErrorMessage('');
+        }}
+      />
+
+      <OutcomeSuccessSheet
+        visible={successSheetOpen}
+        message={successMessage}
+        onClose={() => {
+          setSuccessSheetOpen(false);
+          setSuccessMessage('');
+        }}
+      />
     </Screen>
   );
 }

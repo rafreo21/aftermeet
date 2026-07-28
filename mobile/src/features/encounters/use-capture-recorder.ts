@@ -23,6 +23,21 @@ import { isExpoGo } from '@/lib/runtime';
 export type RecordingState = 'idle' | 'recording' | 'paused' | 'stopped';
 export type TranscriptStatus = LiveTranscriptStatus;
 export type ImportRecordingMeta = { fileName?: string; mimeType?: string };
+export type ServerTranscribePhase = 'idle' | 'preparing' | 'transcribing' | 'revealing' | 'done' | 'failed';
+
+async function revealTranscriptProgressively(
+  fullText: string,
+  onChunk: (value: string) => void,
+) {
+  const words = fullText.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return;
+  let built = '';
+  for (let index = 0; index < words.length; index += 1) {
+    built += `${index ? ' ' : ''}${words[index]}`;
+    onChunk(built);
+    await new Promise((resolve) => setTimeout(resolve, index < 24 ? 28 : 8));
+  }
+}
 
 type UseCaptureRecorderOptions = {
   transcript: string;
@@ -61,11 +76,14 @@ export function useCaptureRecorder({
   const [speechAudioLevel, setSpeechAudioLevel] = useState(0);
   const [speechSeconds, setSpeechSeconds] = useState(0);
   const [captureMode, setCaptureMode] = useState<SpeechCaptureMode>(() => resolveSpeechCaptureMode());
+  const [serverTranscribePhase, setServerTranscribePhase] = useState<ServerTranscribePhase>('idle');
+  const [serverTranscribeError, setServerTranscribeError] = useState('');
 
   const recordingStateRef = useRef<RecordingState>('idle');
   const speechCaptureRef = useRef(new NativeSpeechCapture());
   const liveSttReceivedRef = useRef(false);
   const speechTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastTranscribeMetaRef = useRef<ImportRecordingMeta | undefined>(undefined);
   const onErrorRef = useRef(onError);
   const onImportReadyRef = useRef(onImportReady);
   const onImportStartedRef = useRef(onImportStarted);
@@ -157,14 +175,22 @@ export function useCaptureRecorder({
   }, [clearSpeechTimer, publishDuration]);
 
   const transcribeErrorShownRef = useRef(false);
+  const transcribeInFlightRef = useRef(false);
+  const transcribedUriRef = useRef('');
 
   const maybeTranscribeFromServer = useCallback(async (
     uri: string,
     cleanedTranscript: string,
     meta?: ImportRecordingMeta,
+    options?: { force?: boolean },
   ) => {
     const transcribe = transcribeFromServerRef.current;
     if (!transcribe) return cleanedTranscript;
+
+    const normalizedUri = uri.trim();
+    if (!normalizedUri) return cleanedTranscript;
+    if (!options?.force && transcribedUriRef.current === normalizedUri) return cleanedTranscript;
+    if (transcribeInFlightRef.current) return cleanedTranscript;
 
     const needsServer =
       cleanedTranscript.trim().length < 20 ||
@@ -172,30 +198,41 @@ export function useCaptureRecorder({
       !isNativeSpeechTranscriptionAvailable();
     if (!needsServer) return cleanedTranscript;
 
+    lastTranscribeMetaRef.current = meta;
     transcribeErrorShownRef.current = false;
+    transcribeInFlightRef.current = true;
+    setServerTranscribeError('');
+    setServerTranscribePhase('preparing');
     liveTranscript.markTranscribing();
-    setTranscriptOpen(true);
     try {
-      const serverTranscript = await transcribe(uri, meta);
+      setServerTranscribePhase('transcribing');
+      const serverTranscript = await transcribe(normalizedUri, meta);
       if (serverTranscript?.trim()) {
+        setServerTranscribePhase('revealing');
+        liveTranscript.markTranscribing();
+        await revealTranscriptProgressively(serverTranscript, (partial) => {
+          liveTranscript.updateFromUser(partial);
+        });
         liveTranscript.updateFromUser(serverTranscript);
         liveTranscript.markIdle();
+        setServerTranscribePhase('done');
+        transcribedUriRef.current = normalizedUri;
         onTranscriptFinalizedRef.current?.(serverTranscript);
         return serverTranscript;
       }
-      if (!transcribeErrorShownRef.current) {
-        transcribeErrorShownRef.current = true;
-        onErrorRef.current('Could not transcribe this recording. Paste or type what was said.');
-      }
+      const emptyMessage = 'No speech detected in this recording. Paste a transcript manually.';
+      setServerTranscribePhase('failed');
+      setServerTranscribeError(emptyMessage);
+      liveTranscript.markIdle();
     } catch (error) {
-      if (!transcribeErrorShownRef.current) {
-        transcribeErrorShownRef.current = true;
-        const message = error instanceof Error ? error.message : 'Could not transcribe this recording.';
-        onErrorRef.current(message);
-      }
+      const message = error instanceof Error ? error.message : 'Could not transcribe this recording.';
+      setServerTranscribePhase('failed');
+      setServerTranscribeError(message);
+      liveTranscript.markIdle();
+    } finally {
+      transcribeInFlightRef.current = false;
     }
 
-    liveTranscript.markUnavailable();
     return cleanedTranscript;
   }, [liveTranscript]);
 
@@ -254,7 +291,6 @@ export function useCaptureRecorder({
 
     try {
       liveTranscript.resetForRecording();
-      setTranscriptOpen(true);
       setSpeechSeconds(0);
       publishDuration(0);
       setSpeechAudioLevel(0);
@@ -363,8 +399,6 @@ export function useCaptureRecorder({
       } else if (!usingSpeechCapture) {
         cleaned = await maybeTranscribeFromServer('', cleaned);
       }
-
-      setTranscriptOpen(true);
     } catch {
       onErrorRef.current('Recording stopped, but the audio file could not be saved on this device.');
     }
@@ -397,19 +431,29 @@ export function useCaptureRecorder({
       if (draft.durationSeconds && draft.durationSeconds > 0) {
         publishDuration(draft.durationSeconds);
       }
-      setTranscriptOpen(true);
     }
     if (draft.transcript?.trim()) {
       liveTranscript.updateFromUser(draft.transcript);
     }
   }, [liveTranscript, publishDuration]);
 
-  const transcribeRecordingIfNeeded = useCallback(async (uriOverride?: string) => {
+  const transcribeRecordingIfNeeded = useCallback(async (uriOverride?: string, force = false) => {
     const uri = (uriOverride || recordingUri).trim();
     if (!uri || transcript.trim().length >= 20) return;
+    if (!force && transcribedUriRef.current === uri) return;
+    if (transcribeInFlightRef.current) return;
     if (liveTranscript.transcriptStatus === 'transcribing') return;
-    await maybeTranscribeFromServer(uri, transcript.trim());
+    await maybeTranscribeFromServer(uri, transcript.trim(), lastTranscribeMetaRef.current, { force });
   }, [liveTranscript.transcriptStatus, maybeTranscribeFromServer, recordingUri, transcript]);
+
+  const retryTranscription = useCallback(async () => {
+    const uri = recordingUri.trim();
+    if (!uri) return;
+    transcribedUriRef.current = '';
+    setServerTranscribeError('');
+    setServerTranscribePhase('idle');
+    await maybeTranscribeFromServer(uri, '', lastTranscribeMetaRef.current, { force: true });
+  }, [maybeTranscribeFromServer, recordingUri]);
 
   const resetRecording = useCallback(async () => {
     if (usingSpeechCapture) {
@@ -434,6 +478,9 @@ export function useCaptureRecorder({
     setRecordingUri('');
     setPlaybackSource(null);
     setPlaybackReady(false);
+    transcribedUriRef.current = '';
+    setServerTranscribePhase('idle');
+    setServerTranscribeError('');
     liveTranscript.markIdle();
   }, [audioRecorder, clearSpeechTimer, liveTranscript, player, publishDuration, usingSpeechCapture]);
 
@@ -451,6 +498,10 @@ export function useCaptureRecorder({
 
     const asset = result.assets[0];
     onImportStartedRef.current?.();
+    transcribedUriRef.current = '';
+    transcribeErrorShownRef.current = false;
+    setServerTranscribePhase('idle');
+    setServerTranscribeError('');
     if (!isSupportedAudioImport(asset.name ?? undefined, asset.mimeType ?? undefined, asset.uri)) {
       onErrorRef.current('Unsupported format. Choose an audio file such as M4A, MP3, or WAV.');
       return;
@@ -464,6 +515,7 @@ export function useCaptureRecorder({
       fileName: asset.name ?? undefined,
       mimeType: asset.mimeType ?? undefined,
     };
+    lastTranscribeMetaRef.current = importMeta;
 
     speechCaptureRef.current.abort();
     liveTranscript.resetForRecording();
@@ -472,7 +524,6 @@ export function useCaptureRecorder({
     setRecordingUri(asset.uri);
     setPlaybackSource(asset.uri);
     onRecordingUriChange(asset.uri, 'imported', importMeta);
-    setTranscriptOpen(true);
     setPlaybackReady(true);
     publishDuration(Math.max(0, Math.round(player.duration || 0)));
     onImportReadyRef.current?.();
@@ -520,6 +571,8 @@ export function useCaptureRecorder({
     setTranscriptOpen,
     transcriptStatus: liveTranscript.transcriptStatus,
     transcriptStatusLabel,
+    serverTranscribePhase,
+    serverTranscribeError,
     transcriptSupported: isNativeSpeechTranscriptionAvailable(),
     usesServerTranscription: isExpoGo() || captureMode === 'none',
     recordingUri,
@@ -536,6 +589,7 @@ export function useCaptureRecorder({
     updateTranscriptFromUser: liveTranscript.updateFromUser,
     hydrateFromDraft,
     transcribeRecordingIfNeeded,
+    retryTranscription,
   };
 }
 

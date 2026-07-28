@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '@/theme/tokens';
 
-export const CAPTURE_STEPS = ['Record', 'Gather', 'Context', 'Follow-up'] as const;
+export const CAPTURE_STEPS = ['Interaction', 'Context', 'Follow-up'] as const;
 
 export function CaptureStepIndicator({
   current,

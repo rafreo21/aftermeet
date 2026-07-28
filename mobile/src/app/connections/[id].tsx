@@ -1,22 +1,33 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Trash } from 'phosphor-react-native';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionDeleteSheet } from '@/components/connection-delete-sheet';
 import { MobileCardPreview } from '@/components/mobile-card';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
+import { ConnectionDetailSkeleton } from '@/components/skeleton';
 import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { loadConnectionLiveCard } from '@/features/connections/connection-card-loader';
 import {
+  findSavedDirectoryContact,
+  resolveDirectorySaveState,
+  directoryUpdateSummary,
+  type SavedDirectoryContact,
+} from '@/features/connections/connection-directory';
+import {
+  fetchContacts,
   connectionSourceLabel,
   deleteConnection,
-  fetchAllConnections,
+  fetchAllConnectionsMerged,
   type ConnectionItem,
 } from '@/features/connections/connections-api';
 import {
   saveConnectionToAfterMeet,
   saveConnectionToDeviceContacts,
+  updateConnectionDirectory,
 } from '@/features/connections/save-connection-contact';
 import type { MobileCard } from '@/features/card/types';
 import { useAppInsets } from '@/lib/safe-area';
@@ -32,9 +43,24 @@ export default function ConnectionDetailScreen() {
   const [cardLoading, setCardLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [cardSlug, setCardSlug] = useState<string | null>(null);
+  const [savedContact, setSavedContact] = useState<SavedDirectoryContact | null>(null);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successSheetOpen, setSuccessSheetOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+
+  const showError = useCallback((message: string) => {
+    setErrorMessage(message);
+    setErrorSheetOpen(true);
+  }, []);
+
+  const showSuccess = useCallback((message: string) => {
+    setSuccessMessage(message);
+    setSuccessSheetOpen(true);
+  }, []);
 
   const loadConnection = useCallback(async () => {
     if (!session?.access_token || !id) {
@@ -43,19 +69,18 @@ export default function ConnectionDetailScreen() {
       return;
     }
     setLoading(true);
-    setError('');
     try {
-      const connections = await fetchAllConnections(session.access_token);
+      const connections = await fetchAllConnectionsMerged(session.access_token);
       const match = connections.find((item) => item.id === decodeURIComponent(id));
       setConnection(match || null);
-      if (!match) setError('This connection could not be found.');
+      if (!match) showError('This connection could not be found.');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load this connection.');
+      showError(caught instanceof Error ? caught.message : 'Could not load this connection.');
       setConnection(null);
     } finally {
       setLoading(false);
     }
-  }, [id, session?.access_token]);
+  }, [id, session?.access_token, showError]);
 
   const loadCard = useCallback(async (current: ConnectionItem) => {
     if (!session?.access_token) return;
@@ -63,8 +88,25 @@ export default function ConnectionDetailScreen() {
     try {
       const result = await loadConnectionLiveCard(current, session.access_token);
       setCard(result.card);
+      setCardSlug(result.slug);
     } finally {
       setCardLoading(false);
+    }
+  }, [session?.access_token]);
+
+  const loadSavedDirectoryContact = useCallback(async (current: ConnectionItem, slug: string | null) => {
+    if (!session?.access_token) {
+      setSavedContact(null);
+      return;
+    }
+    setDirectoryLoading(true);
+    try {
+      const contacts = await fetchContacts(session.access_token);
+      setSavedContact(findSavedDirectoryContact(contacts, current, slug));
+    } catch {
+      setSavedContact(null);
+    } finally {
+      setDirectoryLoading(false);
     }
   }, [session?.access_token]);
 
@@ -81,6 +123,23 @@ export default function ConnectionDetailScreen() {
     }, [connection, loadCard]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!connection) return;
+      void loadSavedDirectoryContact(connection, cardSlug);
+    }, [connection, cardSlug, loadSavedDirectoryContact]),
+  );
+
+  const directoryState = useMemo(
+    () => (connection ? resolveDirectorySaveState(savedContact, connection, card) : 'unsaved'),
+    [savedContact, connection, card],
+  );
+
+  const directoryHint = useMemo(
+    () => (connection ? directoryUpdateSummary(savedContact, connection, card) : ''),
+    [savedContact, connection, card],
+  );
+
   async function confirmDelete() {
     if (!session?.access_token || !connection) return;
     setDeleting(true);
@@ -89,7 +148,7 @@ export default function ConnectionDetailScreen() {
       setDeleteOpen(false);
       router.back();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not remove this connection.');
+      showError(caught instanceof Error ? caught.message : 'Could not remove this connection.');
       setDeleteOpen(false);
     } finally {
       setDeleting(false);
@@ -99,14 +158,23 @@ export default function ConnectionDetailScreen() {
   async function saveToDirectory() {
     if (!session?.access_token || !connection) return;
     setSaving(true);
-    setMessage('');
-    setError('');
     try {
-      await saveConnectionToAfterMeet(session.access_token, connection, card);
-      await saveConnectionToDeviceContacts(connection, card);
-      setMessage('Saved to your directory.');
+      if (directoryState === 'needs_update') {
+        await updateConnectionDirectory(session.access_token, connection, card);
+        showSuccess('Directory updated with the latest card details.');
+      } else {
+        await saveConnectionToAfterMeet(session.access_token, connection, card);
+        await saveConnectionToDeviceContacts(connection, card);
+        showSuccess('Saved to your directory.');
+      }
+      await loadSavedDirectoryContact(connection, cardSlug);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save this connection.');
+      const message = caught instanceof Error ? caught.message : 'Could not save this connection.';
+      if (message.toLowerCase().includes('session has expired')) {
+        showError('Your app session could not reach AfterMeet. Sign out from Settings, sign in again, then retry.');
+      } else {
+        showError(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -143,19 +211,11 @@ export default function ConnectionDetailScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
           showsVerticalScrollIndicator={false}>
           {loading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator color={colors.ink} />
-            </View>
-          ) : error && !connection ? (
-            <View style={styles.centered}>
-              <Body>{error}</Body>
-            </View>
+            <ConnectionDetailSkeleton />
           ) : connection ? (
             <View style={styles.cardWrap}>
               {cardLoading && !card ? (
-                <View style={styles.centered}>
-                  <ActivityIndicator color={colors.ink} />
-                </View>
+                <ConnectionDetailSkeleton />
               ) : card ? (
                 <>
                   <MobileCardPreview card={card} />
@@ -171,12 +231,21 @@ export default function ConnectionDetailScreen() {
                 </View>
               )}
 
-              <Button loading={saving} onPress={() => void saveToDirectory()}>
-                Save to directory
-              </Button>
+              {directoryState === 'saved' ? (
+                <Body style={styles.savedNote}>Saved to your AfterMeet directory.</Body>
+              ) : directoryState === 'needs_update' && directoryHint ? (
+                <Body style={styles.updateNote}>{directoryHint}</Body>
+              ) : null}
 
-              {message ? <Text style={styles.success}>{message}</Text> : null}
-              {error ? <Text style={styles.error}>{error}</Text> : null}
+              {directoryState === 'saved' ? (
+                <Button variant="secondary" disabled>
+                  Saved to directory
+                </Button>
+              ) : (
+                <Button loading={saving || directoryLoading} onPress={() => void saveToDirectory()}>
+                  {directoryState === 'needs_update' ? 'Update directory' : 'Save to directory'}
+                </Button>
+              )}
             </View>
           ) : null}
         </ScrollView>
@@ -188,6 +257,24 @@ export default function ConnectionDetailScreen() {
         onCancel={() => setDeleteOpen(false)}
         onConfirm={() => void confirmDelete()}
         loading={deleting}
+      />
+
+      <OutcomeErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={() => {
+          setErrorSheetOpen(false);
+          setErrorMessage('');
+        }}
+      />
+
+      <OutcomeSuccessSheet
+        visible={successSheetOpen}
+        message={successMessage}
+        onClose={() => {
+          setSuccessSheetOpen(false);
+          setSuccessMessage('');
+        }}
       />
     </View>
   );
@@ -215,7 +302,6 @@ const styles = StyleSheet.create({
   headerCopy: { gap: spacing.x2 },
   scroll: { flex: 1, marginTop: spacing.x3 },
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
-  centered: { paddingVertical: spacing.x6, alignItems: 'center' },
   cardWrap: { gap: spacing.x3 },
   emptyCard: {
     padding: spacing.x5,
@@ -225,6 +311,6 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   readOnlyNote: { textAlign: 'center', color: colors.muted, fontSize: 13, lineHeight: 18 },
-  success: { color: colors.ink, textAlign: 'center', fontSize: 13, fontWeight: '700' },
-  error: { color: colors.danger, textAlign: 'center', fontSize: 13 },
+  savedNote: { textAlign: 'center', color: colors.muted, fontSize: 13, lineHeight: 18 },
+  updateNote: { textAlign: 'center', color: colors.inkSoft, fontSize: 13, lineHeight: 18 },
 });

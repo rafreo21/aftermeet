@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 
 import { contactFromRow, contactToRow, isContactUuid, type ContactRow } from "../../../lib/contacts-server";
 import type { Contact } from "../../../lib/contacts";
-import { getAppUser } from "../../../lib/auth/context";
-import { createClient } from "../../../lib/supabase/server";
+import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 
 function isContact(value: unknown): value is Contact {
   if (!value || typeof value !== "object") return false;
@@ -12,7 +11,7 @@ function isContact(value: unknown): value is Contact {
 }
 
 async function findExistingContact(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createApiSupabaseClient>>,
   workspaceId: string,
   contact: Contact,
 ) {
@@ -46,14 +45,14 @@ async function findExistingContact(
   return (data as ContactRow | null) ?? null;
 }
 
-export async function GET() {
-  const user = await getAppUser();
+export async function GET(request: Request) {
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ contacts: [], preview: true }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase
     .from("contacts")
     .select("*")
@@ -70,7 +69,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     const body = await request.json().catch(() => null) as Contact | null;
@@ -82,7 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A valid contact is required." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const existing = await findExistingContact(supabase, user.workspaceId, body);
   const row = contactToRow(body, user.workspaceId, user.id, existing?.id);
 

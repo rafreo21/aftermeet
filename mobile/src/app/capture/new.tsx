@@ -14,9 +14,8 @@ import {
 
 import { CaptureContextStep } from '@/components/capture-context-step';
 import { CaptureErrorSheet } from '@/components/capture-error-sheet';
-import { CaptureGatherStep } from '@/components/capture-gather-step';
+import { CaptureInteractionStep } from '@/components/capture-interaction-step';
 import { CaptureLeaveSheet } from '@/components/capture-leave-sheet';
-import { CaptureRecordStep } from '@/components/capture-record-step';
 import { CaptureStepIndicator } from '@/components/capture-step-indicator';
 import { Body, Button, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
@@ -137,7 +136,9 @@ export default function CaptureWizardScreen() {
   }, []);
 
   const closeErrorSheet = useCallback(() => {
-    dismissedErrorRef.current = error.trim();
+    if (error.trim()) {
+      dismissedErrorRef.current = error.trim();
+    }
     setErrorSheetOpen(false);
     setError('');
   }, [error]);
@@ -236,23 +237,15 @@ export default function CaptureWizardScreen() {
     throw new Error('Could not transcribe this recording. Paste or type what was said.');
   }, [session?.access_token]);
 
-  const enterGatherStep = useCallback(() => {
-    const now = new Date().toISOString();
-    generationKickoffRef.current = '';
-    updateDraft({ step: 1, gatherSessionStartedAt: now });
+  const goToStep = useCallback((step: number) => {
+    updateDraft({ step: Math.max(0, Math.min(2, step)) });
   }, [updateDraft]);
 
-  const goToStep = useCallback((step: number) => {
-    if (step === 1) {
-      enterGatherStep();
-      return;
-    }
-    updateDraft({ step });
-  }, [enterGatherStep, updateDraft]);
-
   const handleImportReady = useCallback(() => {
-    enterGatherStep();
-  }, [enterGatherStep]);
+    if (!draftRef.current.gatherSessionStartedAt) {
+      updateDraft({ gatherSessionStartedAt: new Date().toISOString() });
+    }
+  }, [updateDraft]);
 
   const recorder = useCaptureRecorder({
     transcript: draft.transcript,
@@ -331,7 +324,7 @@ export default function CaptureWizardScreen() {
   );
 
   useEffect(() => {
-    if (!draftReady || (draft.step !== 1 && draft.step !== 2)) return;
+    if (!draftReady || draft.step !== 1) return;
     const clean = draft.transcript.trim();
     if (clean.length < 20) return;
     if (generationStatus === 'generating') return;
@@ -396,22 +389,6 @@ export default function CaptureWizardScreen() {
   }, [draft.durationSeconds, draft.recordingSource, draft.recordingUri, draft.transcript, draftReady, recorder, session?.access_token]);
 
   useEffect(() => {
-    if (!draftReady || !session?.access_token) return;
-    if (draft.step < 1 || draft.transcript.trim().length >= 20) return;
-    const uri = draft.recordingUri || recorder.recordingUri;
-    if (!uri || isTranscribing) return;
-    void recorder.transcribeRecordingIfNeeded(uri);
-  }, [
-    draft.recordingUri,
-    draft.step,
-    draft.transcript,
-    draftReady,
-    isTranscribing,
-    recorder,
-    session?.access_token,
-  ]);
-
-  useEffect(() => {
     if (!draftReady) return;
     const uri = draft.recordingUri || recorder.recordingUri;
     if (!uri || recorder.recordingState === 'recording') return;
@@ -437,11 +414,11 @@ export default function CaptureWizardScreen() {
   ]);
 
   useEffect(() => {
-    if (!session?.access_token || draft.step !== 1) return;
+    if (!session?.access_token || draft.step !== 0) return;
 
     let cancelled = false;
-    const loadExchanges = () => {
-      setLoadingExchanges(true);
+    const loadExchanges = (showLoading = false) => {
+      if (showLoading) setLoadingExchanges(true);
       void fetchInboundExchanges(session.access_token!)
         .then((items) => {
           if (!cancelled) setExchanges(items);
@@ -450,12 +427,12 @@ export default function CaptureWizardScreen() {
           if (!cancelled) setExchanges([]);
         })
         .finally(() => {
-          if (!cancelled) setLoadingExchanges(false);
+          if (!cancelled && showLoading) setLoadingExchanges(false);
         });
     };
 
-    loadExchanges();
-    const timer = setInterval(loadExchanges, 5000);
+    loadExchanges(true);
+    const timer = setInterval(() => loadExchanges(false), 5000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -481,39 +458,25 @@ export default function CaptureWizardScreen() {
     });
   }
 
-  async function finishRecordingAndGather() {
+  async function continueFromInteraction(skipRecording = false) {
     if (!draft.consent) {
       showCaptureError('Confirm that everyone agreed before continuing.');
       return;
     }
-    if (recorder.recordingState === 'recording' || recorder.recordingState === 'paused') {
-      await recorder.stopRecording();
-    }
-    enterGatherStep();
-  }
-
-  function continueFromRecord(skipRecording = false) {
-    if (!draft.consent) {
-      showCaptureError('Confirm that everyone agreed before continuing.');
-      return;
-    }
-    if (!skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
-      showCaptureError('Tap Finish recording when you are done — there is no time limit.');
-      return;
-    }
-    enterGatherStep();
-  }
-
-  function continueFromGather() {
     const people = draft.people ?? [];
     if (!hasValidGatherPeople(people)) {
       showCaptureError('Add at least one person you met.');
       return;
     }
-    const hasRecording = Boolean(draft.recordingUri || recorder.recordingUri);
-    const hasTranscript = Boolean(draft.transcript.trim());
-    if (!hasTranscript && !isTranscribing && !hasRecording) {
-      showCaptureError('Record or add a transcript before continuing.');
+    if (!skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
+      await recorder.stopRecording();
+    }
+    updateDraft({ step: 1 });
+  }
+
+  function continueFromContext() {
+    if (!draft.title.trim() && !draft.sharedSummary.trim()) {
+      showCaptureError('Add a meeting title or share summary.');
       return;
     }
     updateDraft({ step: 2 });
@@ -525,14 +488,6 @@ export default function CaptureWizardScreen() {
     await setAuthReturnPath('/capture/new');
     router.push('/auth');
     return null;
-  }
-
-  function continueFromContext() {
-    if (!draft.title.trim() && !draft.sharedSummary.trim()) {
-      showCaptureError('Add a meeting title or share summary.');
-      return;
-    }
-    updateDraft({ step: 3 });
   }
 
   async function saveAndReview(skipFollowUp = false) {
@@ -613,38 +568,29 @@ export default function CaptureWizardScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           {draft.step === 0 ? (
-            <CaptureRecordStep
+            <CaptureInteractionStep
+              draft={draft}
+              onDraftChange={updateDraft}
               consent={draft.consent}
               consentMethod={draft.consentMethod}
               onConsentChange={(value) => updateDraft({ consent: value })}
               onConsentMethodChange={(value) => updateDraft({ consentMethod: value })}
               recorder={recorder}
               signedIn={Boolean(session?.access_token)}
-              hasRecording={Boolean(draft.recordingUri || recorder.recordingUri)}
-              hasTranscript={Boolean(draft.transcript.trim())}
+              exchanges={sessionExchanges}
+              loadingExchanges={loadingExchanges}
+              onLinkExchange={linkExchange}
+              onEnsureAuth={ensureAuth}
             />
           ) : null}
 
           {draft.step === 1 ? (
-            <CaptureGatherStep
-              draft={draft}
-              onDraftChange={updateDraft}
-              exchanges={sessionExchanges}
-              loadingExchanges={loadingExchanges}
-              signedIn={Boolean(session?.access_token)}
-              onLinkExchange={linkExchange}
-              onEnsureAuth={ensureAuth}
-              isTranscribing={isTranscribing}
-              hasRecording={Boolean(draft.recordingUri || recorder.recordingUri)}
-            />
-          ) : null}
-
-          {draft.step === 2 ? (
             <CaptureContextStep
               draft={draft}
               onDraftChange={updateDraft}
               refreshing={extracting}
               isGenerating={generationStatus === 'generating'}
+              isTranscribing={isTranscribing}
               generationError={generationError}
               onRefresh={() => {
                 generationKickoffRef.current = '';
@@ -655,7 +601,7 @@ export default function CaptureWizardScreen() {
             />
           ) : null}
 
-          {draft.step === 3 ? (
+          {draft.step === 2 ? (
             <View style={styles.block}>
               <View style={styles.blockHead}>
                 <PaperPlaneTilt size={18} color={colors.ink} weight="bold" />
@@ -709,41 +655,24 @@ export default function CaptureWizardScreen() {
           {draft.step === 0 ? (
             <>
               {draft.consent && recorder.recordingState === 'idle' && !recorder.recordingUri ? (
-                <Button variant="secondary" style={{ flex: 1 }} onPress={() => continueFromRecord(true)}>
+                <Button variant="secondary" style={{ flex: 1 }} onPress={() => void continueFromInteraction(true)}>
                   Skip recording
                 </Button>
               ) : null}
-              {recorder.recordingState === 'recording' || recorder.recordingState === 'paused' ? (
-                <Button style={{ flex: 1 }} onPress={() => void finishRecordingAndGather()}>
-                  Finish recording
-                </Button>
-              ) : (
-                <Button
-                  style={{ flex: 1 }}
-                  onPress={() => continueFromRecord(false)}
-                  disabled={
-                    !draft.consent
-                    || (!recorder.recordingComplete && !draft.transcript.trim() && !draft.recordingUri)
-                  }>
-                  Next
-                </Button>
-              )}
+              <Button
+                style={{ flex: 1 }}
+                onPress={() => void continueFromInteraction(false)}
+                disabled={!draft.consent || !hasValidGatherPeople(draft.people ?? [])}>
+                Next
+              </Button>
             </>
           ) : null}
           {draft.step === 1 ? (
-            <Button
-              style={{ flex: 1 }}
-              onPress={continueFromGather}
-              disabled={!hasValidGatherPeople(draft.people ?? [])}>
-              Next
-            </Button>
-          ) : null}
-          {draft.step === 2 ? (
             <Button style={{ flex: 1 }} onPress={continueFromContext}>
               Next
             </Button>
           ) : null}
-          {draft.step === 3 ? (
+          {draft.step === 2 ? (
             <>
               <Button variant="secondary" style={{ flex: 1 }} loading={saving} onPress={() => void saveAndReview(true)}>
                 Save

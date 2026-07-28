@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CardDeleteSheet } from '@/components/card-delete-sheet';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { MobileCardPreview } from '@/components/mobile-card';
 import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
@@ -28,6 +29,8 @@ export default function CardDetailScreen() {
   const primary = isPrimaryCard(selected.id || '');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +57,10 @@ export default function CardDetailScreen() {
       await deleteCard(selected.id);
       setDeleteOpen(false);
       router.back();
+    } catch (caught) {
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not delete this card.');
+      setErrorSheetOpen(true);
+      setDeleteOpen(false);
     } finally {
       setDeleting(false);
     }
@@ -127,6 +134,15 @@ export default function CardDetailScreen() {
         onCancel={() => setDeleteOpen(false)}
         onConfirm={() => void confirmDelete()}
         loading={deleting}
+      />
+
+      <OutcomeErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={() => {
+          setErrorSheetOpen(false);
+          setErrorMessage('');
+        }}
       />
     </View>
   );

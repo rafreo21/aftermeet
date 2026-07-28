@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 
-import { getAppUser } from "../../../../lib/auth/context";
-import { createClient } from "../../../../lib/supabase/server";
+import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
 
-export async function GET() {
-  const user = await getAppUser();
+export async function GET(request: Request) {
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ connections: [] }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase.rpc("list_my_people_connections");
   if (error) {
     return NextResponse.json({ error: "We couldn’t load people you’ve met." }, { status: 500 });
@@ -20,7 +19,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getAppUser();
+  const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
   if (user.id === "local-development-preview") {
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
@@ -32,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A card slug is required." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = await createApiSupabaseClient(request);
   const { error } = await supabase.rpc("link_people_connection_from_scan", { p_slug: slug });
   if (error) {
     return NextResponse.json({ error: "We couldn’t link that card to your people list." }, { status: 500 });

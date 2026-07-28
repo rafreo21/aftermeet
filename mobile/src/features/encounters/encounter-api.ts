@@ -296,26 +296,28 @@ export async function transcribeEncounterAudio(
   options?: { fileName?: string; mimeType?: string; language?: string },
 ) {
   const prepared = await prepareAudioFile(uri, options);
-  const preferMultipart = prepared.size === 0 || prepared.size > MAX_BASE64_TRANSCRIBE_BYTES;
+  const canUseBase64 = prepared.size === 0 || prepared.size <= MAX_BASE64_TRANSCRIBE_BYTES;
 
-  if (preferMultipart) {
+  if (canUseBase64) {
     try {
-      return await transcribeViaMultipart(accessToken, prepared, options?.language);
+      const withBase64 = await prepareAudioUpload(uri, options);
+      return await transcribeViaBase64Json(accessToken, withBase64, options?.language);
     } catch (error) {
       if (prepared.size > MAX_BASE64_TRANSCRIBE_BYTES) throw error;
-    }
-  }
-
-  try {
-    const withBase64 = await prepareAudioUpload(uri, options);
-    return await transcribeViaBase64Json(accessToken, withBase64, options?.language);
-  } catch (error) {
-    if (!preferMultipart) {
       try {
         return await transcribeViaMultipart(accessToken, prepared, options?.language);
       } catch {
         throw error;
       }
+    }
+  }
+
+  try {
+    return await transcribeViaMultipart(accessToken, prepared, options?.language);
+  } catch (error) {
+    if (prepared.size <= MAX_BASE64_TRANSCRIBE_BYTES) {
+      const withBase64 = await prepareAudioUpload(uri, options);
+      return await transcribeViaBase64Json(accessToken, withBase64, options?.language);
     }
     throw error;
   }

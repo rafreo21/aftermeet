@@ -71,5 +71,5 @@ export function watchSetupInstructions(platform: 'ios' | 'android') {
 }
 
 export function virtualBackgroundInstructions() {
-  return 'Downloads a 1920×1080 JPG for Zoom, Google Meet, and Teams. Save it to your photos, then pick it under virtual backgrounds.';
+  return 'Downloads a 1920×1080 JPG for Zoom, Google Meet, and Teams.';
 }

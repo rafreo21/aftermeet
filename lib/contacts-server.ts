@@ -44,6 +44,7 @@ export function contactFromRow(row: ContactRow): Contact {
     source: row.source ?? undefined,
     exchangeId: row.exchange_id ?? undefined,
     campaignId: row.campaign_id ?? undefined,
+    legacyId: row.legacy_id ?? undefined,
   };
 }
 

@@ -1,15 +1,28 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import { CaretRight, MagnifyingGlass, UsersThree } from 'phosphor-react-native';
+import { CaretRight, MagnifyingGlass, Plus, SortAscending } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import {
+  ConnectionAddSheet,
+  ConnectionManualAddSheet,
+  ConnectionSortSheet,
+} from '@/components/connection-sheets';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
+import {
+  ConnectionsHeaderSkeleton,
+  ConnectionsListSkeleton,
+} from '@/components/skeleton';
 import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { connectionAvatarUrl } from '@/features/connections/connection-public-card';
 import {
   connectionSourceLabel,
-  fetchAllConnections,
+  createManualContact,
+  enrichConnectionPhotos,
+  fetchAllConnectionsMerged,
   filterConnections,
   sortConnections,
   type ConnectionItem,
@@ -52,28 +65,53 @@ export default function ConnectionsScreen() {
   const insets = useAppInsets();
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successSheetOpen, setSuccessSheetOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ConnectionSort>('date');
+  const [addOpen, setAddOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
+
+  const showError = useCallback((message: string) => {
+    setErrorMessage(message);
+    setErrorSheetOpen(true);
+  }, []);
+
+  const showSuccess = useCallback((message: string) => {
+    setSuccessMessage(message);
+    setSuccessSheetOpen(true);
+  }, []);
 
   const load = useCallback(async () => {
     if (!session?.access_token) {
       setConnections([]);
       setLoading(false);
+      setEnriching(false);
       return;
     }
     setLoading(true);
-    setError('');
+    setErrorSheetOpen(false);
+    setErrorMessage('');
     try {
-      setConnections(await fetchAllConnections(session.access_token));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load connections.');
-      setConnections([]);
-    } finally {
+      const merged = await fetchAllConnectionsMerged(session.access_token);
+      setConnections(merged);
       setLoading(false);
+      setEnriching(true);
+      void enrichConnectionPhotos(session.access_token, merged)
+        .then(setConnections)
+        .finally(() => setEnriching(false));
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'Could not load connections.');
+      setConnections([]);
+      setLoading(false);
+      setEnriching(false);
     }
-  }, [session?.access_token]);
+  }, [session?.access_token, showError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,32 +124,52 @@ export default function ConnectionsScreen() {
     [connections, query, sort],
   );
 
+  async function saveManualContact(input: { name: string; email: string; role: string; company: string }) {
+    if (!session?.access_token) {
+      showError('Sign in to add connections.');
+      return;
+    }
+    setSavingManual(true);
+    try {
+      await createManualContact(session.access_token, input);
+      setManualOpen(false);
+      setAddOpen(false);
+      showSuccess(`${input.name.trim()} was added to your connections.`);
+      await load();
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'Could not save this connection.');
+    } finally {
+      setSavingManual(false);
+    }
+  }
+
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
       <View style={styles.page}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <BackButton onPress={() => router.back()} />
-            {connections.length ? (
+            {session ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Search connections"
-                onPress={() => setSearchOpen((value) => !value)}
-                style={styles.searchButton}>
-                <MagnifyingGlass size={20} color={colors.ink} weight="bold" />
+                accessibilityLabel="Add connection"
+                onPress={() => setAddOpen(true)}
+                style={styles.addButton}>
+                <Plus size={22} color={colors.ink} weight="bold" />
               </Pressable>
             ) : null}
           </View>
-          {connections.length ? (
-            <View style={styles.headerCopy}>
-              <Eyebrow>Connections</Eyebrow>
-              <Text style={styles.title}>People you’ve met</Text>
-              <Body>Cards you saved and people who shared their details with you.</Body>
-            </View>
-          ) : null}
-          {connections.length ? (
-            <View style={styles.toolbar}>
-              {searchOpen ? (
+
+          {loading && !connections.length ? (
+            <ConnectionsHeaderSkeleton />
+          ) : session ? (
+            <>
+              <View style={styles.headerCopy}>
+                <Eyebrow>Connections</Eyebrow>
+                <Text style={styles.title}>People you’ve met</Text>
+                <Body>Cards you saved and people who shared their details with you.</Body>
+              </View>
+              <View style={styles.searchRow}>
                 <View style={styles.searchField}>
                   <MagnifyingGlass size={18} color={colors.muted} />
                   <TextInput
@@ -120,25 +178,17 @@ export default function ConnectionsScreen() {
                     placeholder="Search connections"
                     placeholderTextColor={colors.muted}
                     style={styles.searchInput}
-                    autoFocus
                   />
                 </View>
-              ) : null}
-              <View style={styles.sortRow}>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => setSort('date')}
-                  style={[styles.sortChip, sort === 'date' && styles.sortChipActive]}>
-                  <Text style={[styles.sortChipText, sort === 'date' && styles.sortChipTextActive]}>Date added</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setSort('az')}
-                  style={[styles.sortChip, sort === 'az' && styles.sortChipActive]}>
-                  <Text style={[styles.sortChipText, sort === 'az' && styles.sortChipTextActive]}>A–Z</Text>
+                  accessibilityLabel="Sort connections"
+                  onPress={() => setSortOpen(true)}
+                  style={styles.sortButton}>
+                  <SortAscending size={20} color={colors.ink} weight="bold" />
                 </Pressable>
               </View>
-            </View>
+            </>
           ) : null}
         </View>
 
@@ -149,22 +199,17 @@ export default function ConnectionsScreen() {
           keyboardShouldPersistTaps="handled">
           {!session ? (
             <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <UsersThree size={28} color={colors.ink} weight="bold" />
-              </View>
               <Text style={styles.emptyTitle}>Sign in to see connections</Text>
+              <Body>Save cards you scan and people who share their details with you.</Body>
               <Button onPress={() => router.push('/auth')}>Sign in</Button>
             </View>
           ) : loading ? (
-            <Body style={styles.loadingCopy}>Loading connections…</Body>
-          ) : error ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Couldn’t load connections</Text>
-              <Body style={styles.loadingCopy}>{error}</Body>
-              <Button variant="secondary" onPress={() => void load()}>Try again</Button>
-            </View>
+            <ConnectionsListSkeleton count={6} />
           ) : connections.length ? (
             <View style={styles.list}>
+              {enriching ? (
+                <Text style={styles.enrichingCopy}>Updating photos…</Text>
+              ) : null}
               {visibleConnections.map((connection) => (
                 <ConnectionRow
                   key={connection.id}
@@ -173,21 +218,63 @@ export default function ConnectionsScreen() {
                 />
               ))}
               {!visibleConnections.length ? (
-                <Body style={styles.loadingCopy}>No connections match your search.</Body>
+                <Body style={styles.emptySearch}>No connections match your search.</Body>
               ) : null}
             </View>
           ) : (
             <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <UsersThree size={28} color={colors.ink} weight="bold" />
-              </View>
               <Text style={styles.emptyTitle}>No connections yet</Text>
-              <Button onPress={() => router.push('/share-card')}>Share my card</Button>
-              <Button variant="secondary" onPress={() => router.push('/scanner')}>Scan a card</Button>
+              <Body>Scan a card or add someone manually to start building your network.</Body>
+              <Button onPress={() => setAddOpen(true)}>Add connection</Button>
             </View>
           )}
         </ScrollView>
       </View>
+
+      <ConnectionAddSheet
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAddManually={() => {
+          setAddOpen(false);
+          setManualOpen(true);
+        }}
+        onScanQr={() => {
+          setAddOpen(false);
+          router.push('/scanner');
+        }}
+      />
+
+      <ConnectionManualAddSheet
+        visible={manualOpen}
+        saving={savingManual}
+        onClose={() => setManualOpen(false)}
+        onSave={(input) => void saveManualContact(input)}
+      />
+
+      <ConnectionSortSheet
+        visible={sortOpen}
+        sort={sort}
+        onClose={() => setSortOpen(false)}
+        onSelect={setSort}
+      />
+
+      <OutcomeErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={() => {
+          setErrorSheetOpen(false);
+          setErrorMessage('');
+        }}
+      />
+
+      <OutcomeSuccessSheet
+        visible={successSheetOpen}
+        message={successMessage}
+        onClose={() => {
+          setSuccessSheetOpen(false);
+          setSuccessMessage('');
+        }}
+      />
     </View>
   );
 }
@@ -201,7 +288,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  searchButton: {
+  addButton: {
     width: 44,
     height: 44,
     borderRadius: radius.round,
@@ -217,8 +304,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1.1,
   },
-  toolbar: { gap: spacing.x2 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x2,
+  },
   searchField: {
+    flex: 1,
     minHeight: 46,
     paddingHorizontal: spacing.x3,
     flexDirection: 'row',
@@ -230,24 +322,20 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   searchInput: { flex: 1, color: colors.ink, fontSize: 15 },
-  sortRow: { flexDirection: 'row', gap: spacing.x2 },
-  sortChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.round,
+  sortButton: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
   },
-  sortChipActive: {
-    backgroundColor: colors.ink,
-    borderColor: colors.ink,
-  },
-  sortChipText: { color: colors.muted, fontSize: 12, fontWeight: '800' },
-  sortChipTextActive: { color: colors.white },
   scroll: { flex: 1, marginTop: spacing.x3 },
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
   list: { gap: spacing.x2 },
+  enrichingCopy: { color: colors.muted, fontSize: 12, textAlign: 'center', marginBottom: spacing.x1 },
   row: {
     minHeight: 68,
     flexDirection: 'row',
@@ -279,14 +367,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.x6,
     paddingHorizontal: spacing.x2,
   },
-  emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-  },
   emptyTitle: { color: colors.ink, fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  loadingCopy: { textAlign: 'center', color: colors.muted },
+  emptySearch: { textAlign: 'center', color: colors.muted },
 });
