@@ -67,7 +67,9 @@ function subtitle(role?: string, company?: string, fallback = 'Connected through
 }
 
 function mergeKey(name: string, email?: string) {
-  return `${name.trim().toLowerCase()}|${(email || '').trim().toLowerCase()}`;
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (normalizedEmail) return normalizedEmail;
+  return name.trim().toLowerCase();
 }
 
 export async function fetchPeopleConnections(accessToken: string) {
@@ -174,7 +176,10 @@ export async function fetchAllConnectionsMerged(accessToken: string): Promise<Co
       photoUrl: connectionAvatarUrl({ name, email: exchange.visitor_email?.trim() || undefined } as ConnectionItem),
     };
     const key = mergeKey(name, item.email);
-    if (!merged.has(key)) merged.set(key, item);
+    const existing = merged.get(key);
+    if (!existing || existing.source === 'contact') {
+      merged.set(key, item);
+    }
   }
 
   for (const contact of contacts) {
@@ -187,10 +192,26 @@ export async function fetchAllConnectionsMerged(accessToken: string): Promise<Co
       email: contact.email?.trim() || undefined,
       phone: contact.phone?.trim() || undefined,
       source: 'contact',
+      connectedAt: undefined,
       photoUrl: connectionAvatarUrl({ name, email: contact.email?.trim() || undefined } as ConnectionItem),
     };
     const key = mergeKey(name, item.email);
-    if (!merged.has(key)) merged.set(key, item);
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, item);
+      continue;
+    }
+    if (existing.source === 'inbound') {
+      merged.set(key, {
+        ...existing,
+        ...item,
+        id: existing.id,
+        sourceId: existing.sourceId,
+        source: 'inbound',
+        subtitle: existing.subtitle,
+        connectedAt: existing.connectedAt || item.connectedAt,
+      });
+    }
   }
 
   return Array.from(merged.values());

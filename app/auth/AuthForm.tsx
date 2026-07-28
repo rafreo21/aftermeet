@@ -7,6 +7,7 @@ import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimpl
 import { GoogleLogoIcon } from "@phosphor-icons/react/dist/csr/GoogleLogo";
 import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
 import { XLogoIcon } from "@phosphor-icons/react/dist/csr/XLogo";
+import { describeOtpDeliveryError } from "../../lib/auth/otp-delivery-error";
 import { appendVisitorIntentToCallback, VISITOR_DEFAULT_DESTINATION, type VisitorIntent, visitorOnboardingPath } from "../../lib/auth/visitor-intent";
 import { Button } from "../components/Button";
 import { TextField } from "../components/FormField";
@@ -22,15 +23,17 @@ export function AuthForm({
   next,
   visitorIntent,
   initialError,
+  initialEmail = "",
   providerAvailability,
 }: {
   appUrl: string;
   next: string;
   visitorIntent: VisitorIntent | null;
   initialError: string;
+  initialEmail?: string;
   providerAvailability: ProviderAvailability;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -55,11 +58,7 @@ export function AuthForm({
         options: { shouldCreateUser: true },
       });
       if (authError) {
-        if (authError.code === "over_email_send_rate_limit" || authError.status === 429 || authError.message.toLowerCase().includes("rate")) {
-          setError("Too many sign-in attempts. Please wait a few minutes before trying again.");
-        } else {
-          setError("We couldn’t send the code. Please try again.");
-        }
+        setError(describeOtpDeliveryError(authError));
         return;
       }
       setSentTo(normalized);

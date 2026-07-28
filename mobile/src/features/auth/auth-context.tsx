@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 
 import { createAuthRedirectUri } from '@/lib/auth-redirect';
+import { describeOtpDeliveryError } from '@/lib/otp-delivery-error';
 import { completeAuthSessionFromUrl, readLaunchAuthUrl } from '@/lib/auth-session-url';
 import { readMobileAuthRedirectUris } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         email: email.trim().toLowerCase(),
         options: { shouldCreateUser: true },
       });
-      return error ? { error: error.message } : { sent: true };
+      return error ? { error: describeOtpDeliveryError(error) } : { sent: true };
     },
     verifyEmailCode: async (email, token) => {
       if (!supabase) return { error: 'Connect the mobile environment to Supabase first.' };

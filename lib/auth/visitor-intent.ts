@@ -3,6 +3,7 @@ export type VisitorIntent = {
   slug?: string;
   exchangeId?: string;
   shareToken?: string;
+  email?: string;
 };
 
 export const VISITOR_DEFAULT_DESTINATION = "/app/people";
@@ -14,10 +15,11 @@ export function parseVisitorIntent(searchParams: URLSearchParams): VisitorIntent
     slug: searchParams.get("slug")?.trim() || undefined,
     exchangeId: searchParams.get("exchangeId")?.trim() || undefined,
     shareToken: searchParams.get("shareToken")?.trim() || undefined,
+    email: searchParams.get("email")?.trim().toLowerCase() || undefined,
   };
 }
 
-export function buildAuthHref(intent: VisitorIntent | { slug: string; exchangeId?: string; shareToken?: string }) {
+export function buildAuthHref(intent: VisitorIntent | { slug: string; exchangeId?: string; shareToken?: string; email?: string }) {
   const params = new URLSearchParams({
     intent: "visitor",
     next: VISITOR_DEFAULT_DESTINATION,
@@ -25,6 +27,7 @@ export function buildAuthHref(intent: VisitorIntent | { slug: string; exchangeId
   if (intent.slug) params.set("slug", intent.slug);
   if ("exchangeId" in intent && intent.exchangeId) params.set("exchangeId", intent.exchangeId);
   if ("shareToken" in intent && intent.shareToken) params.set("shareToken", intent.shareToken);
+  if ("email" in intent && intent.email) params.set("email", intent.email.trim().toLowerCase());
   return `/auth?${params.toString()}`;
 }
 

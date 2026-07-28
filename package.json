@@ -15,7 +15,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "configure:supabase-auth": "node scripts/configure-supabase-auth.mjs",
-    "deploy:send-auth-email": "node scripts/deploy-send-auth-email.mjs"
+    "deploy:send-auth-email": "node scripts/deploy-send-auth-email.mjs",
+    "verify:resend-delivery": "node scripts/verify-resend-delivery.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

@@ -124,6 +124,16 @@ export async function saveConnectionToAfterMeet(accessToken: string, connection:
   if (!response.ok) {
     throw new Error(payload.error || 'Could not save this person to your directory.');
   }
+
+  if (connection.source === 'inbound') {
+    await mobileFetch('/api/cards/exchanges', accessToken, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: connection.sourceId, status: 'imported' }),
+    }).catch(() => {
+      // directory save succeeded; exchange status is best-effort
+    });
+  }
 }
 
 export async function saveConnectionToDeviceContacts(connection: ConnectionItem, card?: MobileCard | null) {

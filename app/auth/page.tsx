@@ -35,7 +35,7 @@ async function readProviderAvailability(url: string, anonKey: string): Promise<P
 export default async function AuthPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string; intent?: string; slug?: string; exchangeId?: string; shareToken?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; intent?: string; slug?: string; exchangeId?: string; shareToken?: string; email?: string }>;
 }) {
   const params = await searchParams;
   const visitorIntent = parseVisitorIntent(new URLSearchParams(params as Record<string, string>));
@@ -72,6 +72,7 @@ export default async function AuthPage({
             next={next}
             visitorIntent={visitorIntent}
             initialError={params.error ? errors[params.error] ?? "" : ""}
+            initialEmail={visitorIntent?.email || params.email?.trim().toLowerCase() || ""}
             providerAvailability={providerAvailability}
           />
         )}

@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
     return Response.json({}, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to send auth email";
-    return Response.json({ error: { message } }, { status: 401 });
+    const status = message.toLowerCase().includes("only send testing emails") ? 422 : 500;
+    return Response.json({ error: { message } }, { status });
   }
 });

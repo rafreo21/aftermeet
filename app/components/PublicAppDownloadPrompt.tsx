@@ -23,7 +23,11 @@ export function PublicAppDownloadPrompt({
   const playStoreUrl = getPlayStoreUrl();
   const appStoreUrl = getAppStoreUrl();
   const storesLive = hasPublishedMobileApp();
-  const webAuthHref = buildAuthHref({ intent: "visitor", slug: slug ?? "" });
+  const webAuthHref = buildAuthHref({
+    intent: "visitor",
+    slug: slug ?? "",
+    email: visitorEmail?.trim().toLowerCase(),
+  });
 
   return (
     <div className="public-app-download" role="dialog" aria-modal="true" aria-labelledby="app-download-title">

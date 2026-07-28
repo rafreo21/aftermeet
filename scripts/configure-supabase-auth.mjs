@@ -84,6 +84,8 @@ async function setSecrets(token, secrets) {
 }
 
 async function main() {
+  const useSupabaseEmail = process.argv.includes("--supabase-email");
+  const useResendSmtp = process.argv.includes("--resend-smtp");
   const accessToken = readEnv("SUPABASE_ACCESS_TOKEN");
   const resendApiKey = readEnv("RESEND_API_KEY");
   const resendFrom = readEnv("RESEND_FROM_EMAIL") || "AfterMeet <onboarding@resend.dev>";
@@ -96,7 +98,7 @@ async function main() {
     process.exit(1);
   }
 
-  if (!resendApiKey) {
+  if (!useSupabaseEmail && !resendApiKey) {
     console.error("Missing RESEND_API_KEY.");
     console.error("");
     console.error("Skip Vercel — set this up directly on Resend:");
@@ -107,34 +109,75 @@ async function main() {
     console.error("");
     console.error("For testing, RESEND_FROM_EMAIL=AfterMeet <onboarding@resend.dev> only delivers");
     console.error("to the email you used on Resend. Add your domain in Resend for production.");
+    console.error("");
+    console.error("Temporary beta fallback (Supabase default email):");
+    console.error("  npm run configure:supabase-auth -- --supabase-email");
     process.exit(1);
   }
 
-  console.log(`Configuring Supabase Auth (${PROJECT_REF})...`);
-  console.log("  delivery: Send Email Hook → Resend (6-digit codes, no magic links)");
-  console.log("  hook URL:", hookUri);
-  console.log("  from:", resendFrom);
+  if (!useSupabaseEmail && resendFrom.includes("onboarding@resend.dev")) {
+    console.warn("\nWarning: onboarding@resend.dev only delivers to your Resend account email.");
+    console.warn("Visitors with other addresses (for example rafreo@icloud.com) cannot receive sign-in codes.");
+    console.warn("Verify a domain in Resend, update RESEND_FROM_EMAIL, or rerun with --supabase-email.\n");
+  }
 
-  console.log("\nSetting edge function secrets...");
-  await setSecrets(accessToken, [
-    { name: "RESEND_API_KEY", value: resendApiKey },
-    { name: "SEND_EMAIL_HOOK_SECRET", value: hookSecret },
-    { name: "RESEND_FROM_EMAIL", value: resendFrom },
-  ]);
+  console.log(`Configuring Supabase Auth (${PROJECT_REF})...`);
+  if (useSupabaseEmail) {
+    console.log("  delivery: Supabase default email (temporary beta fallback)");
+  } else if (useResendSmtp) {
+    console.log("  delivery: Supabase custom SMTP → Resend");
+    console.log("  from:", resendFrom);
+  } else {
+    console.log("  delivery: Send Email Hook → Resend (6-digit codes, no magic links)");
+    console.log("  hook URL:", hookUri);
+    console.log("  from:", resendFrom);
+  }
+
+  if (!useSupabaseEmail && !useResendSmtp) {
+    console.log("\nSetting edge function secrets...");
+    await setSecrets(accessToken, [
+      { name: "RESEND_API_KEY", value: resendApiKey },
+      { name: "SEND_EMAIL_HOOK_SECRET", value: hookSecret },
+      { name: "RESEND_FROM_EMAIL", value: resendFrom },
+    ]);
+  }
 
   console.log("Updating auth config...");
-  await api(accessToken, "/config/auth", {
-    method: "PATCH",
-    body: {
-      site_url: SITE_URL,
-      uri_allow_list: REDIRECT_URLS,
-      external_email_enabled: true,
+  const authPatch = {
+    site_url: SITE_URL,
+    uri_allow_list: REDIRECT_URLS,
+    external_email_enabled: true,
+    mailer_secure_email_change_enabled: false,
+  };
+
+  if (useSupabaseEmail) {
+    Object.assign(authPatch, {
+      hook_send_email_enabled: false,
+    });
+  } else if (useResendSmtp) {
+    const fromMatch = /<?([^<>@\s]+@[^<>@\s]+)>?/.exec(resendFrom);
+    const smtpAdminEmail = fromMatch?.[1] || resendFrom;
+    Object.assign(authPatch, {
+      hook_send_email_enabled: false,
+      smtp_host: "smtp.resend.com",
+      smtp_port: 465,
+      smtp_user: "resend",
+      smtp_pass: resendApiKey,
+      smtp_admin_email: smtpAdminEmail,
+      smtp_sender_name: "AfterMeet",
+    });
+  } else {
+    Object.assign(authPatch, {
       hook_send_email_enabled: true,
       hook_send_email_uri: hookUri,
       hook_send_email_secrets: hookSecret,
       rate_limit_email_sent: 30,
-      mailer_secure_email_change_enabled: false,
-    },
+    });
+  }
+
+  await api(accessToken, "/config/auth", {
+    method: "PATCH",
+    body: authPatch,
   });
 
   const current = await api(accessToken, "/config/auth");
@@ -144,11 +187,19 @@ async function main() {
   console.log("  send email hook:", current.hook_send_email_enabled ? "enabled" : "disabled");
   console.log("  email rate limit / hour:", current.rate_limit_email_sent ?? 30);
   console.log("");
-  console.log("Next: deploy the edge function if you haven't yet:");
-  console.log("  npm run deploy:send-auth-email");
-  console.log("");
-  console.log("Save this hook secret in .env.local if you generated a new one:");
-  console.log(`  SEND_EMAIL_HOOK_SECRET=${hookSecret}`);
+  if (useSupabaseEmail) {
+    console.log("Using Supabase default email delivery until a verified Resend domain is configured.");
+    console.log("When aftermeet.app is verified in Resend, rerun without --supabase-email.");
+  } else if (useResendSmtp) {
+    console.log("Using Resend SMTP through Supabase Auth.");
+    console.log("Verify your sender domain in Resend before inviting external users.");
+  } else {
+    console.log("Next: deploy the edge function if you haven't yet:");
+    console.log("  npm run deploy:send-auth-email");
+    console.log("");
+    console.log("Save this hook secret in .env.local if you generated a new one:");
+    console.log(`  SEND_EMAIL_HOOK_SECRET=${hookSecret}`);
+  }
 }
 
 main().catch((error) => {

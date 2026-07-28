@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import { CaretRight, MagnifyingGlass, Plus, SortAscending } from 'phosphor-react-native';
+import { CaretRight, MagnifyingGlass, Plus, SortAscending, UsersThree } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -143,6 +143,9 @@ export default function ConnectionsScreen() {
     }
   }
 
+  const hasConnections = connections.length > 0;
+  const showDirectoryChrome = session && (loading || hasConnections);
+
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
       <View style={styles.page}>
@@ -160,9 +163,9 @@ export default function ConnectionsScreen() {
             ) : null}
           </View>
 
-          {loading && !connections.length ? (
+          {loading && !hasConnections ? (
             <ConnectionsHeaderSkeleton />
-          ) : session ? (
+          ) : showDirectoryChrome ? (
             <>
               <View style={styles.headerCopy}>
                 <Eyebrow>Connections</Eyebrow>
@@ -193,19 +196,24 @@ export default function ConnectionsScreen() {
         </View>
 
         <ScrollView
-          style={styles.scroll}
+          style={[styles.scroll, !showDirectoryChrome && styles.scrollFlush]}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {!session ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Sign in to see connections</Text>
-              <Body>Save cards you scan and people who share their details with you.</Body>
+            <View style={styles.hero}>
+              <View style={styles.heroIcon}>
+                <UsersThree size={28} color={colors.white} weight="fill" />
+              </View>
+              <Text style={styles.heroTitle}>Sign in to see connections</Text>
+              <Body style={styles.heroCopy}>
+                Save cards you scan and people who share their details with you.
+              </Body>
               <Button onPress={() => router.push('/auth')}>Sign in</Button>
             </View>
           ) : loading ? (
             <ConnectionsListSkeleton count={6} />
-          ) : connections.length ? (
+          ) : hasConnections ? (
             <View style={styles.list}>
               {enriching ? (
                 <Text style={styles.enrichingCopy}>Updating photos…</Text>
@@ -222,9 +230,14 @@ export default function ConnectionsScreen() {
               ) : null}
             </View>
           ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No connections yet</Text>
-              <Body>Scan a card or add someone manually to start building your network.</Body>
+            <View style={styles.hero}>
+              <View style={styles.heroIcon}>
+                <UsersThree size={28} color={colors.white} weight="fill" />
+              </View>
+              <Text style={styles.heroTitle}>No connections yet</Text>
+              <Body style={styles.heroCopy}>
+                Scan a card or add someone manually to start building your network.
+              </Body>
               <Button onPress={() => setAddOpen(true)}>Add connection</Button>
             </View>
           )}
@@ -333,7 +346,24 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   scroll: { flex: 1, marginTop: spacing.x3 },
+  scrollFlush: { marginTop: 0 },
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
+  hero: {
+    gap: spacing.x3,
+    padding: spacing.x5,
+    borderRadius: radius.large,
+    backgroundColor: colors.ink,
+  },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(135, 234, 92, 0.18)',
+  },
+  heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800', lineHeight: 28 },
+  heroCopy: { color: '#C5D3BF', lineHeight: 22 },
   list: { gap: spacing.x2 },
   enrichingCopy: { color: colors.muted, fontSize: 12, textAlign: 'center', marginBottom: spacing.x1 },
   row: {
@@ -361,12 +391,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2, marginTop: 4 },
   source: { color: colors.inkSoft, fontSize: 10, fontWeight: '700' },
   when: { color: colors.muted, fontSize: 10 },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.x3,
-    paddingVertical: spacing.x6,
-    paddingHorizontal: spacing.x2,
-  },
-  emptyTitle: { color: colors.ink, fontSize: 20, fontWeight: '800', textAlign: 'center' },
   emptySearch: { textAlign: 'center', color: colors.muted },
 });
