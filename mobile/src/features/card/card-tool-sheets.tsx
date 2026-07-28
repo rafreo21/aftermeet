@@ -59,13 +59,8 @@ type SharedSheetProps = {
   cardPublicUrl?: (card: MobileCard) => string;
 };
 
-function SheetMessage({ message, error }: { message?: string; error?: string }) {
-  return (
-    <>
-      {message ? <Text style={styles.success}>{message}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </>
-  );
+function SheetMessage({ message }: { message?: string }) {
+  return message ? <Text style={styles.success}>{message}</Text> : null;
 }
 
 export function WalletToolSheetContent({
@@ -78,13 +73,11 @@ export function WalletToolSheetContent({
   walletNote,
   showCompany,
   message,
-  error,
 }: SharedSheetProps & {
   walletAvailable: boolean | null;
   walletNote: string;
   showCompany: boolean;
   message: string;
-  error: string;
 }) {
   const { busy, run, setMessage } = actions;
 
@@ -151,7 +144,7 @@ export function WalletToolSheetContent({
           ) : null}
         </>
       ) : null}
-      <SheetMessage message={message} error={error} />
+      <SheetMessage message={message} />
     </View>
   );
 }
@@ -162,8 +155,7 @@ export function NfcToolSheetContent({
   actions,
   accessToken,
   message,
-  error,
-}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'> & { message: string; error: string }) {
+}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'> & { message: string }) {
   const { busy, run, setMessage } = actions;
 
   return (
@@ -211,7 +203,7 @@ export function NfcToolSheetContent({
         <Copy size={16} color={colors.ink} weight="bold" />
         Copy NFC programming JSON
       </Button>
-      <SheetMessage message={message} error={error} />
+      <SheetMessage message={message} />
     </View>
   );
 }
@@ -227,12 +219,10 @@ export function WidgetToolSheetContent({
   showCompany,
   initials,
   message,
-  error,
 }: SharedSheetProps & {
   showCompany: boolean;
   initials: string;
   message: string;
-  error: string;
 }) {
   const { busy, run, setMessage } = actions;
   const [snapshot, setSnapshot] = useState<WidgetSnapshot | null>(null);
@@ -364,7 +354,7 @@ export function WidgetToolSheetContent({
         <SquaresFour size={18} color={colors.ink} weight="bold" />
         Refresh home-screen widgets
       </Button>
-      <SheetMessage message={message} error={error} />
+      <SheetMessage message={message} />
     </View>
   );
 }
@@ -379,7 +369,6 @@ export function SignatureToolSheetContent({
   copied,
   copySignature,
   message,
-  error,
 }: {
   card: MobileCard;
   publicUrl: string;
@@ -390,7 +379,6 @@ export function SignatureToolSheetContent({
   copied: string;
   copySignature: (kind: 'plain' | 'html') => Promise<void>;
   message: string;
-  error: string;
 }) {
   return (
     <View style={styles.sheetBody}>
@@ -419,7 +407,7 @@ export function SignatureToolSheetContent({
         <Code size={16} color={colors.ink} weight="bold" />
         {copied === 'html' ? 'HTML copied' : 'Copy HTML signature'}
       </Button>
-      <SheetMessage message={message} error={error} />
+      <SheetMessage message={message} />
     </View>
   );
 }
@@ -431,8 +419,7 @@ export function WatchToolSheetContent({
   accessToken,
   published,
   message,
-  error,
-}: SharedSheetProps & { published: boolean; message: string; error: string }) {
+}: SharedSheetProps & { published: boolean; message: string }) {
   const { busy, run, setMessage } = actions;
 
   return (
@@ -455,7 +442,7 @@ export function WatchToolSheetContent({
         <Watch size={18} color={colors.ink} weight="bold" />
         Download watch QR
       </Button>
-      <SheetMessage message={message} error={error} />
+      <SheetMessage message={message} />
     </View>
   );
 }
@@ -469,8 +456,7 @@ export function BackgroundToolSheetContent({
   published,
   subtitle,
   message,
-  error,
-}: SharedSheetProps & { published: boolean; subtitle: string; message: string; error: string }) {
+}: SharedSheetProps & { published: boolean; subtitle: string; message: string }) {
   const { busy, run, setMessage } = actions;
 
   return (
@@ -496,7 +482,7 @@ export function BackgroundToolSheetContent({
         <Monitor size={18} color={colors.ink} weight="bold" />
         Download virtual background
       </Button>
-      <SheetMessage message={message} error={error} />
+      <SheetMessage message={message} />
     </View>
   );
 }
@@ -513,7 +499,6 @@ const styles = StyleSheet.create({
   sheetBody: { gap: spacing.x3 },
   note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
-  error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
   walletPreview: {
     borderRadius: radius.medium,
     padding: spacing.x4,

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
+import { CardToolErrorSheet } from '@/components/card-tool-error-sheet';
 import { BackButton, Body, Button, Eyebrow, Panel } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -79,7 +80,8 @@ export default function CardToolsScreen() {
 
   const [activeSheet, setActiveSheet] = useState<ToolSheet>('none');
   const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [busy, setBusy] = useState('');
   const [copied, setCopied] = useState('');
   const [walletAvailable, setWalletAvailable] = useState<boolean | null>(null);
@@ -133,16 +135,23 @@ export default function CardToolsScreen() {
 
   const run = useCallback(async (action: string, task: () => Promise<void>) => {
     setBusy(action);
-    setError('');
     setMessage('');
     try {
       await task();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Something went wrong.');
+      const nextMessage = caught instanceof Error ? caught.message : 'Something went wrong.';
+      setErrorMessage(nextMessage);
+      setErrorSheetOpen(true);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setBusy('');
     }
+  }, []);
+
+  const showError = useCallback((nextMessage: string) => {
+    setErrorMessage(nextMessage);
+    setErrorSheetOpen(true);
   }, []);
 
   const sheetActions = useMemo(() => ({
@@ -153,7 +162,8 @@ export default function CardToolsScreen() {
 
   function openSheet(next: ToolSheet) {
     setMessage('');
-    setError('');
+    setErrorSheetOpen(false);
+    setErrorMessage('');
     setActiveSheet(next);
   }
 
@@ -161,25 +171,34 @@ export default function CardToolsScreen() {
     setActiveSheet('none');
   }
 
+  function closeErrorSheet() {
+    setErrorSheetOpen(false);
+    setErrorMessage('');
+  }
+
   async function copySignature(kind: 'plain' | 'html') {
     if (!card) return;
 
-    let qrDataUri: string | undefined;
-    if (kind === 'html' && card.slug && session?.access_token) {
-      try {
-        qrDataUri = await fetchBrandedQrDataUri(card.slug, session.access_token);
-      } catch {
-        qrDataUri = undefined;
+    try {
+      let qrDataUri: string | undefined;
+      if (kind === 'html' && card.slug && session?.access_token) {
+        try {
+          qrDataUri = await fetchBrandedQrDataUri(card.slug, session.access_token);
+        } catch {
+          qrDataUri = undefined;
+        }
       }
-    }
 
-    const value = kind === 'plain'
-      ? buildPlainSignature(signatureProfile)
-      : buildHtmlSignature({ ...signatureProfile, qrDataUri });
-    await Clipboard.setStringAsync(value);
-    setCopied(kind);
-    setTimeout(() => setCopied(''), 1500);
-    setMessage(kind === 'plain' ? 'Plain signature copied.' : 'HTML signature copied.');
+      const value = kind === 'plain'
+        ? buildPlainSignature(signatureProfile)
+        : buildHtmlSignature({ ...signatureProfile, qrDataUri });
+      await Clipboard.setStringAsync(value);
+      setCopied(kind);
+      setTimeout(() => setCopied(''), 1500);
+      setMessage(kind === 'plain' ? 'Plain signature copied.' : 'HTML signature copied.');
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'Could not copy the signature.');
+    }
   }
 
   if (!card) {
@@ -298,7 +317,6 @@ export default function CardToolsScreen() {
           walletAvailable={walletAvailable}
           walletNote={walletNote}
           message={message}
-          error={error}
         />
       </BottomSheet>
 
@@ -307,7 +325,6 @@ export default function CardToolsScreen() {
           {...sharedSheetProps}
           actions={sheetActions}
           message={message}
-          error={error}
         />
       </BottomSheet>
 
@@ -319,7 +336,6 @@ export default function CardToolsScreen() {
           showCompany={showCompany}
           initials={initials}
           message={message}
-          error={error}
         />
       </BottomSheet>
 
@@ -334,7 +350,6 @@ export default function CardToolsScreen() {
           copied={copied}
           copySignature={copySignature}
           message={message}
-          error={error}
         />
       </BottomSheet>
 
@@ -343,7 +358,6 @@ export default function CardToolsScreen() {
           {...sharedSheetProps}
           published={published}
           message={message}
-          error={error}
         />
       </BottomSheet>
 
@@ -353,9 +367,14 @@ export default function CardToolsScreen() {
           published={published}
           subtitle={subtitle}
           message={message}
-          error={error}
         />
       </BottomSheet>
+
+      <CardToolErrorSheet
+        visible={errorSheetOpen}
+        message={errorMessage}
+        onClose={closeErrorSheet}
+      />
     </View>
   );
 }

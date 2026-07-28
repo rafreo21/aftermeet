@@ -34,8 +34,16 @@ export async function downloadShareAsset(
 
   if (download.status < 200 || download.status >= 300) {
     const payload = await FileSystem.readAsStringAsync(download.uri).catch(() => '');
-    const parsed = payload ? JSON.parse(payload) as { error?: string } : null;
-    throw new Error(parsed?.error || 'We couldn’t download this asset.');
+    let apiError = 'We couldn’t download this asset.';
+    if (payload) {
+      try {
+        const parsed = JSON.parse(payload) as { error?: string };
+        if (parsed.error?.trim()) apiError = parsed.error.trim();
+      } catch {
+        // keep default message
+      }
+    }
+    throw new Error(apiError);
   }
 
   const info = await FileSystem.getInfoAsync(download.uri);

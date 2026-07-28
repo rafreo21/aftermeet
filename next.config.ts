@@ -1,18 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["sharp"],
   outputFileTracingIncludes: {
     "/api/mobile/share-assets/[slug]": [
       "./public/aftermeet-mark.png",
       "./lib/aftermeet-logo-base64.ts",
-      "./node_modules/@fontsource/inter/files/inter-latin-400-normal.woff",
-      "./node_modules/@fontsource/inter/files/inter-latin-700-normal.woff",
+      "./lib/share-asset-fonts-data.ts",
     ],
     "/api/cards/share-assets/[slug]": [
       "./public/aftermeet-mark.png",
       "./lib/aftermeet-logo-base64.ts",
-      "./node_modules/@fontsource/inter/files/inter-latin-400-normal.woff",
-      "./node_modules/@fontsource/inter/files/inter-latin-700-normal.woff",
+      "./lib/share-asset-fonts-data.ts",
     ],
   },
 };

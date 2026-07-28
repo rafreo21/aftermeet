@@ -87,9 +87,57 @@ export async function buildVirtualBackgroundSvg(profile: ShareAssetProfile) {
 
 /** JPG export for Zoom, Google Meet, and Teams. */
 export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
-  const svg = await buildVirtualBackgroundSvgDocument(profile);
-  return sharp(Buffer.from(svg), { density: 144 })
-    .resize(VIRTUAL_BG_PANEL.canvasWidth, VIRTUAL_BG_PANEL.canvasHeight, { fit: "fill" })
+  const theme = normalizeHex(profile.themeColor);
+  const softTop = tint(theme, 0.55);
+  const softBottom = tint(theme, 0.78);
+  const name = escapeXml(profile.name.trim() || "Your name");
+  const layout = buildVirtualBackgroundLayout(profile);
+  const fonts = await loadShareAssetFontsBase64();
+
+  const backgroundSvg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
+    `<defs>`,
+    `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">`,
+    `<stop offset="0%" stop-color="${softTop}"/>`,
+    `<stop offset="100%" stop-color="${softBottom}"/>`,
+    `</linearGradient>`,
+    `</defs>`,
+    `<rect width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" fill="url(#bg)"/>`,
+    `</svg>`,
+  ].join("");
+
+  const panelSvg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.width}" height="${VIRTUAL_BG_PANEL.height}">`,
+    `<rect width="${VIRTUAL_BG_PANEL.width}" height="${VIRTUAL_BG_PANEL.height}" rx="${VIRTUAL_BG_PANEL.radius}" fill="#FFFFFF" fill-opacity="0.94"/>`,
+    `</svg>`,
+  ].join("");
+
+  const textSvg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
+    `<style>${shareAssetFontStyles(fonts.regular, fonts.bold)}</style>`,
+    `<text x="${layout.nameX}" y="${layout.nameY}" fill="#163300" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.nameFontSize}" font-weight="700">${name}</text>`,
+    layout.subtitle
+      ? `<text x="${layout.nameX}" y="${layout.subtitleY}" fill="#53634D" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.subtitleFontSize}" font-weight="400">${escapeXml(layout.subtitle)}</text>`
+      : "",
+    `<text x="${layout.scanX}" y="${layout.scanY}" fill="#71806B" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.scanFontSize}" font-weight="400">Scan to save my contact</text>`,
+    `</svg>`,
+  ].filter(Boolean).join("");
+
+  const [background, panel, qrBuffer, textLayer] = await Promise.all([
+    sharp(Buffer.from(backgroundSvg)).png().toBuffer(),
+    sharp(Buffer.from(panelSvg)).png().toBuffer(),
+    buildBrandedQrPngBuffer(profile.cardUrl, VIRTUAL_BG_PANEL.qrSize * 5).then((buffer) =>
+      sharp(buffer).resize(VIRTUAL_BG_PANEL.qrSize, VIRTUAL_BG_PANEL.qrSize, { kernel: sharp.kernel.nearest }).png().toBuffer(),
+    ),
+    sharp(Buffer.from(textSvg)).png().toBuffer(),
+  ]);
+
+  return sharp(background)
+    .composite([
+      { input: panel, top: VIRTUAL_BG_PANEL.y, left: VIRTUAL_BG_PANEL.x },
+      { input: qrBuffer, top: layout.qrY, left: layout.qrX },
+      { input: textLayer, top: 0, left: 0 },
+    ])
     .jpeg({ quality: 92, mozjpeg: true })
     .toBuffer();
 }
