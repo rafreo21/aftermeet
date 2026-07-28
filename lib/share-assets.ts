@@ -6,6 +6,7 @@ import {
   buildVirtualBackgroundLayout,
   VIRTUAL_BG_PANEL,
 } from "./virtual-background-layout.ts";
+import { buildVirtualBackgroundPanelPng } from "./virtual-background-panel-image.ts";
 
 export type ShareAssetProfile = {
   name: string;
@@ -90,9 +91,6 @@ export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
   const theme = normalizeHex(profile.themeColor);
   const softTop = tint(theme, 0.55);
   const softBottom = tint(theme, 0.78);
-  const name = escapeXml(profile.name.trim() || "Your name");
-  const layout = buildVirtualBackgroundLayout(profile);
-  const fonts = await loadShareAssetFontsBase64();
 
   const backgroundSvg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
@@ -106,38 +104,18 @@ export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
     `</svg>`,
   ].join("");
 
-  const panelSvg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.width}" height="${VIRTUAL_BG_PANEL.height}">`,
-    `<rect width="${VIRTUAL_BG_PANEL.width}" height="${VIRTUAL_BG_PANEL.height}" rx="${VIRTUAL_BG_PANEL.radius}" fill="#FFFFFF" fill-opacity="0.94"/>`,
-    `</svg>`,
-  ].join("");
-
-  const textSvg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
-    `<style>${shareAssetFontStyles(fonts.regular, fonts.bold)}</style>`,
-    `<text x="${layout.nameX}" y="${layout.nameY}" fill="#163300" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.nameFontSize}" font-weight="700">${name}</text>`,
-    layout.subtitle
-      ? `<text x="${layout.nameX}" y="${layout.subtitleY}" fill="#53634D" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.subtitleFontSize}" font-weight="400">${escapeXml(layout.subtitle)}</text>`
-      : "",
-    `<text x="${layout.scanX}" y="${layout.scanY}" fill="#71806B" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.scanFontSize}" font-weight="400">Scan to save my contact</text>`,
-    `</svg>`,
-  ].filter(Boolean).join("");
-
-  const [background, panel, qrBuffer, textLayer] = await Promise.all([
+  const [background, panelPngRaw] = await Promise.all([
     sharp(Buffer.from(backgroundSvg)).png().toBuffer(),
-    sharp(Buffer.from(panelSvg)).png().toBuffer(),
-    buildBrandedQrPngBuffer(profile.cardUrl, VIRTUAL_BG_PANEL.qrSize * 5).then((buffer) =>
-      sharp(buffer).resize(VIRTUAL_BG_PANEL.qrSize, VIRTUAL_BG_PANEL.qrSize, { kernel: sharp.kernel.nearest }).png().toBuffer(),
-    ),
-    sharp(Buffer.from(textSvg)).png().toBuffer(),
+    buildVirtualBackgroundPanelPng(profile, 2),
   ]);
 
+  const panelPng = await sharp(panelPngRaw)
+    .resize(VIRTUAL_BG_PANEL.width, VIRTUAL_BG_PANEL.height)
+    .png()
+    .toBuffer();
+
   return sharp(background)
-    .composite([
-      { input: panel, top: VIRTUAL_BG_PANEL.y, left: VIRTUAL_BG_PANEL.x },
-      { input: qrBuffer, top: layout.qrY, left: layout.qrX },
-      { input: textLayer, top: 0, left: 0 },
-    ])
+    .composite([{ input: panelPng, top: VIRTUAL_BG_PANEL.y, left: VIRTUAL_BG_PANEL.x }])
     .jpeg({ quality: 92, mozjpeg: true })
     .toBuffer();
 }

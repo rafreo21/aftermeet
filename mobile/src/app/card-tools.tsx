@@ -16,6 +16,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CardToolErrorSheet } from '@/components/card-tool-error-sheet';
+import { CardToolSuccessSheet } from '@/components/card-tool-success-sheet';
 import { BackButton, Body, Button, Eyebrow, Panel } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -79,9 +80,10 @@ export default function CardToolsScreen() {
   );
 
   const [activeSheet, setActiveSheet] = useState<ToolSheet>('none');
-  const [message, setMessage] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successSheetOpen, setSuccessSheetOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [busy, setBusy] = useState('');
   const [copied, setCopied] = useState('');
   const [walletAvailable, setWalletAvailable] = useState<boolean | null>(null);
@@ -133,12 +135,19 @@ export default function CardToolsScreen() {
     themeColor: card?.theme,
   }), [card, publicUrl, showCompany]);
 
-  const run = useCallback(async (action: string, task: () => Promise<void>) => {
+  const run = useCallback(async (
+    action: string,
+    task: () => Promise<void>,
+    options?: { successMessage?: string },
+  ) => {
     setBusy(action);
-    setMessage('');
     try {
       await task();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (options?.successMessage?.trim()) {
+        setSuccessMessage(options.successMessage.trim());
+        setSuccessSheetOpen(true);
+      }
     } catch (caught) {
       const nextMessage = caught instanceof Error ? caught.message : 'Something went wrong.';
       setErrorMessage(nextMessage);
@@ -149,6 +158,14 @@ export default function CardToolsScreen() {
     }
   }, []);
 
+  const showSuccess = useCallback((nextMessage: string) => {
+    const trimmed = nextMessage.trim();
+    if (!trimmed) return;
+    setSuccessMessage(trimmed);
+    setSuccessSheetOpen(true);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
   const showError = useCallback((nextMessage: string) => {
     setErrorMessage(nextMessage);
     setErrorSheetOpen(true);
@@ -157,13 +174,13 @@ export default function CardToolsScreen() {
   const sheetActions = useMemo(() => ({
     busy,
     run,
-    setMessage,
   }), [busy, run]);
 
   function openSheet(next: ToolSheet) {
-    setMessage('');
     setErrorSheetOpen(false);
     setErrorMessage('');
+    setSuccessSheetOpen(false);
+    setSuccessMessage('');
     setActiveSheet(next);
   }
 
@@ -174,6 +191,11 @@ export default function CardToolsScreen() {
   function closeErrorSheet() {
     setErrorSheetOpen(false);
     setErrorMessage('');
+  }
+
+  function closeSuccessSheet() {
+    setSuccessSheetOpen(false);
+    setSuccessMessage('');
   }
 
   async function copySignature(kind: 'plain' | 'html') {
@@ -195,7 +217,7 @@ export default function CardToolsScreen() {
       await Clipboard.setStringAsync(value);
       setCopied(kind);
       setTimeout(() => setCopied(''), 1500);
-      setMessage(kind === 'plain' ? 'Plain signature copied.' : 'HTML signature copied.');
+      showSuccess(kind === 'plain' ? 'Plain signature copied.' : 'HTML signature copied.');
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'Could not copy the signature.');
     }
@@ -316,7 +338,6 @@ export default function CardToolsScreen() {
           showCompany={showCompany}
           walletAvailable={walletAvailable}
           walletNote={walletNote}
-          message={message}
         />
       </BottomSheet>
 
@@ -324,7 +345,6 @@ export default function CardToolsScreen() {
         <NfcToolSheetContent
           {...sharedSheetProps}
           actions={sheetActions}
-          message={message}
         />
       </BottomSheet>
 
@@ -335,7 +355,6 @@ export default function CardToolsScreen() {
           cardPublicUrl={cardPublicUrl}
           showCompany={showCompany}
           initials={initials}
-          message={message}
         />
       </BottomSheet>
 
@@ -349,7 +368,6 @@ export default function CardToolsScreen() {
           showCompany={showCompany}
           copied={copied}
           copySignature={copySignature}
-          message={message}
         />
       </BottomSheet>
 
@@ -357,7 +375,6 @@ export default function CardToolsScreen() {
         <WatchToolSheetContent
           {...sharedSheetProps}
           published={published}
-          message={message}
         />
       </BottomSheet>
 
@@ -366,7 +383,6 @@ export default function CardToolsScreen() {
           {...sharedSheetProps}
           published={published}
           subtitle={subtitle}
-          message={message}
         />
       </BottomSheet>
 
@@ -374,6 +390,12 @@ export default function CardToolsScreen() {
         visible={errorSheetOpen}
         message={errorMessage}
         onClose={closeErrorSheet}
+      />
+
+      <CardToolSuccessSheet
+        visible={successSheetOpen}
+        message={successMessage}
+        onClose={closeSuccessSheet}
       />
     </View>
   );

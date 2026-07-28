@@ -45,8 +45,11 @@ export type CardToolTheme = ReturnType<typeof themeSurfaceStyle>;
 
 type SheetActions = {
   busy: string;
-  run: (action: string, task: () => Promise<void>) => Promise<void>;
-  setMessage: (value: string) => void;
+  run: (
+    action: string,
+    task: () => Promise<void>,
+    options?: { successMessage?: string },
+  ) => Promise<void>;
 };
 
 type SharedSheetProps = {
@@ -59,10 +62,6 @@ type SharedSheetProps = {
   cardPublicUrl?: (card: MobileCard) => string;
 };
 
-function SheetMessage({ message }: { message?: string }) {
-  return message ? <Text style={styles.success}>{message}</Text> : null;
-}
-
 export function WalletToolSheetContent({
   card,
   publicUrl,
@@ -72,14 +71,12 @@ export function WalletToolSheetContent({
   walletAvailable,
   walletNote,
   showCompany,
-  message,
 }: SharedSheetProps & {
   walletAvailable: boolean | null;
   walletNote: string;
   showCompany: boolean;
-  message: string;
 }) {
-  const { busy, run, setMessage } = actions;
+  const { busy, run } = actions;
 
   return (
     <View style={styles.sheetBody}>
@@ -116,8 +113,7 @@ export function WalletToolSheetContent({
             onPress={() => void run('apple', async () => {
               if (!accessToken) throw new Error('Sign in required.');
               await addAppleWalletPass(card.slug, accessToken);
-              setMessage('Choose Add to Wallet from the share sheet.');
-            })}>
+            }, { successMessage: 'Choose Add to Wallet from the share sheet.' })}>
             <Wallet size={18} color={colors.ink} weight="bold" />
             Add to Apple Wallet
           </Button>
@@ -134,8 +130,7 @@ export function WalletToolSheetContent({
             onPress={() => void run('google', async () => {
               if (!accessToken) throw new Error('Sign in required.');
               await addGoogleWalletPass(card.slug, accessToken);
-              setMessage('Finish adding the pass in Google Wallet.');
-            })}>
+            }, { successMessage: 'Finish adding the pass in Google Wallet.' })}>
             <GoogleLogo size={18} color={colors.ink} weight="bold" />
             Add to Google Wallet
           </Button>
@@ -144,7 +139,6 @@ export function WalletToolSheetContent({
           ) : null}
         </>
       ) : null}
-      <SheetMessage message={message} />
     </View>
   );
 }
@@ -154,9 +148,8 @@ export function NfcToolSheetContent({
   publicUrl,
   actions,
   accessToken,
-  message,
-}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'> & { message: string }) {
-  const { busy, run, setMessage } = actions;
+}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'>) {
+  const { busy, run } = actions;
 
   return (
     <View style={styles.sheetBody}>
@@ -171,8 +164,7 @@ export function NfcToolSheetContent({
             loading={busy === 'nfc'}
             onPress={() => void run('nfc', async () => {
               await programNfcTag(publicUrl);
-              setMessage('NFC tag programmed. Tap it with a phone to open your card.');
-            })}>
+            }, { successMessage: 'NFC tag programmed. Tap it with a phone to open your card.' })}>
             <ContactlessPayment size={18} color={colors.ink} weight="bold" />
             Program NFC tag
           </Button>
@@ -187,9 +179,8 @@ export function NfcToolSheetContent({
         variant="secondary"
         loading={busy === 'nfc-link'}
         onPress={() => void run('nfc-link', async () => {
-          const value = await copyNfcCardLink(publicUrl);
-          setMessage(`Card link copied: ${value}`);
-        })}>
+          await copyNfcCardLink(publicUrl);
+        }, { successMessage: 'Card link copied. Paste it into your NFC tool.' })}>
         <LinkSimple size={16} color={colors.ink} weight="bold" />
         Copy card link for NFC
       </Button>
@@ -198,12 +189,10 @@ export function NfcToolSheetContent({
         loading={busy === 'nfc-copy'}
         onPress={() => void run('nfc-copy', async () => {
           await copyNfcManufacturerPayload(publicUrl);
-          setMessage('Programming JSON copied for manufacturer tools.');
-        })}>
+        }, { successMessage: 'Programming JSON copied for manufacturer tools.' })}>
         <Copy size={16} color={colors.ink} weight="bold" />
         Copy NFC programming JSON
       </Button>
-      <SheetMessage message={message} />
     </View>
   );
 }
@@ -218,13 +207,11 @@ export function WidgetToolSheetContent({
   cardPublicUrl,
   showCompany,
   initials,
-  message,
 }: SharedSheetProps & {
   showCompany: boolean;
   initials: string;
-  message: string;
 }) {
-  const { busy, run, setMessage } = actions;
+  const { busy, run } = actions;
   const [snapshot, setSnapshot] = useState<WidgetSnapshot | null>(null);
   const resolveCardUrl = cardPublicUrl || (() => publicUrl);
 
@@ -349,12 +336,10 @@ export function WidgetToolSheetContent({
           await updateQuickShareWidget(card, publicUrl, accessToken, allCards, resolveCardUrl);
           const next = await buildWidgetSnapshot(allCards, resolveCardUrl, accessToken, card);
           setSnapshot(next);
-          setMessage('Widget data refreshed. Add or update AfterMeet from your widget picker.');
-        })}>
+        }, { successMessage: 'Widget data refreshed. Add or update AfterMeet from your widget picker.' })}>
         <SquaresFour size={18} color={colors.ink} weight="bold" />
         Refresh home-screen widgets
       </Button>
-      <SheetMessage message={message} />
     </View>
   );
 }
@@ -368,7 +353,6 @@ export function SignatureToolSheetContent({
   showCompany,
   copied,
   copySignature,
-  message,
 }: {
   card: MobileCard;
   publicUrl: string;
@@ -378,7 +362,6 @@ export function SignatureToolSheetContent({
   showCompany: boolean;
   copied: string;
   copySignature: (kind: 'plain' | 'html') => Promise<void>;
-  message: string;
 }) {
   return (
     <View style={styles.sheetBody}>
@@ -407,7 +390,6 @@ export function SignatureToolSheetContent({
         <Code size={16} color={colors.ink} weight="bold" />
         {copied === 'html' ? 'HTML copied' : 'Copy HTML signature'}
       </Button>
-      <SheetMessage message={message} />
     </View>
   );
 }
@@ -418,9 +400,8 @@ export function WatchToolSheetContent({
   actions,
   accessToken,
   published,
-  message,
-}: SharedSheetProps & { published: boolean; message: string }) {
-  const { busy, run, setMessage } = actions;
+}: SharedSheetProps & { published: boolean }) {
+  const { busy, run } = actions;
 
   return (
     <View style={styles.sheetBody}>
@@ -437,12 +418,10 @@ export function WatchToolSheetContent({
         onPress={() => void run('watch', async () => {
           if (!accessToken) throw new Error('Sign in required.');
           await downloadShareAsset(card.slug, 'watch-face', accessToken);
-          setMessage('Watch QR downloaded. Add it to your watch face.');
-        })}>
+        }, { successMessage: 'Watch QR downloaded. Add it to your watch face.' })}>
         <Watch size={18} color={colors.ink} weight="bold" />
         Download watch QR
       </Button>
-      <SheetMessage message={message} />
     </View>
   );
 }
@@ -455,9 +434,8 @@ export function BackgroundToolSheetContent({
   accessToken,
   published,
   subtitle,
-  message,
-}: SharedSheetProps & { published: boolean; subtitle: string; message: string }) {
-  const { busy, run, setMessage } = actions;
+}: SharedSheetProps & { published: boolean; subtitle: string }) {
+  const { busy, run } = actions;
 
   return (
     <View style={styles.sheetBody}>
@@ -477,12 +455,10 @@ export function BackgroundToolSheetContent({
         onPress={() => void run('background', async () => {
           if (!accessToken) throw new Error('Sign in required.');
           await downloadShareAsset(card.slug, 'virtual-background', accessToken);
-          setMessage('Virtual background downloaded. Import it in your meeting app.');
-        })}>
+        }, { successMessage: 'Virtual background downloaded. Import it in your meeting app.' })}>
         <Monitor size={18} color={colors.ink} weight="bold" />
         Download virtual background
       </Button>
-      <SheetMessage message={message} />
     </View>
   );
 }
@@ -498,7 +474,6 @@ export function cardToolShowCompany(card: MobileCard) {
 const styles = StyleSheet.create({
   sheetBody: { gap: spacing.x3 },
   note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
-  success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
   walletPreview: {
     borderRadius: radius.medium,
     padding: spacing.x4,
