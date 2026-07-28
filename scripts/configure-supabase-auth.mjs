@@ -83,6 +83,20 @@ async function setSecrets(token, secrets) {
   });
 }
 
+const OTP_MAGIC_LINK_SUBJECT = "Your AfterMeet sign-in code";
+const OTP_MAGIC_LINK_CONTENT = `<h2>Your AfterMeet sign-in code</h2>
+<p>Enter this 6-digit code in AfterMeet to sign in:</p>
+<p style="font-size:32px;font-weight:700;letter-spacing:8px;margin:20px 0">{{ .Token }}</p>
+<p>This code expires shortly and can only be used once.</p>
+<p>If you didn't request this, you can ignore this email.</p>`;
+
+function otpTemplatePatch() {
+  return {
+    mailer_subjects_magic_link: OTP_MAGIC_LINK_SUBJECT,
+    mailer_templates_magic_link_content: OTP_MAGIC_LINK_CONTENT,
+  };
+}
+
 async function main() {
   const useSupabaseEmail = process.argv.includes("--supabase-email");
   const useResendSmtp = process.argv.includes("--resend-smtp");
@@ -150,6 +164,10 @@ async function main() {
     mailer_secure_email_change_enabled: false,
   };
 
+  if (!useSupabaseEmail) {
+    Object.assign(authPatch, otpTemplatePatch());
+  }
+
   if (useSupabaseEmail) {
     Object.assign(authPatch, {
       hook_send_email_enabled: false,
@@ -188,8 +206,8 @@ async function main() {
   console.log("  email rate limit / hour:", current.rate_limit_email_sent ?? 30);
   console.log("");
   if (useSupabaseEmail) {
-    console.log("Using Supabase default email delivery until a verified Resend domain is configured.");
-    console.log("When aftermeet.app is verified in Resend, rerun without --supabase-email.");
+    console.log("Using Supabase default email with OTP template (6-digit codes, not magic links).");
+    console.log("When aftermeet.app is verified in Resend, rerun without --supabase-email for Resend delivery.");
   } else if (useResendSmtp) {
     console.log("Using Resend SMTP through Supabase Auth.");
     console.log("Verify your sender domain in Resend before inviting external users.");
