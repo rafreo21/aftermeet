@@ -69,16 +69,21 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
   }
 
-  const asset = type === "virtual-background"
-    ? await buildVirtualBackgroundJpeg(profile)
-    : await buildWatchFacePng(profile);
-  const format = type === "virtual-background" ? "jpg" : "png";
+  try {
+    const asset = type === "virtual-background"
+      ? await buildVirtualBackgroundJpeg(profile)
+      : await buildWatchFacePng(profile);
+    const format = type === "virtual-background" ? "jpg" : "png";
 
-  return new NextResponse(new Uint8Array(asset), {
-    headers: {
-      "Content-Type": shareAssetMimeType(type),
-      "Content-Disposition": `attachment; filename="${shareAssetFilename(type, normalized, format)}"`,
-      "Cache-Control": "private, no-store",
-    },
-  });
+    return new NextResponse(new Uint8Array(asset), {
+      headers: {
+        "Content-Type": shareAssetMimeType(type),
+        "Content-Disposition": `attachment; filename="${shareAssetFilename(type, normalized, format)}"`,
+        "Cache-Control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    console.error("share-asset generation failed", error);
+    return NextResponse.json({ error: "We couldn’t generate this image. Try again in a moment." }, { status: 500 });
+  }
 }

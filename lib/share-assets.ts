@@ -1,7 +1,10 @@
-import QRCode from "qrcode";
 import sharp from "sharp";
 
 import { buildBrandedQrDataUri, buildBrandedQrPngBuffer } from "./branded-qr.ts";
+import {
+  buildVirtualBackgroundLayout,
+  VIRTUAL_BG_PANEL,
+} from "./virtual-background-layout.ts";
 
 export type ShareAssetProfile = {
   name: string;
@@ -13,15 +16,6 @@ export type ShareAssetProfile = {
   companyLogoUrl?: string;
   showCompany?: boolean;
 };
-
-const VIRTUAL_BG_WIDTH = 1920;
-const VIRTUAL_BG_HEIGHT = 1080;
-const VIRTUAL_PANEL_X = 1510;
-const VIRTUAL_PANEL_Y = 48;
-const VIRTUAL_PANEL_W = 380;
-const VIRTUAL_PANEL_H = 320;
-const VIRTUAL_PANEL_PAD = 28;
-const VIRTUAL_QR_SIZE = 220;
 
 function escapeXml(value: string) {
   return value
@@ -45,18 +39,6 @@ function tint(hex: string, amount: number) {
   return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
-function virtualBackgroundLayout(profile: ShareAssetProfile) {
-  const role = profile.role.trim();
-  const company = profile.showCompany !== false ? profile.company.trim() : "";
-  const subtitle = [role, company].filter(Boolean).join(" · ");
-  const qrY = subtitle ? 156 : 132;
-  const qrX = VIRTUAL_PANEL_X + Math.round((VIRTUAL_PANEL_W - VIRTUAL_QR_SIZE) / 2);
-  const scanY = qrY + VIRTUAL_QR_SIZE + 34;
-  const scanX = VIRTUAL_PANEL_X + Math.round(VIRTUAL_PANEL_W / 2);
-
-  return { subtitle, qrX, qrY, scanX, scanY };
-}
-
 /** @deprecated Use buildBrandedQrDataUri instead. */
 export async function buildQrPngDataUri(cardUrl: string, size = 512) {
   return buildBrandedQrDataUri(cardUrl, size);
@@ -71,78 +53,78 @@ export async function buildVirtualBackgroundSvg(profile: ShareAssetProfile) {
   const softTop = tint(theme, 0.55);
   const softBottom = tint(theme, 0.78);
   const name = escapeXml(profile.name.trim() || "Your name");
-  const { subtitle, qrX, qrY, scanX, scanY } = virtualBackgroundLayout(profile);
-  const qrDataUri = await buildBrandedQrDataUri(profile.cardUrl, VIRTUAL_QR_SIZE * 4);
+  const layout = buildVirtualBackgroundLayout(profile);
+  const qrDataUri = await buildBrandedQrDataUri(profile.cardUrl, VIRTUAL_BG_PANEL.qrSize * 4);
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_WIDTH}" height="${VIRTUAL_BG_HEIGHT}" viewBox="0 0 ${VIRTUAL_BG_WIDTH} ${VIRTUAL_BG_HEIGHT}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" viewBox="0 0 ${VIRTUAL_BG_PANEL.canvasWidth} ${VIRTUAL_BG_PANEL.canvasHeight}">`,
     `<defs>`,
     `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">`,
     `<stop offset="0%" stop-color="${softTop}"/>`,
     `<stop offset="100%" stop-color="${softBottom}"/>`,
     `</linearGradient>`,
     `</defs>`,
-    `<rect width="${VIRTUAL_BG_WIDTH}" height="${VIRTUAL_BG_HEIGHT}" fill="url(#bg)"/>`,
-    `<rect x="${VIRTUAL_PANEL_X}" y="${VIRTUAL_PANEL_Y}" width="${VIRTUAL_PANEL_W}" height="${VIRTUAL_PANEL_H}" rx="24" fill="#FFFFFF" fill-opacity="0.96"/>`,
-    `<text x="${VIRTUAL_PANEL_X + VIRTUAL_PANEL_PAD}" y="98" fill="#163300" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">${name}</text>`,
-    subtitle
-      ? `<text x="${VIRTUAL_PANEL_X + VIRTUAL_PANEL_PAD}" y="132" fill="#53634D" font-family="Arial, Helvetica, sans-serif" font-size="18">${escapeXml(subtitle)}</text>`
+    `<rect width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" fill="url(#bg)"/>`,
+    `<rect x="${VIRTUAL_BG_PANEL.x}" y="${VIRTUAL_BG_PANEL.y}" width="${VIRTUAL_BG_PANEL.width}" height="${layout.panelHeight}" rx="24" fill="#FFFFFF" fill-opacity="0.96"/>`,
+    `<text x="${VIRTUAL_BG_PANEL.x + VIRTUAL_BG_PANEL.pad}" y="${layout.nameY}" fill="#163300" font-family="Arial, Helvetica, sans-serif" font-size="${VIRTUAL_BG_PANEL.nameFontSize}" font-weight="700">${name}</text>`,
+    layout.subtitle
+      ? `<text x="${VIRTUAL_BG_PANEL.x + VIRTUAL_BG_PANEL.pad}" y="${layout.subtitleY}" fill="#53634D" font-family="Arial, Helvetica, sans-serif" font-size="${VIRTUAL_BG_PANEL.subtitleFontSize}">${escapeXml(layout.subtitle)}</text>`
       : "",
-    `<image href="${qrDataUri}" x="${qrX}" y="${qrY}" width="${VIRTUAL_QR_SIZE}" height="${VIRTUAL_QR_SIZE}" preserveAspectRatio="xMidYMid meet"/>`,
-    `<text x="${scanX}" y="${scanY}" fill="#71806B" font-family="Arial, Helvetica, sans-serif" font-size="16" text-anchor="middle">Scan to save my contact</text>`,
+    `<image href="${qrDataUri}" x="${layout.qrX}" y="${layout.qrY}" width="${VIRTUAL_BG_PANEL.qrSize}" height="${VIRTUAL_BG_PANEL.qrSize}" preserveAspectRatio="xMidYMid meet"/>`,
+    `<text x="${layout.scanX}" y="${layout.scanY}" fill="#71806B" font-family="Arial, Helvetica, sans-serif" font-size="${VIRTUAL_BG_PANEL.scanFontSize}" text-anchor="middle">Scan to save my contact</text>`,
     `</svg>`,
   ].filter(Boolean).join("");
 }
 
-/** JPG export for Zoom, Google Meet, Teams — meeting apps do not accept SVG backgrounds. */
+/** JPG export for Zoom, Google Meet, and Teams. */
 export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
   const theme = normalizeHex(profile.themeColor);
   const softTop = tint(theme, 0.55);
   const softBottom = tint(theme, 0.78);
   const name = escapeXml(profile.name.trim() || "Your name");
-  const { subtitle, qrX, qrY, scanX, scanY } = virtualBackgroundLayout(profile);
+  const layout = buildVirtualBackgroundLayout(profile);
 
   const backgroundSvg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_WIDTH}" height="${VIRTUAL_BG_HEIGHT}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
     `<defs>`,
     `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">`,
     `<stop offset="0%" stop-color="${softTop}"/>`,
     `<stop offset="100%" stop-color="${softBottom}"/>`,
     `</linearGradient>`,
     `</defs>`,
-    `<rect width="${VIRTUAL_BG_WIDTH}" height="${VIRTUAL_BG_HEIGHT}" fill="url(#bg)"/>`,
+    `<rect width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" fill="url(#bg)"/>`,
     `</svg>`,
   ].join("");
 
   const panelSvg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_PANEL_W}" height="${VIRTUAL_PANEL_H}">`,
-    `<rect width="${VIRTUAL_PANEL_W}" height="${VIRTUAL_PANEL_H}" rx="24" fill="#FFFFFF" fill-opacity="0.96"/>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.width}" height="${layout.panelHeight}">`,
+    `<rect width="${VIRTUAL_BG_PANEL.width}" height="${layout.panelHeight}" rx="24" fill="#FFFFFF" fill-opacity="0.96"/>`,
     `</svg>`,
   ].join("");
 
   const textSvg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_WIDTH}" height="${VIRTUAL_BG_HEIGHT}">`,
-    `<text x="${VIRTUAL_PANEL_X + VIRTUAL_PANEL_PAD}" y="98" fill="#163300" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">${name}</text>`,
-    subtitle
-      ? `<text x="${VIRTUAL_PANEL_X + VIRTUAL_PANEL_PAD}" y="132" fill="#53634D" font-family="Arial, Helvetica, sans-serif" font-size="18">${escapeXml(subtitle)}</text>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
+    `<text x="${VIRTUAL_BG_PANEL.x + VIRTUAL_BG_PANEL.pad}" y="${layout.nameY}" fill="#163300" font-family="Arial, Helvetica, sans-serif" font-size="${VIRTUAL_BG_PANEL.nameFontSize}" font-weight="700">${name}</text>`,
+    layout.subtitle
+      ? `<text x="${VIRTUAL_BG_PANEL.x + VIRTUAL_BG_PANEL.pad}" y="${layout.subtitleY}" fill="#53634D" font-family="Arial, Helvetica, sans-serif" font-size="${VIRTUAL_BG_PANEL.subtitleFontSize}">${escapeXml(layout.subtitle)}</text>`
       : "",
-    `<text x="${scanX}" y="${scanY}" fill="#71806B" font-family="Arial, Helvetica, sans-serif" font-size="16" text-anchor="middle">Scan to save my contact</text>`,
+    `<text x="${layout.scanX}" y="${layout.scanY}" fill="#71806B" font-family="Arial, Helvetica, sans-serif" font-size="${VIRTUAL_BG_PANEL.scanFontSize}" text-anchor="middle">Scan to save my contact</text>`,
     `</svg>`,
   ].filter(Boolean).join("");
 
   const [background, panel, qrBuffer, textLayer] = await Promise.all([
     sharp(Buffer.from(backgroundSvg)).png().toBuffer(),
     sharp(Buffer.from(panelSvg)).png().toBuffer(),
-    buildBrandedQrPngBuffer(profile.cardUrl, VIRTUAL_QR_SIZE * 4).then((buffer) =>
-      sharp(buffer).resize(VIRTUAL_QR_SIZE, VIRTUAL_QR_SIZE).png().toBuffer(),
+    buildBrandedQrPngBuffer(profile.cardUrl, VIRTUAL_BG_PANEL.qrSize * 4).then((buffer) =>
+      sharp(buffer).resize(VIRTUAL_BG_PANEL.qrSize, VIRTUAL_BG_PANEL.qrSize, { kernel: sharp.kernel.nearest }).png().toBuffer(),
     ),
     sharp(Buffer.from(textSvg)).png().toBuffer(),
   ]);
 
   return sharp(background)
     .composite([
-      { input: panel, top: VIRTUAL_PANEL_Y, left: VIRTUAL_PANEL_X },
-      { input: qrBuffer, top: qrY, left: qrX },
+      { input: panel, top: VIRTUAL_BG_PANEL.y, left: VIRTUAL_BG_PANEL.x },
+      { input: qrBuffer, top: layout.qrY, left: layout.qrX },
       { input: textLayer, top: 0, left: 0 },
     ])
     .jpeg({ quality: 92, mozjpeg: true })
@@ -179,7 +161,7 @@ export async function buildWatchFacePng(profile: ShareAssetProfile) {
     sharp(Buffer.from(backgroundSvg)).png().toBuffer(),
     sharp(Buffer.from(frameSvg)).png().toBuffer(),
     buildBrandedQrPngBuffer(profile.cardUrl, qrDisplaySize * 4).then((buffer) =>
-      sharp(buffer).resize(qrDisplaySize, qrDisplaySize).png().toBuffer(),
+      sharp(buffer).resize(qrDisplaySize, qrDisplaySize, { kernel: sharp.kernel.nearest }).png().toBuffer(),
     ),
     sharp(Buffer.from(textSvg)).png().toBuffer(),
   ]);
@@ -225,3 +207,5 @@ export function shareAssetFilename(
 export function shareAssetMimeType(type: "virtual-background" | "watch-face") {
   return type === "virtual-background" ? "image/jpeg" : "image/png";
 }
+
+export { buildVirtualBackgroundLayout, VIRTUAL_BG_PANEL } from "./virtual-background-layout.ts";

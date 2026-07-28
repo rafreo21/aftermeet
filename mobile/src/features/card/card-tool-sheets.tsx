@@ -29,6 +29,7 @@ import {
   virtualBackgroundInstructions,
   watchSetupInstructions,
 } from '@/features/card/share-assets';
+import { VirtualBackgroundPanelPreview } from '@/components/virtual-background-panel-preview';
 import { updateQuickShareWidget, widgetSetupInstructions, buildWidgetSnapshot } from '@/features/card/widget-sync';
 import { WIDGET_OPTIONS } from '@/features/card/widget-types';
 import type { WidgetSnapshot } from '@/features/card/widget-types';
@@ -476,20 +477,13 @@ export function BackgroundToolSheetContent({
     <View style={styles.sheetBody}>
       <Body>{virtualBackgroundInstructions()}</Body>
       <View style={[styles.backgroundPreview, { backgroundColor: theme.backgroundColor }]}>
-        <View style={styles.backgroundOverlay}>
-          <Text style={styles.backgroundName}>{card.name}</Text>
-          {subtitle ? <Text style={styles.backgroundSubtitle}>{subtitle}</Text> : null}
-          <View style={styles.backgroundQrRow}>
-            <BrandedQrPreview
-              cardUrl={publicUrl}
-              slug={card.slug}
-              accessToken={accessToken}
-              size={88}
-              style={styles.backgroundQrImage}
-            />
-          </View>
-          <Text style={styles.backgroundScanLabel}>Scan to save my contact</Text>
-        </View>
+        <VirtualBackgroundPanelPreview
+          name={card.name}
+          subtitle={subtitle}
+          cardUrl={publicUrl}
+          slug={card.slug}
+          accessToken={accessToken}
+        />
       </View>
       <Button
         loading={busy === 'background'}
@@ -682,33 +676,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backgroundPreview: {
-    minHeight: 148,
+    minHeight: 168,
     borderRadius: radius.medium,
     padding: spacing.x4,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-  },
-  backgroundOverlay: {
-    width: 220,
-    padding: spacing.x3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    gap: spacing.x2,
-  },
-  backgroundName: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  backgroundSubtitle: { color: colors.muted, fontSize: 11 },
-  backgroundQrRow: {
-    alignItems: 'center',
-    paddingTop: spacing.x1,
-    paddingBottom: spacing.x1,
-  },
-  backgroundQrImage: {
-    borderRadius: 10,
-  },
-  backgroundScanLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
   },
 });

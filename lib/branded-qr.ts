@@ -4,11 +4,15 @@ import { join } from "node:path";
 import QRCode from "qrcode";
 import sharp from "sharp";
 
+import { AFTERMEET_LOGO_PNG_BASE64 } from "./aftermeet-logo-base64.ts";
+
 const QR_OPTIONS = {
   errorCorrectionLevel: "H" as const,
   margin: 1,
   color: { dark: "#163300", light: "#FFFFFF" },
 };
+
+const EMBEDDED_LOGO_BUFFER = Buffer.from(AFTERMEET_LOGO_PNG_BASE64, "base64");
 
 let logoBufferPromise: Promise<Buffer> | null = null;
 
@@ -27,7 +31,7 @@ async function loadAfterMeetLogoBuffer() {
           // try next candidate
         }
       }
-      throw new Error("AfterMeet logo asset is missing.");
+      return EMBEDDED_LOGO_BUFFER;
     })();
   }
   return logoBufferPromise;

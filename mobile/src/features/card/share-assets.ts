@@ -21,56 +21,38 @@ export async function downloadShareAsset(
   const env = readEnv();
   if (!env) throw new Error('App configuration is missing.');
 
-  const response = await fetch(
-    `${env.publicCardBaseUrl}/api/mobile/share-assets/${encodeURIComponent(slug)}?type=${type}`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-  );
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(payload?.error || 'We couldn’t download this asset.');
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.startsWith('image/')) {
-    throw new Error('The server returned an invalid image file.');
-  }
-
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength < 256) {
-    throw new Error('The downloaded image looks incomplete.');
-  }
-
+  const url = `${env.publicCardBaseUrl}/api/mobile/share-assets/${encodeURIComponent(slug)}?type=${type}`;
   const filename = `aftermeet-${type}-${slug}.${assetExtension(type)}`;
   const path = `${FileSystem.cacheDirectory}${filename}`;
-  await FileSystem.writeAsStringAsync(path, arrayBufferToBase64(bytes), {
-    encoding: FileSystem.EncodingType.Base64,
+
+  const download = await FileSystem.downloadAsync(url, path, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: type === 'virtual-background' ? 'image/jpeg' : 'image/png',
+    },
   });
 
+  if (download.status < 200 || download.status >= 300) {
+    const payload = await FileSystem.readAsStringAsync(download.uri).catch(() => '');
+    const parsed = payload ? JSON.parse(payload) as { error?: string } : null;
+    throw new Error(parsed?.error || 'We couldn’t download this asset.');
+  }
+
+  const info = await FileSystem.getInfoAsync(download.uri);
+  if (!info.exists || (info.size ?? 0) < 1024) {
+    throw new Error('The downloaded image looks incomplete. Try again after publishing your card.');
+  }
+
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(path, {
+    await Sharing.shareAsync(download.uri, {
       mimeType: assetMimeType(type),
       dialogTitle: type === 'virtual-background' ? 'Virtual background' : 'Smart watch QR',
+      UTI: type === 'virtual-background' ? 'public.jpeg' : 'public.png',
     });
-    return path;
+    return download.uri;
   }
 
-  return path;
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    const chunk = bytes.subarray(index, index + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
+  return download.uri;
 }
 
 export function watchSetupInstructions(platform: 'ios' | 'android') {
@@ -81,5 +63,5 @@ export function watchSetupInstructions(platform: 'ios' | 'android') {
 }
 
 export function virtualBackgroundInstructions() {
-  return 'Downloads a 1920×1080 JPG — the format Zoom, Google Meet, and Teams accept. Import it in your meeting app under virtual backgrounds.';
+  return 'Downloads a 1920×1080 JPG for Zoom, Google Meet, and Teams. Save it to your photos, then pick it under virtual backgrounds.';
 }
