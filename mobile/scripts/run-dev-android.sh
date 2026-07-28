@@ -22,11 +22,24 @@ if ! adb devices | grep -v '^List' | grep -q 'device$'; then
 fi
 
 echo "Forwarding phone port 8081 → Mac Metro (8081)…"
-adb reverse tcp:8081 tcp:8081
+if adb devices | grep -v '^List' | grep -q 'device$'; then
+  adb reverse tcp:8081 tcp:8081
+else
+  echo "Warning: no USB device — plug in your phone or use the same Wi‑Fi + manual URL in the dev menu."
+fi
+
+# Avoid stale Metro blocking startup in non-interactive shells.
+if lsof -ti:8081 >/dev/null 2>&1; then
+  echo "Stopping existing Metro on port 8081…"
+  lsof -ti:8081 | xargs kill -9 2>/dev/null || true
+  sleep 1
+fi
 
 echo ""
-echo "Starting Metro. Keep this terminal open, then open AfterMeet on your phone."
+echo "Starting Metro for dev client. Keep this terminal open."
+echo "Open the AfterMeet dev build on your phone (not Expo Go)."
+echo "Install dev client once: npm run android:dev-client"
 echo "If it was already open, force-quit and reopen, or shake → Reload."
 echo ""
 
-npx expo start --clear
+npx expo start --dev-client --clear --port 8081
