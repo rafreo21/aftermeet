@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { CaretRight } from 'phosphor-react-native';
+import { CaretRight, ListChecks } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -7,6 +7,7 @@ import { BrandMark } from '@/components/brand-mark';
 import { FollowUpCell } from '@/components/follow-up-cell';
 import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
 import { FollowUpsSheet } from '@/components/follow-ups-sheet';
+import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { Body, Eyebrow, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
@@ -97,6 +98,26 @@ export default function HomeScreen() {
           Share your card, capture the meeting, and keep track of the people you meet.
         </Body>
 
+        <View style={styles.steps}>
+          {STEPS.map((step) => (
+            <Pressable
+              key={step.num}
+              accessibilityRole="button"
+              onPress={() => router.navigate(step.route)}
+              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepNum}>{step.num}</Text>
+              </View>
+              <Text style={styles.stepTitle}>{step.title}</Text>
+              <Text style={styles.stepCopy}>{step.copy}</Text>
+              <View style={styles.stepAction}>
+                <Text style={styles.stepActionText}>Open</Text>
+                <CaretRight size={14} color={colors.accent} weight="bold" />
+              </View>
+            </Pressable>
+          ))}
+        </View>
+
         {session ? (
           <View style={styles.followUpsSection}>
             <View style={styles.sectionHead}>
@@ -123,32 +144,15 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : (
-              <Body style={styles.emptyFollowUps}>
-                Open actions from your captures will show up here after you save a follow-up.
-              </Body>
+              <MiniPromptCard
+                icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
+                title="No follow-ups yet"
+                copy="Save a follow-up in capture and it will show up here."
+                onPress={() => router.navigate('/capture')}
+              />
             )}
           </View>
         ) : null}
-
-        <View style={styles.steps}>
-          {STEPS.map((step) => (
-            <Pressable
-              key={step.num}
-              accessibilityRole="button"
-              onPress={() => router.navigate(step.route)}
-              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepNum}>{step.num}</Text>
-              </View>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepCopy}>{step.copy}</Text>
-              <View style={styles.stepAction}>
-                <Text style={styles.stepActionText}>Open</Text>
-                <CaretRight size={14} color={colors.accent} weight="bold" />
-              </View>
-            </Pressable>
-          ))}
-        </View>
       </ScrollView>
 
       <FollowUpsSheet
@@ -203,7 +207,6 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
   viewAll: { color: colors.accent, fontSize: 13, fontWeight: '800' },
   followUpList: { gap: spacing.x3 },
-  emptyFollowUps: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   steps: { gap: spacing.x2 },
   stepCard: {
     padding: spacing.x5,

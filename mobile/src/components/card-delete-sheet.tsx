@@ -19,7 +19,7 @@ export function CardDeleteSheet({
   return (
     <BottomSheet
       visible={visible}
-      title="Delete this card?"
+      title="Are you sure you want to delete?"
       onClose={onCancel}
       footer={
         <>

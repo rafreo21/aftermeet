@@ -9,6 +9,7 @@ import {
   ConnectionManualAddSheet,
   ConnectionSortSheet,
 } from '@/components/connection-sheets';
+import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import {
@@ -223,12 +224,11 @@ export default function ConnectionsScreen() {
               ) : null}
             </View>
           ) : (
-            <GreenHeroCard
-              icon={<UsersThree size={28} color={colors.white} weight="fill" />}
+            <MiniPromptCard
+              icon={<UsersThree size={18} color={colors.ink} weight="fill" />}
               title="No connections yet"
-              copy="Scan a card or add someone manually to start building your network."
-              primaryLabel="Add connection"
-              onPrimary={() => setAddOpen(true)}
+              copy="Scan a card or add someone manually."
+              onPress={() => setAddOpen(true)}
             />
           )}
         </ScrollView>

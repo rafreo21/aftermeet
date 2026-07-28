@@ -19,16 +19,16 @@ export function ConnectionDeleteSheet({
   return (
     <BottomSheet
       visible={visible}
-      title="Remove connection?"
+      title="Are you sure you want to delete?"
       onClose={onCancel}
       footer={
         <>
           <Button variant="secondary" onPress={onCancel} disabled={loading}>Keep</Button>
-          <Button onPress={onConfirm} loading={loading}>Remove</Button>
+          <Button onPress={onConfirm} loading={loading}>Yes, delete</Button>
         </>
       }>
       <Body>
-        Remove {name || 'this connection'} from your list? Their card will stay online — this only removes them from your connections.
+        Remove {name || 'this connection'} from your list? Their card stays online — this only removes them from your connections and shared directory link here.
       </Body>
     </BottomSheet>
   );

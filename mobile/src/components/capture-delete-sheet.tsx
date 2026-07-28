@@ -19,7 +19,7 @@ export function CaptureDeleteSheet({
   return (
     <BottomSheet
       visible={visible}
-      title="Delete this capture?"
+      title="Are you sure you want to delete?"
       onClose={onCancel}
       footer={
         <>

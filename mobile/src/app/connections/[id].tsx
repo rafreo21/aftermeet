@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { CaretRight, IdentificationCard, Trash } from 'phosphor-react-native';
+import { CaretRight, IdentificationCard, Microphone, Trash } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -10,6 +10,7 @@ import { FollowUpCell } from '@/components/follow-up-cell';
 import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
 import { FollowUpsSheet } from '@/components/follow-ups-sheet';
 import { MeetingDetailSheet } from '@/components/meeting-detail-sheet';
+import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { ConnectionDetailSkeleton } from '@/components/skeleton';
@@ -328,7 +329,12 @@ export default function ConnectionDetailScreen() {
                     </Pressable>
                   ))
                 ) : (
-                  <Body style={styles.empty}>Capture a meeting with {connection.name.split(' ')[0] || 'them'} to build history here.</Body>
+                  <MiniPromptCard
+                    icon={<Microphone size={18} color={colors.ink} weight="bold" />}
+                    title="No meetings yet"
+                    copy={`Capture a conversation with ${connection.name.split(' ')[0] || 'them'}.`}
+                    onPress={() => router.navigate('/capture')}
+                  />
                 )}
               </View>
 
@@ -521,7 +527,6 @@ const styles = StyleSheet.create({
   meetingTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   meetingMeta: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   meetingSummary: { color: colors.inkSoft, fontSize: 13, lineHeight: 18 },
-  empty: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   cardButton: {
     flexDirection: 'row',
     alignItems: 'center',
