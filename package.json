@@ -20,6 +20,7 @@
     "verify:google-wallet": "node scripts/verify-google-wallet.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.23",
     "@fontsource/inter": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "@resvg/resvg-js": "^2.6.2",

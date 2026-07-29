@@ -2,14 +2,10 @@ import "server-only";
 
 import { transcribe } from "ai";
 
-import { isAiGatewayConfigured, refreshAiGatewayAuth } from "./ai-gateway-auth";
+import { isAiConfigured, prepareAiAuth, transcriptionModel } from "./ai-provider";
 import { cleanLiveTranscript } from "./transcript-cleanup";
 
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
-
-function transcriptionModel() {
-  return process.env.AFTERMEET_TRANSCRIPTION_MODEL?.trim() || "openai/whisper-1";
-}
 
 export async function transcribeEncounterAudio(
   audio: Uint8Array,
@@ -27,11 +23,11 @@ export async function transcribeEncounterAudio(
     throw new Error("Recording is larger than 25 MB. Choose a shorter or compressed recording.");
   }
 
-  if (!(await isAiGatewayConfigured())) {
-    throw new Error("Server transcription is not configured yet. Paste a transcript manually for now.");
+  if (!(await isAiConfigured())) {
+    throw new Error("Server transcription is not configured yet. Add OPENAI_API_KEY, or paste a transcript manually.");
   }
 
-  await refreshAiGatewayAuth();
+  await prepareAiAuth();
 
   const language = options?.language?.trim().slice(0, 12);
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAppUser } from "../../../../lib/auth/context";
 import { enrichCapturedProfile } from "../../../../lib/contact-capture-server";
-import { isAiGatewayConfigured } from "../../../../lib/ai-gateway-auth";
+import { isAiConfigured } from "../../../../lib/ai-provider";
 import type { CapturedProfile } from "../../../../lib/page-profile-capture";
 
 function isCapturedProfile(value: unknown): value is CapturedProfile {
@@ -26,12 +26,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A captured profile payload is required." }, { status: 400 });
   }
 
-  if (!(await isAiGatewayConfigured())) {
+  if (!(await isAiConfigured())) {
     return NextResponse.json({
       profile: body.profile,
       source: "dom",
       uncertainFields: [],
-      message: "Saved visible page details. Add AI_GATEWAY_API_KEY for smarter cleanup.",
+      message: "Saved visible page details. Add OPENAI_API_KEY for smarter cleanup.",
     }, { headers: { "Cache-Control": "private, no-store" } });
   }
 

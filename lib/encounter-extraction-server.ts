@@ -8,7 +8,7 @@ import {
   type EncounterExtractionDraft,
   type ExtractionOwnerContext,
 } from "./encounter-extraction";
-import { isAiGatewayConfigured, refreshAiGatewayAuth } from "./ai-gateway-auth";
+import { isAiConfigured, languageModel, prepareAiAuth } from "./ai-provider";
 import { normalizeTranscriptForExtraction } from "./transcript-cleanup";
 
 const extractionSchema = z.object({
@@ -20,10 +20,6 @@ const extractionSchema = z.object({
   followUpType: z.enum(["email", "linkedin", "call", "meeting", "send", "whatsapp", "other"]),
   uncertainFields: z.array(z.string()).describe("Field names where the transcript is ambiguous"),
 });
-
-function extractionModel() {
-  return process.env.AFTERMEET_EXTRACTION_MODEL?.trim() || "openai/gpt-5.4";
-}
 
 function formatOwnerContext(context?: ExtractionOwnerContext) {
   if (!context) return "Recording owner: unknown";
@@ -128,7 +124,7 @@ function buildExtractionPrompt(
 }
 
 export async function isAiExtractionConfigured() {
-  return isAiGatewayConfigured();
+  return isAiConfigured();
 }
 
 export async function extractEncounterDraft(
@@ -162,11 +158,11 @@ export async function extractEncounterDraft(
     };
   }
 
-  await refreshAiGatewayAuth();
+  await prepareAiAuth();
 
   try {
     const result = await generateText({
-      model: extractionModel(),
+      model: languageModel(),
       output: Output.object({ schema: extractionSchema }),
       system: buildExtractionSystemPrompt(ownerContext),
       prompt: buildExtractionPrompt(normalizedTranscript, personName, ownerContext, personHints),

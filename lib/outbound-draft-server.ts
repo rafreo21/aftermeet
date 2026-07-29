@@ -7,14 +7,15 @@ import { buildHeuristicOutboundDraft, type OutboundDraftContent } from "./outbou
 import type { ActionLinkContext } from "./action-links";
 import type { Encounter, EncounterAction } from "./encounters";
 import { isAiExtractionConfigured } from "./encounter-extraction-server";
+import { languageModel, prepareAiAuth } from "./ai-provider";
 
 const draftSchema = z.object({
   subject: z.string().describe("Email subject line, or empty for LinkedIn-style messages"),
   body: z.string().describe("Review-ready message draft the owner can edit before sending"),
 });
 
-function extractionModel() {
-  return process.env.AFTERMEET_EXTRACTION_MODEL?.trim() || "openai/gpt-5.4";
+function draftModel() {
+  return languageModel();
 }
 
 export async function generateOutboundDraft(input: {
@@ -24,13 +25,14 @@ export async function generateOutboundDraft(input: {
 }): Promise<{ draft: OutboundDraftContent; source: "ai" | "heuristic"; fallback?: boolean }> {
   const heuristic = buildHeuristicOutboundDraft(input.action, input.encounter, input.context);
 
-  if (!isAiExtractionConfigured()) {
+  if (!(await isAiExtractionConfigured())) {
     return { draft: heuristic, source: "heuristic" };
   }
 
   try {
+    await prepareAiAuth();
     const result = await generateText({
-      model: extractionModel(),
+      model: draftModel(),
       output: Output.object({ schema: draftSchema }),
       system: [
         "You write short, warm follow-up drafts for AfterMeet.",

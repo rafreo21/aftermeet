@@ -3,7 +3,7 @@ import "server-only";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
-import { refreshAiGatewayAuth } from "./ai-gateway-auth";
+import { isAiConfigured, languageModel, prepareAiAuth } from "./ai-provider";
 import { capturedProfileFullName } from "./contacts.ts";
 import { buildLinkedInCaptureContext } from "./linkedin-page-capture.ts";
 import type { CapturedProfile } from "./page-profile-capture";
@@ -21,7 +21,7 @@ const captureSchema = z.object({
 });
 
 function captureModel() {
-  return process.env.AFTERMEET_EXTRACTION_MODEL?.trim() || "openai/gpt-5.4";
+  return languageModel();
 }
 
 function shouldKeepOriginalValue(field: keyof CapturedProfile | "fullName", original: string, enriched: string) {
@@ -64,7 +64,7 @@ function mergeEnrichedProfile(original: CapturedProfile, enriched: z.infer<typeo
 }
 
 export async function enrichCapturedProfile(profile: CapturedProfile, pageText: string) {
-  await refreshAiGatewayAuth();
+  await prepareAiAuth();
 
   const result = await generateText({
     model: captureModel(),
