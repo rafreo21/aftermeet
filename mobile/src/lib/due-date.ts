@@ -1,4 +1,4 @@
-export type DuePreset = 'none' | 'today' | 'tomorrow' | 'week' | 'next_week' | 'custom';
+export type DuePreset = 'none' | 'today' | 'tomorrow' | 'in_3_days' | 'in_1_week' | 'custom';
 
 function toIsoDate(date: Date) {
   const year = date.getFullYear();
@@ -21,23 +21,23 @@ function endOfWeek(date: Date) {
   return copy;
 }
 
+function addDays(from: Date, days: number) {
+  const next = new Date(from);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 export function dueDateFromPreset(preset: DuePreset, customDate = ''): string {
   const now = startOfDay(new Date());
   switch (preset) {
     case 'today':
       return toIsoDate(now);
-    case 'tomorrow': {
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return toIsoDate(tomorrow);
-    }
-    case 'week':
-      return toIsoDate(endOfWeek(now));
-    case 'next_week': {
-      const nextWeek = new Date(now);
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      return toIsoDate(nextWeek);
-    }
+    case 'tomorrow':
+      return toIsoDate(addDays(now, 1));
+    case 'in_3_days':
+      return toIsoDate(addDays(now, 3));
+    case 'in_1_week':
+      return toIsoDate(addDays(now, 7));
     case 'custom':
       return customDate.trim().slice(0, 10);
     default:
@@ -48,7 +48,7 @@ export function dueDateFromPreset(preset: DuePreset, customDate = ''): string {
 export function inferDuePreset(dueAt: string): DuePreset {
   if (!dueAt.trim()) return 'none';
   const iso = dueAt.trim().slice(0, 10);
-  const presets: DuePreset[] = ['today', 'tomorrow', 'week', 'next_week'];
+  const presets: DuePreset[] = ['today', 'tomorrow', 'in_3_days', 'in_1_week'];
   for (const preset of presets) {
     if (dueDateFromPreset(preset) === iso) return preset;
   }
@@ -58,8 +58,9 @@ export function inferDuePreset(dueAt: string): DuePreset {
 export const DUE_PRESETS: Array<{ id: DuePreset; label: string }> = [
   { id: 'today', label: 'Today' },
   { id: 'tomorrow', label: 'Tomorrow' },
-  { id: 'week', label: 'This week' },
-  { id: 'next_week', label: 'Next week' },
+  { id: 'in_3_days', label: 'In 3 days' },
+  { id: 'in_1_week', label: 'In 1 week' },
+  { id: 'custom', label: 'Pick date' },
 ];
 
 export function formatDueLabel(dueAt: string, now = new Date()): string | null {
@@ -72,8 +73,7 @@ export function formatDueLabel(dueAt: string, now = new Date()): string | null {
     return days === 1 ? 'Overdue 1d' : `Overdue ${days}d`;
   }
   if (due.getTime() === today.getTime()) return 'Today';
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrow = addDays(today, 1);
   if (due.getTime() === tomorrow.getTime()) return 'Tomorrow';
   return due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
@@ -113,4 +113,16 @@ export function formatMeetingDate(startedAt: string) {
   const date = new Date(startedAt);
   if (Number.isNaN(date.getTime())) return 'Meeting';
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function formatCustomDueDate(isoDate: string) {
+  const date = startOfDay(new Date(`${isoDate.slice(0, 10)}T12:00:00`));
+  if (Number.isNaN(date.getTime())) return 'Pick a date';
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+export function shiftDueDate(isoDate: string, days: number) {
+  const base = startOfDay(new Date(`${isoDate.slice(0, 10)}T12:00:00`));
+  if (Number.isNaN(base.getTime())) return dueDateFromPreset('in_3_days');
+  return toIsoDate(addDays(base, days));
 }

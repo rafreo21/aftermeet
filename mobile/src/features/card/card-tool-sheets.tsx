@@ -89,7 +89,11 @@ export function WalletToolSheetContent({
 
   return (
     <View style={styles.sheetBody}>
-      <Body>Your card appears in Wallet with name, role, company, and a scannable QR code. Apple and Google render the pass scan code themselves; your AfterMeet mark appears on the pass header.</Body>
+      <Body>
+        Google Wallet shows your name, role, and a scannable link. The list icon uses your profile photo when one is published.
+        Google renders the scan code itself, so it will not match the branded QR in the app until you re-save the pass after publishing.
+        While your Google issuer is in demo mode, passes may show a [TEST ONLY] prefix — that clears once publishing access is approved.
+      </Body>
       <WalletPreviewBackground theme={card.theme} style={styles.walletPreview}>
         <Text style={[styles.walletHeader, { color: theme.softColor }]}>AfterMeet Card</Text>
         <View style={styles.walletFields}>

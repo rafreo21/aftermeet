@@ -29,11 +29,26 @@ test("wallet config flags are false without env vars", () => {
 test("google wallet jwt origins use hostnames", async () => {
   const previous = process.env.NEXT_PUBLIC_APP_URL;
   process.env.NEXT_PUBLIC_APP_URL = "https://aftermeet-beta.vercel.app";
-  const { walletJwtOrigins } = await import("../lib/google-wallet-pass.ts");
+  const { walletJwtOrigins, resolveGoogleWalletLogoUrl } = await import("../lib/google-wallet-pass.ts");
 
   assert.deepEqual(walletJwtOrigins("https://aftermeet-beta.vercel.app/c/demo"), [
     "aftermeet-beta.vercel.app",
   ]);
+
+  assert.equal(
+    resolveGoogleWalletLogoUrl({
+      slug: "demo",
+      fullName: "Alex Morgan",
+      role: "Designer",
+      company: "AfterMeet",
+      bio: "",
+      themeColor: "#9fe870",
+      cardUrl: "https://aftermeet-beta.vercel.app/c/demo",
+      profileImageUrl: "https://cdn.example.com/profile.png",
+      companyLogoUrl: "",
+    }),
+    "https://cdn.example.com/profile.png",
+  );
 
   process.env.NEXT_PUBLIC_APP_URL = previous;
 });

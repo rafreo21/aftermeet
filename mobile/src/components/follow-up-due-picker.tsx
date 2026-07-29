@@ -1,4 +1,12 @@
-import { DUE_PRESETS, dueDateFromPreset, inferDuePreset, type DuePreset } from '@/lib/due-date';
+import {
+  DUE_PRESETS,
+  dueDateFromPreset,
+  formatCustomDueDate,
+  inferDuePreset,
+  shiftDueDate,
+  type DuePreset,
+} from '@/lib/due-date';
+import { CaretLeft, CaretRight } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -14,6 +22,10 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
   function selectPreset(preset: DuePreset) {
     if (preset === 'none') {
       onChange('');
+      return;
+    }
+    if (preset === 'custom') {
+      onChange(dueAt.trim() || dueDateFromPreset('in_3_days'));
       return;
     }
     onChange(dueDateFromPreset(preset));
@@ -35,6 +47,25 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
           </Pressable>
         ))}
       </View>
+      {activePreset === 'custom' ? (
+        <View style={styles.customRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Previous day"
+            onPress={() => onChange(shiftDueDate(dueAt, -1))}
+            style={styles.stepButton}>
+            <CaretLeft size={16} color={colors.ink} weight="bold" />
+          </Pressable>
+          <Text style={styles.customDate}>{formatCustomDueDate(dueAt)}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Next day"
+            onPress={() => onChange(shiftDueDate(dueAt, 1))}
+            style={styles.stepButton}>
+            <CaretRight size={16} color={colors.ink} weight="bold" />
+          </Pressable>
+        </View>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         onPress={() => selectPreset('none')}
@@ -62,6 +93,24 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   chipTextActive: { color: colors.white },
+  customRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.x2,
+    paddingVertical: spacing.x2,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceMuted,
+  },
+  stepButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  customDate: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   skip: {
     alignSelf: 'flex-start',
     paddingVertical: spacing.x1,
