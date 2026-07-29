@@ -54,7 +54,8 @@ type UseCaptureRecorderOptions = {
 const RECORDING_OPTIONS = {
   ...RecordingPresets.HIGH_QUALITY,
   isMeteringEnabled: true,
-  directory: recordingsDirectory(),
+  // expo-audio enum — not a custom path (custom paths crash native AudioRecorder)
+  directory: 'document' as const,
 };
 
 /** Hard cap for on-device capture — auto Finish when reached. */
@@ -281,10 +282,7 @@ export function useCaptureRecorder({
       allowsRecording: true,
       playsInSilentMode: true,
     });
-    await audioRecorder.prepareToRecordAsync({
-      ...RECORDING_OPTIONS,
-      directory: recordingsDirectory(),
-    });
+    await audioRecorder.prepareToRecordAsync(RECORDING_OPTIONS);
     audioRecorder.record();
   }, [audioRecorder]);
 
