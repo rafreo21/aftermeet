@@ -2,10 +2,59 @@ import "server-only";
 
 import { transcribe } from "ai";
 
-import { isAiConfigured, prepareAiAuth, transcriptionModel } from "./ai-provider";
+import { isAiConfigured, prepareAiAuth, transcriptionModel, usesDirectOpenAi } from "./ai-provider";
 import { cleanLiveTranscript } from "./transcript-cleanup";
 
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+
+function guessMimeFromFileName(fileName: string) {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".mp3") || lower.endsWith(".mpeg") || lower.endsWith(".mpga")) return "audio/mpeg";
+  if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) return "audio/mp4";
+  if (lower.endsWith(".aac")) return "audio/aac";
+  if (lower.endsWith(".caf")) return "audio/x-caf";
+  if (lower.endsWith(".flac")) return "audio/flac";
+  if (lower.endsWith(".webm")) return "audio/webm";
+  if (lower.endsWith(".ogg") || lower.endsWith(".oga")) return "audio/ogg";
+  return "audio/mp4";
+}
+
+function resolveMimeAndName(options?: { mimeType?: string; fileName?: string }) {
+  const fileName = options?.fileName?.trim() || "recording.m4a";
+  const mimeType = options?.mimeType?.trim() || guessMimeFromFileName(fileName);
+  return { fileName, mimeType };
+}
+
+/** Direct Whisper call with correct filename/MIME — AI SDK detectMediaType often mislabels m4a as wav. */
+async function transcribeWithOpenAiWhisper(
+  audio: Uint8Array,
+  options: { language?: string; mimeType: string; fileName: string },
+) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
+
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([Buffer.from(audio)], { type: options.mimeType }),
+    options.fileName,
+  );
+  form.append("model", "whisper-1");
+  if (options.language) form.append("language", options.language);
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+
+  const payload = await response.json().catch(() => null) as { text?: string; error?: { message?: string } } | null;
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `OpenAI transcription failed (${response.status}).`);
+  }
+  return payload?.text?.trim() || "";
+}
 
 export async function transcribeEncounterAudio(
   audio: Uint8Array,
@@ -30,15 +79,18 @@ export async function transcribeEncounterAudio(
   await prepareAiAuth();
 
   const language = options?.language?.trim().slice(0, 12);
+  const { fileName, mimeType } = resolveMimeAndName(options);
 
   try {
-    const result = await transcribe({
-      model: transcriptionModel(),
-      audio,
-      providerOptions: language ? { openai: { language } } : undefined,
-    });
+    const rawText = usesDirectOpenAi()
+      ? await transcribeWithOpenAiWhisper(audio, { language, mimeType, fileName })
+      : (await transcribe({
+          model: transcriptionModel(),
+          audio,
+          providerOptions: language ? { openai: { language } } : undefined,
+        })).text.trim();
 
-    const transcript = cleanLiveTranscript(result.text.trim());
+    const transcript = cleanLiveTranscript(rawText);
     if (!transcript) {
       return {
         transcript: "",

@@ -281,7 +281,11 @@ export default function CaptureWizardScreen() {
   });
 
   const recorderHydratedRef = useRef(false);
-  const isTranscribing = recorder.transcriptStatus === 'transcribing';
+  const isTranscribing = recorder.transcriptStatus === 'transcribing'
+    || recorder.serverTranscribePhase === 'preparing'
+    || recorder.serverTranscribePhase === 'transcribing'
+    || recorder.serverTranscribePhase === 'revealing'
+    || recorder.isFinishing;
 
   const sessionExchanges = useMemo(() => {
     const started = draft.gatherSessionStartedAt;
@@ -548,6 +552,8 @@ export default function CaptureWizardScreen() {
     }
     if (!skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
       await recorder.stopRecording();
+    } else {
+      await recorder.awaitPendingFinish();
     }
     updateDraft({ step: 1 });
   }
@@ -792,8 +798,13 @@ export default function CaptureWizardScreen() {
               <Button
                 style={{ flex: 1 }}
                 onPress={() => void continueFromInteraction(false)}
-                disabled={!draft.consent || !hasValidGatherPeople(draft.people ?? [])}>
-                Next
+                loading={isTranscribing}
+                disabled={
+                  !draft.consent
+                  || !hasValidGatherPeople(draft.people ?? [])
+                  || isTranscribing
+                }>
+                {isTranscribing ? 'Transcribing…' : 'Next'}
               </Button>
             </>
           ) : null}

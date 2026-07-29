@@ -54,8 +54,6 @@ type UseCaptureRecorderOptions = {
 const RECORDING_OPTIONS = {
   ...RecordingPresets.HIGH_QUALITY,
   isMeteringEnabled: true,
-  // expo-audio enum — not a custom path (custom paths crash native AudioRecorder)
-  directory: 'document' as const,
 };
 
 /** Hard cap for on-device capture — auto Finish when reached. */
@@ -83,12 +81,14 @@ export function useCaptureRecorder({
   const [captureMode, setCaptureMode] = useState<SpeechCaptureMode>(() => resolveSpeechCaptureMode());
   const [serverTranscribePhase, setServerTranscribePhase] = useState<ServerTranscribePhase>('idle');
   const [serverTranscribeError, setServerTranscribeError] = useState('');
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const recordingStateRef = useRef<RecordingState>('idle');
   const speechCaptureRef = useRef(new NativeSpeechCapture());
   const liveSttReceivedRef = useRef(false);
   const speechTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopRecordingRef = useRef<() => Promise<void>>(async () => {});
+  const finishPromiseRef = useRef<Promise<void> | null>(null);
   const lastTranscribeMetaRef = useRef<ImportRecordingMeta | undefined>(undefined);
   const onErrorRef = useRef(onError);
   const onImportReadyRef = useRef(onImportReady);
@@ -379,48 +379,72 @@ export function useCaptureRecorder({
   ]);
 
   const stopRecording = useCallback(async () => {
-    if (recordingStateRef.current === 'stopped') return;
+    if (finishPromiseRef.current) {
+      await finishPromiseRef.current;
+      return;
+    }
+    if (recordingStateRef.current === 'stopped' && !isFinishing) return;
 
-    setRecordingState('stopped');
-    try {
-      let uri: string | null = null;
+    const run = (async () => {
+      recordingStateRef.current = 'stopped';
+      setIsFinishing(true);
+      setRecordingState('stopped');
+      try {
+        let uri: string | null = null;
 
-      if (usingSpeechCapture) {
-        liveTranscript.commitPendingSpeech();
-        uri = await stopSpeechCapture();
-        speechCaptureRef.current.resetSession();
-      } else {
-        uri = await stopExpoAudioRecording();
-      }
-
-      publishDuration(seconds);
-      let cleaned = liveTranscript.finalizeTranscript();
-
-      if (uri) {
-        // Always run Whisper when we did not get rich live STT (expo-audio path).
-        if (!liveSttReceivedRef.current || cleaned.trim().length < 20) {
-          cleaned = await maybeTranscribeFromServer(uri, cleaned, undefined, { force: true });
-        } else if (cleaned) {
-          onTranscriptFinalizedRef.current?.(cleaned);
+        if (usingSpeechCapture) {
+          liveTranscript.commitPendingSpeech();
+          uri = await stopSpeechCapture();
+          speechCaptureRef.current.resetSession();
+        } else {
+          uri = await stopExpoAudioRecording();
         }
-        setRecordingUri(uri);
-        setRecordingSource('recorded');
-        setPlaybackSource(uri);
-        onRecordingUriChange(uri, 'recorded');
-        setPlaybackReady(true);
-        onErrorRef.current('');
-      } else if (cleaned.trim()) {
-        onTranscriptFinalizedRef.current?.(cleaned);
-        onErrorRef.current(
-          'Transcript is ready, but no audio file was saved. Tap Record again — we need the file for playback and guest sharing.',
-        );
-      } else {
-        onErrorRef.current('Finish stopped the session, but no audio was saved. Tap Record and try again.');
+
+        publishDuration(seconds);
+        let cleaned = liveTranscript.finalizeTranscript();
+        const mimeType = uri?.toLowerCase().includes('.wav')
+          ? 'audio/wav'
+          : uri?.toLowerCase().includes('.mp3')
+            ? 'audio/mpeg'
+            : 'audio/mp4';
+        const fileName = uri?.split('/').pop()?.split('?')[0] || 'recording.m4a';
+
+        if (uri) {
+          if (!liveSttReceivedRef.current || cleaned.trim().length < 20) {
+            cleaned = await maybeTranscribeFromServer(uri, cleaned, { fileName, mimeType }, { force: true });
+          } else if (cleaned) {
+            onTranscriptFinalizedRef.current?.(cleaned);
+          }
+          setRecordingUri(uri);
+          setRecordingSource('recorded');
+          setPlaybackSource(uri);
+          onRecordingUriChange(uri, 'recorded', { fileName, mimeType });
+          setPlaybackReady(true);
+          onErrorRef.current('');
+        } else if (cleaned.trim()) {
+          onTranscriptFinalizedRef.current?.(cleaned);
+          onErrorRef.current(
+            'Transcript is ready, but no audio file was saved. Tap Record again — we need the file for playback and guest sharing.',
+          );
+        } else {
+          onErrorRef.current('Finish stopped the session, but no audio was saved. Tap Record and try again.');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Finish stopped the session, but nothing was saved. Tap Record and try again.';
+        onErrorRef.current(message);
+      } finally {
+        setIsFinishing(false);
       }
-    } catch {
-      onErrorRef.current('Finish stopped the session, but nothing was saved. Tap Record and try again.');
+    })();
+
+    finishPromiseRef.current = run;
+    try {
+      await run;
+    } finally {
+      if (finishPromiseRef.current === run) finishPromiseRef.current = null;
     }
   }, [
+    isFinishing,
     liveTranscript,
     maybeTranscribeFromServer,
     onRecordingUriChange,
@@ -432,6 +456,10 @@ export function useCaptureRecorder({
   ]);
 
   stopRecordingRef.current = stopRecording;
+
+  const awaitPendingFinish = useCallback(async () => {
+    if (finishPromiseRef.current) await finishPromiseRef.current;
+  }, []);
 
   const hydrateFromDraft = useCallback((draft: {
     recordingUri?: string;
@@ -604,10 +632,12 @@ export function useCaptureRecorder({
     recordingSource,
     recordingComplete: recordingState === 'stopped' || Boolean(recordingUri),
     playbackReady,
+    isFinishing,
     displayTranscript: liveTranscript.displayTranscript,
     startRecording,
     pauseOrResume,
     stopRecording,
+    awaitPendingFinish,
     resetRecording,
     importRecording,
     playRecording,
