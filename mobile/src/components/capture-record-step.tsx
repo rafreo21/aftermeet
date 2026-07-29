@@ -341,9 +341,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.x3,
     paddingVertical: spacing.x2,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.line,
   },
   consentLabel: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   methodRow: { flexDirection: 'row', gap: spacing.x2 },
@@ -417,9 +414,7 @@ const styles = StyleSheet.create({
   actionColumn: { gap: spacing.x3 },
   transcriptSection: {
     gap: spacing.x3,
-    paddingTop: spacing.x4,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    paddingTop: spacing.x2,
   },
   transcriptToggle: {
     flexDirection: 'row',

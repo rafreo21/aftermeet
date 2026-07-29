@@ -4,7 +4,7 @@ import { ContactlessPayment, Scan, ShareNetwork, Wallet } from 'phosphor-react-n
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, Share, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BrandedQrCode } from '@/components/branded-qr-code';
+import { BrandedQrCode, type QrShareMode } from '@/components/branded-qr-code';
 import { GoogleWalletIcon } from '@/components/google-wallet-icon';
 import { BackButton, Body, Button, Eyebrow, ScreenFrame } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
@@ -43,6 +43,7 @@ export default function ShareCardScreen() {
   const [walletAvailable, setWalletAvailable] = useState<boolean | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletNote, setWalletNote] = useState('');
+  const [qrMode, setQrMode] = useState<QrShareMode>('online');
 
   useEffect(() => {
     if (!card.slug || !session?.access_token || card.status !== 'published') {
@@ -94,7 +95,7 @@ export default function ShareCardScreen() {
       setTapToShareReadListener(() => {
         setTapMessage('Card link shared by tap.');
       });
-      await startTapToShare(card, publicUrl);
+      await startTapToShare(publicUrl);
       setTapActive(true);
       setTapMessage('Ready. Ask them to hold their phone against yours.');
     } catch (error) {
@@ -147,7 +148,6 @@ export default function ShareCardScreen() {
         </View>
         <View style={styles.headerCopy}>
           <Eyebrow>Quick Share</Eyebrow>
-          <Text style={styles.title}>Scan to connect</Text>
         </View>
       </View>
       <Body style={styles.cardLine}>
@@ -162,9 +162,36 @@ export default function ShareCardScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}>
         {publicUrl ? (
-          <View style={styles.qr}>
-            <BrandedQrCode card={card} cardUrl={publicUrl} size={220} />
-            <Text style={styles.helperInline}>Works offline — scanners can save your contact without internet.</Text>
+          <View style={styles.qrSection}>
+            <View style={styles.qr}>
+              <BrandedQrCode card={card} cardUrl={publicUrl} mode={qrMode} size={280} />
+            </View>
+            <View style={styles.modeToggle}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: qrMode === 'online' }}
+                onPress={() => setQrMode('online')}
+                style={({ pressed }) => [
+                  styles.modeOption,
+                  qrMode === 'online' && styles.modeOptionActive,
+                  pressed && styles.modeOptionPressed,
+                ]}>
+                <Text style={[styles.modeLabel, qrMode === 'online' && styles.modeLabelActive]}>Online</Text>
+                <Text style={styles.modeHint}>Opens your card page so they can share back</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: qrMode === 'offline' }}
+                onPress={() => setQrMode('offline')}
+                style={({ pressed }) => [
+                  styles.modeOption,
+                  qrMode === 'offline' && styles.modeOptionActive,
+                  pressed && styles.modeOptionPressed,
+                ]}>
+                <Text style={[styles.modeLabel, qrMode === 'offline' && styles.modeLabelActive]}>Offline</Text>
+                <Text style={styles.modeHint}>Saves your contact without internet</Text>
+              </Pressable>
+            </View>
           </View>
         ) : (
           <Text style={styles.helperInline}>Publish your card to generate a QR code.</Text>
@@ -174,7 +201,7 @@ export default function ShareCardScreen() {
             <Text style={styles.tapTitle}>{tapActive ? 'Tap to share is on' : 'Or tap phones together'}</Text>
             <Text style={styles.tapBody}>
               {tapActive
-                ? 'Keep this screen open. Their phone reads your contact over NFC, even offline.'
+                ? 'Keep this screen open. Their phone opens your card page over NFC.'
                 : 'Turn on tap to share, then hold your phone against theirs.'}
             </Text>
             {tapMessage ? <Text style={styles.tapMessage}>{tapMessage}</Text> : null}
@@ -256,13 +283,19 @@ const styles = StyleSheet.create({
   cardLine: { marginTop: -spacing.x1, color: colors.muted, textAlign: 'left' },
   scroll: { flex: 1 },
   scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: spacing.x2,
-    paddingBottom: spacing.x2,
-    gap: spacing.x2,
+    paddingVertical: spacing.x4,
+    gap: spacing.x3,
+  },
+  qrSection: {
+    width: '100%',
+    alignItems: 'center',
+    gap: spacing.x4,
   },
   qr: {
-    padding: 20,
+    padding: spacing.x4,
     borderRadius: radius.large,
     backgroundColor: colors.white,
     shadowColor: colors.ink,
@@ -270,6 +303,28 @@ const styles = StyleSheet.create({
     shadowRadius: 25,
     elevation: 6,
   },
+  modeToggle: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: spacing.x2,
+  },
+  modeOption: {
+    flex: 1,
+    padding: spacing.x3,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surfaceMuted,
+    gap: spacing.x1,
+  },
+  modeOptionActive: {
+    borderColor: colors.accent,
+    backgroundColor: '#eef8e8',
+  },
+  modeOptionPressed: { opacity: 0.86 },
+  modeLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  modeLabelActive: { color: colors.ink },
+  modeHint: { color: colors.muted, fontSize: 11, lineHeight: 15 },
   tapPanel: {
     marginTop: spacing.x4,
     width: '100%',

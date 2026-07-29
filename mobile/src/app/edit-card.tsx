@@ -2,13 +2,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, Image as ImageIcon, Palette, UserCircle, ListChecks } from 'phosphor-react-native';
-import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { CardPublishSheet } from '@/components/card-publish-sheet';
 import { MethodListEditor } from '@/components/method-list-editor';
 import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader } from '@/components/ui';
+import { cardDraftSignature } from '@/lib/card-draft';
 import { useAppInsets } from '@/lib/safe-area';
 import { useCard } from '@/features/card/card-context';
 import { describePublishError } from '@/features/card/publish-card';
@@ -103,27 +104,61 @@ export default function EditCardScreen() {
     [card, getCardById, id],
   );
   const [draft, setDraft] = useState<MobileCard>(source);
+  const [baseline, setBaseline] = useState(() => cardDraftSignature(source));
   const [step, setStep] = useState(0);
   const [sheet, setSheet] = useState<'none' | 'success' | 'error'>('none');
   const [sheetTitle, setSheetTitle] = useState('');
   const [sheetMessage, setSheetMessage] = useState('');
   const [sheetDetail, setSheetDetail] = useState('');
+  const [localPublishing, setLocalPublishing] = useState(false);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDraft = useRef<MobileCard | null>(null);
   const insets = useAppInsets();
 
   useEffect(() => {
     if (!id) return;
     const next = getCardById(id);
-    if (next) setDraft(next);
-  }, [id]);
+    if (next) {
+      setDraft(next);
+      setBaseline(cardDraftSignature(next));
+    }
+  }, [getCardById, id]);
 
-  async function persist(next: MobileCard) {
+  const isDirty = cardDraftSignature(draft) !== baseline;
+  const canPublish = draft.status !== 'published' || isDirty;
+  const isPublishing = publishing || localPublishing;
+
+  const persistLocal = useCallback((next: MobileCard) => {
     const normalized = { ...next, theme: normalizeThemeColor(next.theme) };
     setDraft(normalized);
-    if (normalized.id) await updateCardById(normalized.id, normalized);
-  }
+    pendingDraft.current = normalized;
+
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      persistTimer.current = null;
+      const pending = pendingDraft.current;
+      if (!pending?.id) return;
+      void updateCardById(pending.id, pending);
+      pendingDraft.current = null;
+    }, 700);
+  }, [updateCardById]);
+
+  const flushPersist = useCallback(async () => {
+    if (persistTimer.current) {
+      clearTimeout(persistTimer.current);
+      persistTimer.current = null;
+    }
+    const next = pendingDraft.current ?? draft;
+    pendingDraft.current = null;
+    if (next.id) await updateCardById(next.id, next);
+  }, [draft, updateCardById]);
+
+  useEffect(() => () => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+  }, []);
 
   function updateField<K extends keyof MobileCard>(key: K, value: MobileCard[K]) {
-    void persist({ ...draft, [key]: value });
+    persistLocal({ ...draft, [key]: value });
   }
 
   async function pickImage(key: 'photo' | 'companyLogo' | 'coverPhoto') {
@@ -146,11 +181,19 @@ export default function EditCardScreen() {
   }
 
   async function publish() {
+    if (isPublishing || !canPublish) return;
+
+    setLocalPublishing(true);
     setSheet('none');
+    setSheetTitle('');
+    setSheetMessage('');
+    setSheetDetail('');
+
     try {
-      await persist(draft);
+      await flushPersist();
       const result = await publishCard(draft.id, draft);
       if (result.ok) {
+        setBaseline(cardDraftSignature({ ...draft, status: 'published' }));
         setSheetTitle('Card published');
         setSheetMessage('Your card is live. Share the link, QR code, or open Card Tools for wallet and widgets.');
         setSheetDetail(result.publicUrl);
@@ -168,6 +211,8 @@ export default function EditCardScreen() {
       setSheetMessage(failure.message);
       setSheetDetail(failure.detail || message);
       setSheet('error');
+    } finally {
+      setLocalPublishing(false);
     }
   }
 
@@ -347,7 +392,7 @@ export default function EditCardScreen() {
                 icon={<ListChecks size={18} color={colors.ink} weight="bold" />}>
                 <MethodListEditor
                   methods={draft.methods}
-                  onChange={(methods) => void persist({ ...draft, methods })}
+                  onChange={(methods) => persistLocal({ ...draft, methods })}
                 />
               </SectionCard>
             </View>
@@ -407,8 +452,12 @@ export default function EditCardScreen() {
               Continue
             </Button>
           ) : (
-            <Button style={{ flex: 1 }} loading={publishing} onPress={() => void publish()}>
-              Save and publish
+            <Button
+              style={{ flex: 1 }}
+              loading={isPublishing}
+              disabled={!canPublish || isPublishing}
+              onPress={() => void publish()}>
+              {draft.status === 'published' && !isDirty ? 'Up to date' : 'Save and publish'}
             </Button>
           )}
         </View>
@@ -445,7 +494,7 @@ export default function EditCardScreen() {
         }}
         onSecondary={closeSheet}
         onClose={closeSheet}
-        loading={publishing}
+        loading={isPublishing}
       />
     </View>
   );

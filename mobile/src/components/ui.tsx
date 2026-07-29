@@ -168,23 +168,33 @@ export function Button({ children, onPress, variant = 'primary', disabled, loadi
   return (
     <Pressable
       accessibilityRole="button"
+      delayPressIn={0}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'ghost' && styles.buttonGhost,
-        pressed && styles.buttonPressed,
+        pressed && !loading && styles.buttonPressed,
         (disabled || loading) && styles.buttonDisabled,
         style,
       ]}>
-      {loading ? <ActivityIndicator color={variant === 'primary' ? colors.ink : colors.muted} /> : (
-        <View style={styles.buttonContent}>{items.map((child, index) =>
+      <View style={styles.buttonContent}>
+        {loading ? (
+          <ActivityIndicator color={variant === 'primary' ? colors.ink : colors.muted} />
+        ) : null}
+        {items.map((child, index) =>
           typeof child === 'string' || typeof child === 'number'
-            ? <Text key={`label-${index}`} style={[styles.buttonText, variant !== 'primary' && styles.buttonTextSecondary]}>{child}</Text>
+            ? (
+              <Text
+                key={`label-${index}`}
+                style={[styles.buttonText, variant !== 'primary' && styles.buttonTextSecondary]}>
+                {child}
+              </Text>
+            )
             : isValidElement(child) ? child : null
-        )}</View>
-      )}
+        )}
+      </View>
     </Pressable>
   );
 }

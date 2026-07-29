@@ -85,23 +85,25 @@ export function PhoneInput({ label, value, onChange, placeholder }: PhoneInputPr
           autoCapitalize="none"
           style={styles.search}
         />
-        {filtered.map((entry) => (
-          <Pressable
-            key={entry.iso}
-            accessibilityRole="button"
-            onPress={() => {
-              update({ ...parts, countryIso: entry.iso });
-              setPickerOpen(false);
-              setQuery('');
-            }}
-            style={[styles.countryRow, entry.iso === parts.countryIso && styles.countryRowActive]}>
-            <Text style={styles.countryFlag}>{entry.flag}</Text>
-            <View style={styles.countryCopy}>
-              <Text style={styles.countryName}>{entry.name}</Text>
-              <Text style={styles.countryMeta}>+{entry.dialCode}</Text>
-            </View>
-          </Pressable>
-        ))}
+        <View style={styles.countryList}>
+          {filtered.map((entry) => (
+            <Pressable
+              key={entry.iso}
+              accessibilityRole="button"
+              onPress={() => {
+                update({ ...parts, countryIso: entry.iso });
+                setPickerOpen(false);
+                setQuery('');
+              }}
+              style={[styles.countryRow, entry.iso === parts.countryIso && styles.countryRowActive]}>
+              <Text style={styles.countryFlag}>{entry.flag}</Text>
+              <View style={styles.countryCopy}>
+                <Text style={styles.countryName}>{entry.name}</Text>
+                <Text style={styles.countryMeta}>+{entry.dialCode}</Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
       </BottomSheet>
     </View>
   );
@@ -150,13 +152,13 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
   },
+  countryList: { gap: spacing.x1 },
   countryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.x3,
     paddingVertical: spacing.x3,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
+    borderRadius: radius.medium,
   },
   countryRowActive: { backgroundColor: colors.surfaceMuted },
   countryFlag: { fontSize: 22, width: 30, textAlign: 'center' },

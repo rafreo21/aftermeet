@@ -9,7 +9,7 @@ import {
   type ShareAssetProfile,
 } from "../../../../../lib/share-assets";
 import { buildBrandedQrDataUri } from "../../../../../lib/branded-qr.ts";
-import { buildContactQrPayloadFromShareProfile } from "../../../../../lib/contact-qr.ts";
+import { resolveShareQrPayload } from "../../../../../lib/contact-qr.ts";
 import { getAppUserFromRequest } from "../../../../../lib/auth/mobile-api-auth";
 import { readPublicSupabaseConfig } from "../../../../../lib/supabase/env";
 import { normalizeThemeColor } from "../../../../../lib/theme-contrast.ts";
@@ -89,7 +89,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
     }
     const size = Math.min(Math.max(Number(url.searchParams.get("size") || 512), 256), 1600);
-    const dataUri = await buildBrandedQrDataUri(buildContactQrPayloadFromShareProfile(profile), size);
+    const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), size);
     return NextResponse.json({ dataUri });
   }
 

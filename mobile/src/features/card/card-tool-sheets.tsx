@@ -174,7 +174,7 @@ export function NfcToolSheetContent({
       ) : null}
       <View style={styles.nfcQrPreview}>
         <BrandedQrPreview card={card} cardUrl={publicUrl} size={132} />
-        <Text style={styles.note}>Scans save your contact offline. Online, they can also open your card page.</Text>
+        <Text style={styles.note}>Opens your live card page so visitors can save your details and share theirs back.</Text>
       </View>
       {isTapToShareSupported() ? (
         <Button
@@ -187,7 +187,7 @@ export function NfcToolSheetContent({
               setTapActive(false);
               return;
             }
-            await startTapToShare(card, publicUrl);
+            await startTapToShare(publicUrl);
             setTapActive(true);
           }, {
             successMessage: tapActive

@@ -7,34 +7,43 @@ import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
 import { QR_LOGO } from '@/lib/widget-qr';
 import { colors } from '@/theme/tokens';
 
+export type QrShareMode = 'online' | 'offline';
+
 type BrandedQrCodeProps = {
-  /** @deprecated Prefer card + cardUrl for offline-capable contact QRs. */
-  value?: string;
-  card?: MobileCard;
+  /** Card page URL — default QR payload for online visitor flow. */
   cardUrl?: string;
+  value?: string;
+  /** Required only for offline contact QR mode. */
+  card?: MobileCard;
+  mode?: QrShareMode;
   size?: number;
   style?: ViewStyle;
   color?: string;
   backgroundColor?: string;
 };
 
-function resolvePayload({ value, card, cardUrl }: BrandedQrCodeProps) {
-  if (card && cardUrl?.trim()) {
-    return buildMobileContactQrPayload(card, cardUrl.trim());
+function resolvePayload({ value, card, cardUrl, mode = 'online' }: BrandedQrCodeProps) {
+  if (mode === 'offline') {
+    if (card && cardUrl?.trim()) {
+      return buildMobileContactQrPayload(card, cardUrl.trim());
+    }
+    return value?.trim() ?? '';
   }
-  return value?.trim() ?? '';
+
+  return cardUrl?.trim() || value?.trim() || '';
 }
 
 export function BrandedQrCode({
   value,
   card,
   cardUrl,
+  mode = 'online',
   size = 120,
   style,
   color = colors.ink,
   backgroundColor = colors.white,
 }: BrandedQrCodeProps) {
-  const payload = resolvePayload({ value, card, cardUrl });
+  const payload = resolvePayload({ value, card, cardUrl, mode });
 
   if (!payload) {
     return (

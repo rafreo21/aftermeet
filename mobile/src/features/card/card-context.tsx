@@ -311,39 +311,48 @@ export function CardProvider({ children }: PropsWithChildren) {
       return { ok: false, ...failure };
     }
 
-    setPublishing(true);
-    setPublishError('');
-    try {
-      let publishTarget = target;
-      if (session.access_token) {
-        publishTarget = await saveRemoteCard(target, { strictImages: true }) || target;
-      }
+      setPublishing(true);
+      setPublishError('');
+      try {
+        let publishTarget = target;
+        if (session.access_token) {
+          publishTarget = await saveRemoteCard(target, { strictImages: true }) || target;
+        }
 
-      const { data, error } = await supabase.rpc('publish_my_card', {
-        p_slug: publishTarget.slug,
-        p_full_name: publishTarget.name,
-        p_job_title: publishTarget.role,
-        p_company: publishTarget.company,
-        p_bio: publishTarget.bio,
-        p_theme_color: normalizeThemeColor(publishTarget.theme),
-        p_profile_image_url: publishTarget.photo || '',
-        p_company_logo_url: publishTarget.showCompanyDetails !== false ? (publishTarget.companyLogo || '') : '',
-        p_cover_image_url: publishTarget.coverPhoto || '',
-        p_show_company_details: publishTarget.showCompanyDetails !== false,
-        p_methods: publishTarget.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
-      });
-      if (error) throw error;
+        const { data, error } = await supabase.rpc('publish_my_card', {
+          p_slug: publishTarget.slug,
+          p_full_name: publishTarget.name,
+          p_job_title: publishTarget.role,
+          p_company: publishTarget.company,
+          p_bio: publishTarget.bio,
+          p_theme_color: normalizeThemeColor(publishTarget.theme),
+          p_profile_image_url: publishTarget.photo || '',
+          p_company_logo_url: publishTarget.showCompanyDetails !== false ? (publishTarget.companyLogo || '') : '',
+          p_cover_image_url: publishTarget.coverPhoto || '',
+          p_show_company_details: publishTarget.showCompanyDetails !== false,
+          p_methods: publishTarget.methods.map((method, sortOrder) => ({ ...method, sortOrder })),
+        });
+        if (error) throw error;
 
-      await updateCardById(target.id, {
-        id: String(data),
-        status: 'published',
-        photo: publishTarget.photo,
-        coverPhoto: publishTarget.coverPhoto,
-        companyLogo: publishTarget.companyLogo,
-      });
+        const publishedCard = normalizeCard({
+          ...publishTarget,
+          id: String(data),
+          status: 'published',
+        });
+        const nextCards = cardsRef.current.map((item) => (
+          item.id === target.id ? publishedCard : item
+        ));
+        await persistCards(nextCards, activeCardIdRef.current);
 
-      const publicUrl = cardPublicUrl({ ...publishTarget, slug: publishTarget.slug });
-      return { ok: true, publicUrl };
+        void syncCardToolsForCard(
+          nextCards,
+          (card) => `${readEnv()?.publicCardBaseUrl || 'http://localhost:3000'}/c/${card.slug}`,
+          session.access_token,
+          publishedCard,
+        );
+
+        const publicUrl = cardPublicUrl(publishedCard);
+        return { ok: true, publicUrl };
     } catch (error) {
       const message = formatPublishError(error);
       const failure = describePublishError(message);

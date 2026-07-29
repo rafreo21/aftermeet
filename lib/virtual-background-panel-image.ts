@@ -2,7 +2,7 @@ import { Resvg } from "@resvg/resvg-js";
 import satori from "satori";
 
 import { buildBrandedQrDataUri } from "./branded-qr.ts";
-import { buildContactQrPayloadFromShareProfile } from "./contact-qr.ts";
+import { resolveShareQrPayload } from "./contact-qr.ts";
 import { loadShareAssetFontBuffers } from "./share-asset-fonts.ts";
 import type { ShareAssetProfile } from "./share-assets.ts";
 import { VIRTUAL_BG_PANEL } from "./virtual-background-layout.ts";
@@ -24,7 +24,7 @@ export async function buildVirtualBackgroundPanelPng(profile: ShareAssetProfile,
   const subtitle = profileSubtitle(profile);
   const fonts = loadShareAssetFontBuffers();
   const qrDataUri = await buildBrandedQrDataUri(
-    buildContactQrPayloadFromShareProfile(profile),
+    resolveShareQrPayload(profile),
     VIRTUAL_BG_PANEL.qrSize * 5 * scale,
   );
 

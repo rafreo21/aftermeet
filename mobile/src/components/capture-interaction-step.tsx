@@ -838,9 +838,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.x2,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.line,
   },
   consentLabel: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   methodHeading: {

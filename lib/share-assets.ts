@@ -1,7 +1,7 @@
 import sharp from "sharp";
 
 import { buildBrandedQrDataUri, buildBrandedQrPngBuffer } from "./branded-qr.ts";
-import { buildContactQrPayloadFromShareProfile } from "./contact-qr.ts";
+import { resolveShareQrPayload } from "./contact-qr.ts";
 import { loadShareAssetFontsBase64, shareAssetFontStyles } from "./share-asset-fonts.ts";
 import { normalizeThemeColor, themeGradientStops } from "./theme-contrast.ts";
 import { buildVirtualBackgroundGradientPng } from "./virtual-background-gradient.ts";
@@ -60,7 +60,7 @@ async function buildVirtualBackgroundSvgDocument(profile: ShareAssetProfile) {
   const layout = buildVirtualBackgroundLayout(profile);
   const fonts = await loadShareAssetFontsBase64();
   const qrRenderSize = VIRTUAL_BG_PANEL.qrSize * 5;
-  const qrDataUri = await buildBrandedQrDataUri(buildContactQrPayloadFromShareProfile(profile), qrRenderSize);
+  const qrDataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), qrRenderSize);
   const width = VIRTUAL_BG_PANEL.canvasWidth;
   const height = VIRTUAL_BG_PANEL.canvasHeight;
 
@@ -140,7 +140,7 @@ export async function buildWatchFacePng(profile: ShareAssetProfile) {
   const [background, frame, qrBuffer, textLayer] = await Promise.all([
     sharp(Buffer.from(backgroundSvg)).png().toBuffer(),
     sharp(Buffer.from(frameSvg)).png().toBuffer(),
-    buildBrandedQrPngBuffer(buildContactQrPayloadFromShareProfile(profile), qrDisplaySize * 4).then((buffer) =>
+    buildBrandedQrPngBuffer(resolveShareQrPayload(profile), qrDisplaySize * 4).then((buffer) =>
       sharp(buffer).resize(qrDisplaySize, qrDisplaySize, { kernel: sharp.kernel.nearest }).png().toBuffer(),
     ),
     sharp(Buffer.from(textSvg)).png().toBuffer(),
@@ -163,7 +163,7 @@ export async function buildWatchFaceSvg(profile: ShareAssetProfile) {
   const qrX = Math.round((400 - qrDisplaySize) / 2);
   const qrY = 92;
   const fonts = await loadShareAssetFontsBase64();
-  const qrDataUri = await buildBrandedQrDataUri(buildContactQrPayloadFromShareProfile(profile), qrRenderSize);
+  const qrDataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), qrRenderSize);
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">`,

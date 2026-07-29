@@ -1,7 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
 
-import type { MobileCard } from '@/features/card/types';
-import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
 import { normalizeCardUrl } from '@/lib/nfc-ndef';
 
 type HceSession = {
@@ -33,7 +31,7 @@ export function setTapToShareReadListener(listener: (() => void) | null) {
   onReadCallback = listener;
 }
 
-export async function startTapToShare(card: MobileCard, cardUrl: string) {
+export async function startTapToShare(cardUrl: string) {
   if (!isTapToShareSupported()) {
     throw new Error('Tap to share works on Android. On iPhone, use the QR code or Wallet pass.');
   }
@@ -50,10 +48,9 @@ export async function startTapToShare(card: MobileCard, cardUrl: string) {
   await stopTapToShare();
 
   const { HCESession, NFCTagType4, NFCTagType4NDEFContentType } = await import('react-native-hce');
-  const vcard = buildMobileContactQrPayload(card, normalized);
   const tag = new NFCTagType4({
-    type: NFCTagType4NDEFContentType.Text,
-    content: vcard,
+    type: NFCTagType4NDEFContentType.URL,
+    content: normalized,
     writable: false,
   });
 

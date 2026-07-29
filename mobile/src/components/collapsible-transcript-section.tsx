@@ -79,9 +79,7 @@ export function CollapsibleTranscriptSection({
 const styles = StyleSheet.create({
   section: {
     gap: spacing.x3,
-    paddingTop: spacing.x4,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    paddingTop: spacing.x2,
   },
   toggle: {
     flexDirection: 'row',

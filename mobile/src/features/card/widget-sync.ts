@@ -59,7 +59,7 @@ async function buildWidgetCardPayload(
   let photoImageUri: string | undefined;
 
   try {
-    const qrImageUriValue = await buildWidgetQrFileUri(cardUrl, assetKey, card);
+    const qrImageUriValue = await buildWidgetQrFileUri(cardUrl, assetKey);
     if (qrImageUriValue) {
       qrImageUri = qrImageUriValue;
       if (Platform.OS === 'android') {
@@ -135,8 +135,7 @@ export async function buildWidgetSnapshot(
   let qrImageUri: string | undefined = primary?.qrImageUri;
   if (!qrImageUri && primary?.cardUrl) {
     try {
-      const primaryCard = cardTargets[0];
-      qrImageUri = await buildWidgetQrFileUri(primary.cardUrl, 'primary', primaryCard);
+      qrImageUri = await buildWidgetQrFileUri(primary.cardUrl, 'primary');
     } catch {
       qrImageUri = undefined;
     }
@@ -171,28 +170,10 @@ function bridgePayload(snapshot: WidgetSnapshot): Record<string, string | undefi
   return payload;
 }
 
-function demoMobileCard(): MobileCard {
-  return {
-    slug: 'demo',
-    label: 'Demo',
-    name: WIDGET_DEMO_CARD.name,
-    role: WIDGET_DEMO_CARD.role,
-    company: WIDGET_DEMO_CARD.company,
-    bio: '',
-    theme: 'forest',
-    photo: '',
-    companyLogo: '',
-    coverPhoto: '',
-    showCompanyDetails: true,
-    status: 'published',
-    methods: [],
-  };
-}
-
 async function ensureDemoCardQr(cards: WidgetCardPayload[]) {
   if (cards.length) return cards;
   try {
-    const demoQrUri = await buildWidgetQrFileUri(WIDGET_DEMO_CARD.cardUrl, 'demo', demoMobileCard());
+    const demoQrUri = await buildWidgetQrFileUri(WIDGET_DEMO_CARD.cardUrl, 'demo');
     return [{ ...WIDGET_DEMO_CARD, qrImageUri: demoQrUri }];
   } catch {
     return [WIDGET_DEMO_CARD];

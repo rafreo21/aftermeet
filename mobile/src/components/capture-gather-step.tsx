@@ -35,11 +35,10 @@ type OptionRowProps = {
   title: string;
   subtitle: string;
   onPress: () => void;
-  isLast?: boolean;
   disabled?: boolean;
 };
 
-function OptionRow({ icon, title, subtitle, onPress, isLast, disabled }: OptionRowProps) {
+function OptionRow({ icon, title, subtitle, onPress, disabled }: Omit<OptionRowProps, 'isLast'>) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -47,7 +46,6 @@ function OptionRow({ icon, title, subtitle, onPress, isLast, disabled }: OptionR
       onPress={onPress}
       style={({ pressed }) => [
         styles.optionRow,
-        isLast && styles.optionRowLast,
         pressed && !disabled && styles.optionRowPressed,
         disabled && styles.optionRowDisabled,
       ]}>
@@ -254,7 +252,6 @@ export function CaptureGatherStep({
           title="Share your card"
           subtitle="They scan your QR and we link them automatically"
           onPress={() => setQrOpen(true)}
-          isLast
         />
       </View>
 
@@ -361,11 +358,7 @@ const styles = StyleSheet.create({
   promptCopy: { marginTop: -spacing.x1 },
   peopleList: { gap: spacing.x2 },
   optionList: {
-    borderRadius: radius.large,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-    overflow: 'hidden',
+    gap: spacing.x2,
   },
   optionRow: {
     flexDirection: 'row',
@@ -373,12 +366,13 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
     paddingHorizontal: spacing.x4,
     paddingVertical: spacing.x4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    borderRadius: radius.large,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   optionRowPressed: { opacity: 0.72 },
   optionRowDisabled: { opacity: 0.45 },
-  optionRowLast: { borderBottomWidth: 0 },
   optionIcon: {
     width: 44,
     height: 44,

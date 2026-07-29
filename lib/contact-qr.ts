@@ -23,6 +23,17 @@ export function shareAssetProfileToVcardInput(profile: ShareAssetProfile): CardV
   };
 }
 
+/** Online QRs open the card page (visitor exchange). Offline QRs embed a contact card. */
+export function resolveShareQrPayload(
+  profile: ShareAssetProfile,
+  mode: "online" | "offline" = "online",
+) {
+  if (mode === "offline") {
+    return buildContactQrPayload(shareAssetProfileToVcardInput(profile));
+  }
+  return profile.cardUrl.trim();
+}
+
 export function buildContactQrPayloadFromShareProfile(profile: ShareAssetProfile): string {
   return buildContactQrPayload(shareAssetProfileToVcardInput(profile));
 }

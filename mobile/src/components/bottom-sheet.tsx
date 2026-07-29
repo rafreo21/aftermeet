@@ -119,9 +119,7 @@ const styles = StyleSheet.create({
   body: { gap: spacing.x4, paddingBottom: spacing.x2 },
   footer: {
     marginTop: spacing.x4,
-    paddingTop: spacing.x4,
+    paddingTop: spacing.x2,
     gap: spacing.x2,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
   },
 });

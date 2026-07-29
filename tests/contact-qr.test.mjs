@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildContactQrPayload } from "../lib/contact-qr.ts";
+import { buildContactQrPayload, resolveShareQrPayload } from "../lib/contact-qr.ts";
 
 test("buildContactQrPayload encodes offline contact data with labeled card URL", () => {
   const payload = buildContactQrPayload({
@@ -31,4 +31,18 @@ test("buildContactQrPayload starts with vCard marker for QR scanners", () => {
   });
 
   assert.match(payload, /^BEGIN:VCARD/);
+});
+
+test("resolveShareQrPayload defaults to card URL for online visitor flow", () => {
+  const profile = {
+    name: "Alex Morgan",
+    role: "Designer",
+    company: "AfterMeet",
+    cardUrl: "https://aftermeet.app/c/alex",
+    showCompany: true,
+    methods: [],
+  };
+
+  assert.equal(resolveShareQrPayload(profile), "https://aftermeet.app/c/alex");
+  assert.match(resolveShareQrPayload(profile, "offline"), /^BEGIN:VCARD/);
 });

@@ -130,20 +130,16 @@ export default function ScannerScreen() {
         barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         onBarcodeScanned={locked || linking ? undefined : scanned}
       />
-      <View style={[styles.overlay, { paddingTop: insets.top + spacing.x5, paddingBottom: insets.bottom + spacing.x5 }]}>
-        <View style={styles.top}>
-          <BackButton style={styles.backOnDark} />
-          <Text style={styles.title}>Scan an AfterMeet card</Text>
+      <View style={[styles.overlay, { paddingTop: insets.top + spacing.x3, paddingBottom: insets.bottom + spacing.x4 }]}>
+        <BackButton style={styles.backOnDark} />
+        <View style={styles.scanArea}>
+          <View style={styles.frame}>
+            <View style={styles.cornerTL} />
+            <View style={styles.cornerTR} />
+            <View style={styles.cornerBL} />
+            <View style={styles.cornerBR} />
+          </View>
         </View>
-        <View style={styles.frame}>
-          <View style={styles.cornerTL} />
-          <View style={styles.cornerTR} />
-          <View style={styles.cornerBL} />
-          <View style={styles.cornerBR} />
-        </View>
-        <Text style={styles.helper}>
-          {linking ? 'Adding to your connections…' : 'Position the QR code inside the frame.'}
-        </Text>
         {linking ? <ActivityIndicator color={colors.white} style={styles.spinner} /> : null}
         {error ? (
           <View style={styles.errorWrap}>
@@ -171,16 +167,19 @@ const styles = StyleSheet.create({
   },
   container: { flex: 1, backgroundColor: '#000' },
   overlay: { flex: 1, paddingHorizontal: spacing.x5, backgroundColor: 'rgba(0,0,0,.28)' },
-  top: { gap: spacing.x3 },
-  title: { color: colors.white, fontSize: 20, fontWeight: '800' },
-  backOnDark: { backgroundColor: colors.white },
-  frame: { width: 270, height: 270, alignSelf: 'center', marginTop: '35%' },
+  backOnDark: { backgroundColor: colors.white, alignSelf: 'flex-start' },
+  scanArea: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.x6,
+  },
+  frame: { width: 300, height: 300 },
   cornerTL: { ...corner, top: 0, left: 0, borderTopWidth: 5, borderLeftWidth: 5, borderTopLeftRadius: 12 },
   cornerTR: { ...corner, top: 0, right: 0, borderTopWidth: 5, borderRightWidth: 5, borderTopRightRadius: 12 },
   cornerBL: { ...corner, bottom: 0, left: 0, borderBottomWidth: 5, borderLeftWidth: 5, borderBottomLeftRadius: 12 },
   cornerBR: { ...corner, bottom: 0, right: 0, borderBottomWidth: 5, borderRightWidth: 5, borderBottomRightRadius: 12 },
-  helper: { marginTop: spacing.x5, color: colors.white, textAlign: 'center', fontWeight: '700' },
-  spinner: { marginTop: spacing.x4 },
+  spinner: { marginTop: spacing.x3 },
   errorWrap: { marginTop: spacing.x4, gap: spacing.x2, alignItems: 'center' },
   errorText: { color: colors.white, textAlign: 'center', fontWeight: '600' },
   permission: { flex: 1, paddingHorizontal: spacing.x6, justifyContent: 'center', gap: spacing.x4, backgroundColor: colors.canvas },
