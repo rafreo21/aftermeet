@@ -115,7 +115,7 @@ export function WalletToolSheetContent({
           ) : null}
         </View>
         <View style={styles.walletQrPreview}>
-          <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={112} />
+          <BrandedQrPreview card={card} cardUrl={publicUrl} size={112} />
         </View>
       </WalletPreviewBackground>
       {Platform.OS === 'ios' ? (
@@ -173,8 +173,8 @@ export function NfcToolSheetContent({
         <Text style={styles.note}>{TAP_TO_SHARE_REBUILD_MESSAGE}</Text>
       ) : null}
       <View style={styles.nfcQrPreview}>
-        <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={132} />
-        <Text style={styles.note}>This is the card link written to the tag.</Text>
+        <BrandedQrPreview card={card} cardUrl={publicUrl} size={132} />
+        <Text style={styles.note}>Scans save your contact offline. Online, they can also open your card page.</Text>
       </View>
       {isTapToShareSupported() ? (
         <Button
@@ -187,7 +187,7 @@ export function NfcToolSheetContent({
               setTapActive(false);
               return;
             }
-            await startTapToShare(publicUrl);
+            await startTapToShare(card, publicUrl);
             setTapActive(true);
           }, {
             successMessage: tapActive
@@ -203,8 +203,8 @@ export function NfcToolSheetContent({
           <Button
             loading={busy === 'nfc'}
             onPress={() => void run('nfc', async () => {
-              await programNfcTag(publicUrl);
-            }, { successMessage: 'NFC tag programmed. Tap it with a phone to open your card.' })}>
+              await programNfcTag(card, publicUrl);
+            }, { successMessage: 'NFC tag programmed. Tap it with a phone to save your contact.' })}>
             <ContactlessPayment size={18} color={colors.ink} weight="bold" />
             Program NFC tag
           </Button>
@@ -228,7 +228,7 @@ export function NfcToolSheetContent({
         variant="ghost"
         loading={busy === 'nfc-copy'}
         onPress={() => void run('nfc-copy', async () => {
-          await copyNfcManufacturerPayload(publicUrl);
+          await copyNfcManufacturerPayload(card, publicUrl);
         }, { successMessage: 'Programming JSON copied for manufacturer tools.' })}>
         <Copy size={16} color={colors.ink} weight="bold" />
         Copy NFC programming JSON
@@ -288,9 +288,8 @@ export function WidgetToolSheetContent({
                 <View style={styles.widgetQrOnlyPreview}>
                   <View style={[styles.widgetQrOnlyFrame, { borderColor: theme.backgroundColor }]}>
                     <BrandedQrPreview
+                      card={card}
                       cardUrl={publicUrl}
-                      slug={card.slug}
-                      accessToken={accessToken}
                       size={90}
                     />
                   </View>
@@ -311,9 +310,8 @@ export function WidgetToolSheetContent({
                 <View style={styles.widgetBusinessPreview}>
                   <View style={styles.widgetBusinessQr}>
                     <BrandedQrPreview
+                      card={card}
                       cardUrl={publicUrl}
-                      slug={card.slug}
-                      accessToken={accessToken}
                       size={68}
                     />
                   </View>
@@ -427,7 +425,7 @@ export function SignatureToolSheetContent({
           <Text style={styles.signatureLink}>View my card</Text>
         </View>
         <View style={styles.signatureQr}>
-          <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={72} />
+          <BrandedQrPreview card={card} cardUrl={publicUrl} size={72} />
         </View>
       </View>
       <Button variant="secondary" onPress={() => void copySignature('plain')}>
@@ -457,7 +455,7 @@ export function WatchToolSheetContent({
       <View style={styles.watchPreview}>
         <Text style={styles.watchLabel}>Personal card</Text>
         <View style={styles.watchQr}>
-          <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={120} />
+          <BrandedQrPreview card={card} cardUrl={publicUrl} size={120} />
         </View>
       </View>
       <Button
@@ -490,11 +488,8 @@ export function BackgroundToolSheetContent({
       <Body>{virtualBackgroundInstructions()}</Body>
       <VirtualBackgroundPreviewBackground theme={card.theme} style={styles.backgroundPreview}>
         <VirtualBackgroundPanelPreview
-          name={card.name}
-          subtitle={subtitle}
+          card={card}
           cardUrl={publicUrl}
-          slug={card.slug}
-          accessToken={accessToken}
           panelWidth={200}
         />
       </VirtualBackgroundPreviewBackground>

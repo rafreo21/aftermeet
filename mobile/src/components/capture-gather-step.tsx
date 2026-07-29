@@ -327,7 +327,7 @@ export function CaptureGatherStep({
           Ask them to scan this code. Their details link here automatically. You can add up to {MAX_GATHER_PEOPLE} people.
         </Body>
         <View style={styles.qrWrap}>
-          <BrandedQrCode value={publicUrl} size={220} />
+          <BrandedQrCode card={card} cardUrl={publicUrl} size={220} />
           <Text style={styles.qrHint}>{card.name}</Text>
           {card.role ? (
             <Text style={styles.qrSubhint}>

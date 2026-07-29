@@ -1,6 +1,8 @@
 import * as Clipboard from 'expo-clipboard';
 import { Linking, Platform } from 'react-native';
 
+import type { MobileCard } from '@/features/card/types';
+import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
 import { nfcManufacturerPayload, normalizeCardUrl } from '@/lib/nfc-ndef';
 
 export function isNativeNfcSupported() {
@@ -44,12 +46,13 @@ async function writeNdefMessage(
   await NfcManager.ndefFormatableHandlerAndroid.formatNdef(bytes);
 }
 
-export async function programNfcTag(cardUrl: string) {
+export async function programNfcTag(card: MobileCard, cardUrl: string) {
   if (!isNativeNfcSupported()) {
     throw new Error('NFC writing works on Android. iPhone can read programmed tags but cannot write them from the app.');
   }
 
   const normalized = assertCardUrl(cardUrl);
+  const vcard = buildMobileContactQrPayload(card, normalized);
   const { NfcManager, NfcTech, Ndef } = await loadNfcManager();
 
   const supported = await NfcManager.isSupported();
@@ -62,7 +65,11 @@ export async function programNfcTag(cardUrl: string) {
 
   await NfcManager.start();
   try {
-    const bytes = Ndef.encodeMessage([Ndef.uriRecord(normalized)]);
+    const records = [
+      Ndef.mimeMediaRecord('text/vcard', vcard),
+      Ndef.uriRecord(normalized),
+    ];
+    const bytes = Ndef.encodeMessage(records);
     if (!bytes) throw new Error('Could not encode the NFC message.');
     await writeNdefMessage(NfcManager, NfcTech, Ndef, bytes);
   } catch (error) {
@@ -83,9 +90,10 @@ export async function copyNfcCardLink(cardUrl: string) {
   return normalized;
 }
 
-export async function copyNfcManufacturerPayload(cardUrl: string) {
+export async function copyNfcManufacturerPayload(card: MobileCard, cardUrl: string) {
   const normalized = assertCardUrl(cardUrl);
-  const payload = JSON.stringify(nfcManufacturerPayload(normalized), null, 2);
+  const vcard = buildMobileContactQrPayload(card, normalized);
+  const payload = JSON.stringify(nfcManufacturerPayload(normalized, vcard), null, 2);
   await Clipboard.setStringAsync(payload);
   return payload;
 }

@@ -28,3 +28,18 @@ test("parseScanTarget detects vCard payloads", () => {
 test("parseAfterMeetCardSlug ignores non-card paths", () => {
   assert.equal(parseAfterMeetCardSlug("https://aftermeet.app/app/contacts"), null);
 });
+
+test("parseAfterMeetCardSlugFromScan extracts slug from offline vCard QRs", async () => {
+  const { parseAfterMeetCardSlugFromScan } = await import("../mobile/src/lib/parse-scanned-qr.ts");
+  const vcard = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    "FN:Alex Morgan",
+    "item1.URL:https://aftermeet.app/c/alex-morgan",
+    "item1.X-ABLabel:AfterMeet card",
+    "END:VCARD",
+  ].join("\r\n");
+
+  assert.equal(parseAfterMeetCardSlugFromScan(vcard), "alex-morgan");
+  assert.equal(parseAfterMeetCardSlugFromScan("https://aftermeet.app/c/alex-morgan"), "alex-morgan");
+});

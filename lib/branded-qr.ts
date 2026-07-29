@@ -6,6 +6,9 @@ import sharp from "sharp";
 
 import { AFTERMEET_LOGO_PNG_BASE64 } from "./aftermeet-logo-base64.ts";
 
+import type { CardVcardInput } from "./vcard-export.ts";
+import { buildContactQrPayload } from "./contact-qr.ts";
+
 const QR_OPTIONS = {
   errorCorrectionLevel: "H" as const,
   margin: 1,
@@ -37,9 +40,9 @@ async function loadAfterMeetLogoBuffer() {
   return logoBufferPromise;
 }
 
-export async function buildBrandedQrPngBuffer(cardUrl: string, size = 1024) {
+export async function buildBrandedQrPngBuffer(payload: string, size = 1024) {
   const [qrBuffer, logoBuffer] = await Promise.all([
-    QRCode.toBuffer(cardUrl, {
+    QRCode.toBuffer(payload, {
       ...QR_OPTIONS,
       width: size,
     }),
@@ -73,8 +76,17 @@ export async function buildBrandedQrPngBuffer(cardUrl: string, size = 1024) {
     .toBuffer();
 }
 
-export async function buildBrandedQrDataUri(cardUrl: string, size = 1024) {
-  const buffer = await buildBrandedQrPngBuffer(cardUrl, size);
+export async function buildBrandedQrDataUri(payload: string, size = 1024) {
+  const buffer = await buildBrandedQrPngBuffer(payload, size);
+  return `data:image/png;base64,${buffer.toString("base64")}`;
+}
+
+export async function buildBrandedContactQrPngBuffer(input: CardVcardInput, size = 1024) {
+  return buildBrandedQrPngBuffer(buildContactQrPayload(input), size);
+}
+
+export async function buildBrandedContactQrDataUri(input: CardVcardInput, size = 1024) {
+  const buffer = await buildBrandedContactQrPngBuffer(input, size);
   return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 

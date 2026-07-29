@@ -3,6 +3,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import QRCode from 'qrcode';
 import { Platform } from 'react-native';
 
+import type { MobileCard } from '@/features/card/types';
+import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
+
 const IOS_APP_GROUP = 'group.com.aftermeet.app';
 function qrFileName(fileKey: string) {
   const safeKey = fileKey.replace(/[^a-zA-Z0-9_-]/g, '') || 'primary';
@@ -11,9 +14,21 @@ function qrFileName(fileKey: string) {
 
 export const QR_LOGO = require('../../assets/images/splash-icon.png');
 
-export async function buildWidgetQrFileUri(cardUrl: string, fileKey = 'primary') {
+function resolveWidgetQrPayload(card: MobileCard | undefined, cardUrl: string) {
+  if (card) {
+    return buildMobileContactQrPayload(card, cardUrl);
+  }
+  return cardUrl;
+}
+
+export async function buildWidgetQrFileUri(
+  cardUrl: string,
+  fileKey = 'primary',
+  card?: MobileCard,
+) {
   const QR_FILE_NAME = qrFileName(fileKey);
-  const dataUrl = await QRCode.toDataURL(cardUrl, {
+  const payload = resolveWidgetQrPayload(card, cardUrl);
+  const dataUrl = await QRCode.toDataURL(payload, {
     errorCorrectionLevel: 'H',
     margin: 1,
     width: 512,

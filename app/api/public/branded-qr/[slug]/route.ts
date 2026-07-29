@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { buildBrandedQrPngBuffer } from "../../../../../lib/branded-qr.ts";
+import { buildContactQrPayload } from "../../../../../lib/contact-qr.ts";
+import { publicCompanyField, filterMethodsForCompanyVisibility } from "../../../../../lib/card-company-display";
 import { cardUrlForSlug } from "../../../../../lib/wallet-card-loader";
 
 export async function GET(request: Request, context: { params: Promise<{ slug: string }> }) {
@@ -23,7 +25,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const { data } = await supabase
     .from("cards")
-    .select("slug, status")
+    .select("slug, full_name, job_title, company, bio, show_company_details, status, card_methods(method_type, value, label, sort_order)")
     .eq("slug", normalized)
     .eq("status", "published")
     .maybeSingle();
@@ -34,7 +36,25 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
 
   const size = Math.min(Math.max(Number(new URL(request.url).searchParams.get("size") || 512), 256), 1024);
   const cardUrl = cardUrlForSlug(data.slug, request);
-  const buffer = await buildBrandedQrPngBuffer(cardUrl, size);
+  const showCompanyDetails = data.show_company_details ?? true;
+  const methods = filterMethodsForCompanyVisibility(
+    [...(data.card_methods || [])].sort((a, b) => a.sort_order - b.sort_order),
+    showCompanyDetails,
+  );
+  const payload = buildContactQrPayload({
+    fullName: data.full_name,
+    jobTitle: data.job_title,
+    company: publicCompanyField(data.company, showCompanyDetails),
+    bio: data.bio,
+    cardUrl,
+    showCompanyDetails,
+    methods: methods.map((method) => ({
+      method_type: method.method_type,
+      value: method.value,
+      label: method.label,
+    })),
+  });
+  const buffer = await buildBrandedQrPngBuffer(payload, size);
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

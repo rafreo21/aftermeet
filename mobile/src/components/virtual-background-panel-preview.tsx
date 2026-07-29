@@ -1,24 +1,19 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import type { MobileCard } from '@/features/card/types';
 import { BrandedQrPreview } from '@/components/branded-qr-preview';
 import { colors } from '@/theme/tokens';
 
 type VirtualBackgroundPanelPreviewProps = {
-  name: string;
-  subtitle: string;
+  card: MobileCard;
   cardUrl: string;
-  slug?: string;
-  accessToken?: string;
   panelWidth?: number;
 };
 
 /** Side-by-side panel: copy left, branded QR right, scan line bottom-left. */
 export function VirtualBackgroundPanelPreview({
-  name,
-  subtitle,
+  card,
   cardUrl,
-  slug,
-  accessToken,
   panelWidth = 240,
 }: VirtualBackgroundPanelPreviewProps) {
   const scale = panelWidth / 360;
@@ -28,6 +23,7 @@ export function VirtualBackgroundPanelPreview({
   const nameFontSize = Math.max(12, Math.round(28 * scale));
   const subtitleFontSize = Math.max(10, Math.round(18 * scale));
   const scanFontSize = Math.max(9, Math.round(14 * scale));
+  const subtitle = [card.role, card.company].filter(Boolean).join(' · ');
 
   return (
     <View style={[styles.panel, { width: panelWidth, minHeight: panelHeight, padding: pad }]}>
@@ -35,7 +31,7 @@ export function VirtualBackgroundPanelPreview({
         <View style={[styles.copy, { minHeight: qrSize }]}>
           <View style={styles.heading}>
             <Text style={[styles.name, { fontSize: nameFontSize }]} numberOfLines={2}>
-              {name}
+              {card.name}
             </Text>
             {subtitle ? (
               <Text style={[styles.subtitle, { fontSize: subtitleFontSize }]} numberOfLines={2}>
@@ -47,13 +43,9 @@ export function VirtualBackgroundPanelPreview({
             Scan to save my contact
           </Text>
         </View>
-        <BrandedQrPreview
-          cardUrl={cardUrl}
-          slug={slug}
-          accessToken={accessToken}
-          size={qrSize}
-          style={styles.qr}
-        />
+        <View style={styles.qr}>
+          <BrandedQrPreview card={card} cardUrl={cardUrl} size={qrSize} />
+        </View>
       </View>
     </View>
   );

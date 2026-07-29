@@ -94,7 +94,7 @@ export default function ShareCardScreen() {
       setTapToShareReadListener(() => {
         setTapMessage('Card link shared by tap.');
       });
-      await startTapToShare(publicUrl);
+      await startTapToShare(card, publicUrl);
       setTapActive(true);
       setTapMessage('Ready. Ask them to hold their phone against yours.');
     } catch (error) {
@@ -163,7 +163,8 @@ export default function ShareCardScreen() {
         bounces={false}>
         {publicUrl ? (
           <View style={styles.qr}>
-            <BrandedQrCode value={publicUrl} size={220} />
+            <BrandedQrCode card={card} cardUrl={publicUrl} size={220} />
+            <Text style={styles.helperInline}>Works offline — scanners can save your contact without internet.</Text>
           </View>
         ) : (
           <Text style={styles.helperInline}>Publish your card to generate a QR code.</Text>
@@ -173,7 +174,7 @@ export default function ShareCardScreen() {
             <Text style={styles.tapTitle}>{tapActive ? 'Tap to share is on' : 'Or tap phones together'}</Text>
             <Text style={styles.tapBody}>
               {tapActive
-                ? 'Keep this screen open. Their phone reads your card link over NFC.'
+                ? 'Keep this screen open. Their phone reads your contact over NFC, even offline.'
                 : 'Turn on tap to share, then hold your phone against theirs.'}
             </Text>
             {tapMessage ? <Text style={styles.tapMessage}>{tapMessage}</Text> : null}

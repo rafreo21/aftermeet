@@ -15,10 +15,10 @@ test("nfcUriRecord returns a URL record for Web NFC", () => {
   });
 });
 
-test("nfcManufacturerPayload documents the tap-to-open URL", () => {
-  const payload = nfcManufacturerPayload("https://aftermeet.app/c/alex-morgan");
-  assert.equal(payload.url, "https://aftermeet.app/c/alex-morgan");
-  assert.equal(payload.recordType, "URI");
+test("nfcManufacturerPayload documents offline vCard plus URL fallback", () => {
+  const payload = nfcManufacturerPayload("https://aftermeet.app/c/alex-morgan", "BEGIN:VCARD");
+  assert.equal(payload.records[1].url, "https://aftermeet.app/c/alex-morgan");
+  assert.equal(payload.records[0].mimeType, "text/vcard");
 });
 
 test("wallet config flags are false without env vars", () => {

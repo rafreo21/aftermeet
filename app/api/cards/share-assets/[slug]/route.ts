@@ -8,6 +8,7 @@ import {
   type ShareAssetProfile,
 } from "../../../../../lib/share-assets";
 import { buildBrandedQrDataUri } from "../../../../../lib/branded-qr.ts";
+import { buildContactQrPayloadFromShareProfile } from "../../../../../lib/contact-qr.ts";
 import { getAppUser } from "../../../../../lib/auth/context";
 import { createClient } from "../../../../../lib/supabase/server";
 import { cardUrlForSlug } from "../../../../../lib/wallet-card-loader";
@@ -17,7 +18,7 @@ async function loadShareAssetProfile(slug: string, request: Request, workspaceId
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("cards")
-    .select("slug, full_name, job_title, company, theme_color, profile_image_url, company_logo_url, show_company_details, status")
+    .select("slug, full_name, job_title, company, theme_color, profile_image_url, company_logo_url, show_company_details, status, card_methods(method_type, value, label, sort_order)")
     .eq("slug", slug.toLowerCase())
     .eq("workspace_id", workspaceId)
     .eq("status", "published")
@@ -34,6 +35,13 @@ async function loadShareAssetProfile(slug: string, request: Request, workspaceId
     photoUrl: data.profile_image_url ?? "",
     companyLogoUrl: data.company_logo_url ?? "",
     showCompany: data.show_company_details ?? true,
+    methods: [...(data.card_methods || [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((method) => ({
+        method_type: method.method_type,
+        value: method.value,
+        label: method.label,
+      })),
   };
 }
 
@@ -61,7 +69,7 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
     }
     const size = Math.min(Math.max(Number(url.searchParams.get("size") || 512), 256), 1600);
-    const dataUri = await buildBrandedQrDataUri(profile.cardUrl, size);
+    const dataUri = await buildBrandedQrDataUri(buildContactQrPayloadFromShareProfile(profile), size);
     return NextResponse.json({ dataUri });
   }
 

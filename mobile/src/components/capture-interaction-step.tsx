@@ -571,7 +571,7 @@ export function CaptureInteractionStep({
         }>
         <Body style={styles.centerCopy}>They scan this code and their details link here automatically.</Body>
         <View style={styles.qrWrap}>
-          <BrandedQrCode value={publicUrl} size={220} />
+          <BrandedQrCode card={card} cardUrl={publicUrl} size={220} />
           <Text style={styles.qrHint}>{card.name}</Text>
         </View>
       </BottomSheet>

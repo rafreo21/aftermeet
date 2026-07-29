@@ -150,6 +150,15 @@ export function buildCardVcard(input: CardVcardInput) {
     itemIndex += 1;
   }
 
+  const cardPage = input.cardUrl.trim();
+  if (cardPage) {
+    const cardLinked =
+      primaryWebsite === cardPage || labeledUrls.some((entry) => entry.href === cardPage);
+    if (!cardLinked) {
+      appendLabeledUrl(lines, itemIndex, "AfterMeet card", cardPage);
+    }
+  }
+
   const noteParts = [input.bio?.trim(), whenWeMetNote].filter(Boolean);
   lines.push(`NOTE:${escapeVcard(noteParts.join("\n\n"))}`);
   lines.push("END:VCARD");

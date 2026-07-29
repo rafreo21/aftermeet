@@ -1,32 +1,31 @@
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { BrandedQrCode } from '@/components/branded-qr-code';
-import { colors } from '@/theme/tokens';
+import type { MobileCard } from '@/features/card/types';
 
 type BrandedQrPreviewProps = {
+  card: MobileCard;
   cardUrl: string;
+  size?: number;
   slug?: string;
   accessToken?: string;
-  size?: number;
-  style?: ViewStyle;
 };
 
 export function BrandedQrPreview({
+  card,
   cardUrl,
   size = 120,
-  style,
 }: BrandedQrPreviewProps) {
   return (
-    <View style={[styles.wrapper, { width: size, height: size }, style]}>
-      <BrandedQrCode value={cardUrl} size={size} />
+    <View style={styles.wrap}>
+      <BrandedQrCode card={card} cardUrl={cardUrl} size={size} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    overflow: 'hidden',
-    backgroundColor: colors.white,
-    borderRadius: 12,
+  wrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

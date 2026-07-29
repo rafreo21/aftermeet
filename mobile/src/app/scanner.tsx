@@ -12,17 +12,12 @@ import { ScanShareSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { connectionFromScannedSlug } from '@/features/connections/connections-api';
 import { setAuthReturnPath } from '@/features/encounters/capture-draft';
+import { parseAfterMeetCardSlugFromScan } from '@/lib/parse-scanned-qr';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 function parseCardSlug(url: string) {
-  try {
-    const parsed = new URL(url);
-    const match = parsed.pathname.match(/\/c\/([^/?#]+)/i);
-    return match?.[1] ?? null;
-  } catch {
-    return null;
-  }
+  return parseAfterMeetCardSlugFromScan(url);
 }
 
 export default function ScannerScreen() {
@@ -69,8 +64,16 @@ export default function ScannerScreen() {
       await openScannedCard(slug);
       return;
     }
+    if (/^BEGIN:VCARD/i.test(result.data.trim())) {
+      setError('This contact card is not linked to an AfterMeet profile.');
+      setLocked(false);
+      return;
+    }
     if (await Linking.canOpenURL(result.data)) await Linking.openURL(result.data);
-    else setLocked(false);
+    else {
+      setError('Could not read this QR code.');
+      setLocked(false);
+    }
   }
 
   if (!session) {

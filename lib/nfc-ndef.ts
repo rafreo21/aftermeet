@@ -11,14 +11,24 @@ export function nfcUriRecord(cardUrl: string) {
   };
 }
 
-export function nfcManufacturerPayload(cardUrl: string) {
+export function nfcManufacturerPayload(cardUrl: string, vcard?: string) {
   const url = normalizeCardUrl(cardUrl);
   return {
     format: "NDEF",
-    recordType: "URI",
-    url,
-    encoding: "utf-8",
-    instructions: "Program NFC Type 2 tags with a single URI record pointing to this card URL.",
+    records: [
+      {
+        recordType: "MIME",
+        mimeType: "text/vcard",
+        payload: vcard || "Generate from your AfterMeet card contact export.",
+      },
+      {
+        recordType: "URI",
+        url,
+        encoding: "utf-8",
+      },
+    ],
+    instructions:
+      "Program NFC Type 2 tags with a vCard MIME record (offline contact save) and a URI record fallback for the card page.",
   };
 }
 
