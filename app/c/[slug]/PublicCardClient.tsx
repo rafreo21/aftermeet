@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { PublicAppDownloadPrompt } from "../../components/PublicAppDownloadPrompt";
 import { contactMethodHref } from "@/lib/contact-methods";
+import { buildFollowUpMailto } from "@/lib/follow-up-email";
 import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from "@/lib/theme-contrast";
 import { PublicExchangeForm } from "./PublicExchangeForm";
 
@@ -26,6 +27,16 @@ function publicRoleLine(jobTitle: string | null, company: string | null, showCom
 function isIosDevice() {
   if (typeof navigator === "undefined") return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+function publicMethodHref(method: CardMethod, ownerName: string) {
+  if (method.method_type === "email") {
+    return buildFollowUpMailto(method.value, ownerName);
+  }
+  return contactMethodHref({
+    type: method.method_type,
+    value: method.value,
+  });
 }
 
 function PublicCardView({
@@ -102,10 +113,7 @@ function PublicCardView({
           {bio ? <p className="public-card-bio">{bio}</p> : null}
           <div className="public-card-methods">
             {methods.map((method) => {
-              const href = contactMethodHref({
-                type: method.method_type,
-                value: method.value,
-              });
+              const href = publicMethodHref(method, ownerName);
               if (!href) return null;
               const displayValue = href.startsWith("http") ? href : method.value;
               return (
