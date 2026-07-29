@@ -329,7 +329,7 @@ It excludes unreviewed AI output, abandoned drafts, rejected proposals, anonymou
 - User deletion must not silently destroy shared Workspace history.
 - Person deletion requires review of linked history and may archive or anonymise where appropriate.
 - Raw recordings and attachments should support shorter retention than reviewed structured memory.
-- **Shared cloud recordings:** 10-day availability for guest play/download; daily cleanup removes Supabase objects while host local copies, full transcript, and shared summary remain.
+- **Shared cloud recordings:** 3-day availability for guest play/download; daily cleanup removes Supabase objects while host local copies, full transcript, and shared summary remain.
 - AI inputs and outputs require explicit retention rules and must not be retained indefinitely by default.
 - Legal deletion and privacy rights take precedence over application-level immutability.
 

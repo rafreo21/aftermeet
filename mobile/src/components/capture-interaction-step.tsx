@@ -376,14 +376,9 @@ export function CaptureInteractionStep({
 
           <View style={styles.recorderActions}>
             {recorder.recordingState === 'idle' ? (
-              <>
-                <Button style={styles.flexButton} onPress={() => void recorder.startRecording(consent)}>
-                  Record
-                </Button>
-                <Button variant="secondary" style={styles.flexButton} onPress={() => void recorder.importRecording(consent)}>
-                  Import
-                </Button>
-              </>
+              <Button style={styles.flexButton} onPress={() => void recorder.startRecording(consent)}>
+                Record
+              </Button>
             ) : null}
             {isRecording ? (
               <>

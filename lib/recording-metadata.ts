@@ -1,5 +1,5 @@
 /** Cloud copies of shared recordings expire after this many days. */
-export const CLOUD_RECORDING_RETENTION_DAYS = 10;
+export const CLOUD_RECORDING_RETENTION_DAYS = 3;
 
 export type RecordingMetadataRecord = {
   durationSeconds?: number;

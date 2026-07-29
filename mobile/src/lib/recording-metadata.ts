@@ -1,4 +1,4 @@
-export const CLOUD_RECORDING_RETENTION_DAYS = 10;
+export const CLOUD_RECORDING_RETENTION_DAYS = 3;
 
 export function formatCloudAvailableUntil(isoDate?: string | null): string | null {
   if (!isoDate) return null;

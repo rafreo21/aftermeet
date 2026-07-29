@@ -56,6 +56,9 @@ const RECORDING_OPTIONS = {
   isMeteringEnabled: true,
 };
 
+/** Hard cap for on-device capture — auto Finish when reached. */
+export const MAX_RECORDING_SECONDS = 60 * 60;
+
 export function useCaptureRecorder({
   transcript,
   onTranscriptChange,
@@ -83,6 +86,7 @@ export function useCaptureRecorder({
   const speechCaptureRef = useRef(new NativeSpeechCapture());
   const liveSttReceivedRef = useRef(false);
   const speechTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopRecordingRef = useRef<() => Promise<void>>(async () => {});
   const lastTranscribeMetaRef = useRef<ImportRecordingMeta | undefined>(undefined);
   const onErrorRef = useRef(onError);
   const onImportReadyRef = useRef(onImportReady);
@@ -169,10 +173,21 @@ export function useCaptureRecorder({
       setSpeechSeconds((current) => {
         const next = current + 1;
         publishDuration(next);
+        if (next >= MAX_RECORDING_SECONDS) {
+          void stopRecordingRef.current();
+        }
         return next;
       });
     }, 1000);
   }, [clearSpeechTimer, publishDuration]);
+
+  // Auto-stop expo-audio captures at the same 1-hour cap.
+  useEffect(() => {
+    if (usingSpeechCapture) return;
+    if (recordingState !== 'recording' && recordingState !== 'paused') return;
+    if (seconds < MAX_RECORDING_SECONDS) return;
+    void stopRecordingRef.current();
+  }, [recordingState, seconds, usingSpeechCapture]);
 
   const transcribeErrorShownRef = useRef(false);
   const transcribeInFlightRef = useRef(false);
@@ -297,26 +312,18 @@ export function useCaptureRecorder({
       setRecordingState('recording');
 
       const preferredMode = resolveSpeechCaptureMode();
-      if (preferredMode !== 'none') {
-        setCaptureMode(preferredMode);
-        captureModeRef.current = preferredMode;
+      if (preferredMode === 'unified') {
+        setCaptureMode('unified');
+        captureModeRef.current = 'unified';
         speechCaptureRef.current.resetSession();
-        const started = await startSpeechCapture(preferredMode);
+        const started = await startSpeechCapture('unified');
         if (started) {
           startSpeechTimer();
           return;
         }
-
-        if (preferredMode === 'unified') {
-          const transcriptOnlyStarted = await startSpeechCapture('transcript-only');
-          if (transcriptOnlyStarted) {
-            setCaptureMode('transcript-only');
-            captureModeRef.current = 'transcript-only';
-            onErrorRef.current('Saved audio may be unavailable on this device. Live transcript is still active.');
-            startSpeechTimer();
-            return;
-          }
-        }
+        // Fall through to expo-audio so we always keep a durable file.
+        speechCaptureRef.current.abort();
+        speechCaptureRef.current.resetSession();
       }
 
       setCaptureMode('none');
@@ -396,8 +403,9 @@ export function useCaptureRecorder({
         setPlaybackReady(true);
       } else if (cleaned) {
         onTranscriptFinalizedRef.current?.(cleaned);
-      } else if (!usingSpeechCapture) {
-        cleaned = await maybeTranscribeFromServer('', cleaned);
+        onErrorRef.current('Recording stopped without a saved audio file. Try Record again — audio is required for playback and guest sharing.');
+      } else {
+        onErrorRef.current('Recording stopped, but the audio file could not be saved on this device.');
       }
     } catch {
       onErrorRef.current('Recording stopped, but the audio file could not be saved on this device.');
@@ -413,6 +421,8 @@ export function useCaptureRecorder({
     stopSpeechCapture,
     usingSpeechCapture,
   ]);
+
+  stopRecordingRef.current = stopRecording;
 
   const hydrateFromDraft = useCallback((draft: {
     recordingUri?: string;

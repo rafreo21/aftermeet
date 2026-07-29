@@ -62,9 +62,13 @@ export function shouldUseUnifiedSpeechCapture() {
   return isNativeSpeechTranscriptionAvailable() && supportsNativeSpeechRecording();
 }
 
+/**
+ * Prefer a durable audio file on device. Unified speech (Android) records + STT.
+ * Otherwise use expo-audio (`none`) and server-transcribe after Finish — never
+ * transcript-only as the primary path (that left hosts with no playable file).
+ */
 export function resolveSpeechCaptureMode(): SpeechCaptureMode {
   if (shouldUseUnifiedSpeechCapture()) return 'unified';
-  if (isNativeSpeechTranscriptionAvailable()) return 'transcript-only';
   return 'none';
 }
 

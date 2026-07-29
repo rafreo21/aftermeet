@@ -147,16 +147,20 @@ These phases are the **consumer pilot** scope. Checklist reflects build status; 
 
 ### Phase 1b — Guest recording & cloud retention
 
-Shared recordings are a **temporary cloud bridge** (10 days). Hosts keep local audio + full transcript; guests get summary, actions, play/download while cloud copy exists.
+Shared recordings are a **temporary cloud bridge** (3 days). Hosts keep local audio + full transcript; guests get summary, actions, play/download while cloud copy exists.
 
 - [x] Fix guest recording playback (server resolves storage path; no broken audio player)
 - [x] Merge cloud recording metadata on encounter save (mobile re-sync no longer wipes uploads)
 - [x] Upload recording before save on mobile capture complete
 - [x] Mobile **Approve guest view** (`status: shared`) before sharing link
 - [x] Guest page: play + **Save to my device** + expiry messaging
-- [x] **10-day** cloud retention with daily cleanup cron (`CRON_SECRET` on Vercel)
+- [x] **3-day** cloud retention with daily cleanup cron (`CRON_SECRET` on Vercel)
 - [x] Host **email recording** fallback after cloud expiry (mailto with meeting details + device file share)
 - [x] Web capture upload path (web hosts upload audio for guest sharing on save + review)
+- [x] Mobile capture **Record-only** (import parked for a later build)
+- [x] **1-hour** recording auto-stop
+- [x] Prefer durable on-device audio (no transcript-only primary path); keep local file after guest upload
+- [x] Guest sharing lives under **Follow-up plan** on review; approve uploads local file first when needed
 
 ### Phase 2 — Real AI extraction (Loop 03 / Slice 8)
 

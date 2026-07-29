@@ -46,7 +46,6 @@ import {
   MAX_GATHER_PEOPLE,
 } from '@/features/encounters/gather-people';
 import {
-  deleteLocalRecording,
   removeExpiredLocalRecordings,
   readLocalRecordingMetadata,
   saveLocalRecording,
@@ -613,9 +612,7 @@ export default function CaptureWizardScreen() {
             audioLocation: 'server',
           };
           await updateLocalRecordingSharedUrl(draft.encounterId, uploaded.sharedAudioUrl ?? '');
-          if (draft.retention === 'after_transcription') {
-            await deleteLocalRecording(draft.encounterId);
-          }
+          // Keep local audio for host playback — cloud copy is only the guest bridge.
         } catch {
           // host keeps local playback; guest sharing retried from review screen
         }

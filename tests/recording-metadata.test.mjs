@@ -9,13 +9,13 @@ import {
   mergeRecordingMetadataForSave,
 } from "../lib/recording-metadata.ts";
 
-test("cloud retention is 10 days", () => {
-  assert.equal(CLOUD_RECORDING_RETENTION_DAYS, 10);
+test("cloud retention is 3 days", () => {
+  assert.equal(CLOUD_RECORDING_RETENTION_DAYS, 3);
 });
 
-test("cloudExpiresAt adds 10 days", () => {
+test("cloudExpiresAt adds 3 days", () => {
   const start = new Date("2026-07-01T12:00:00.000Z");
-  assert.equal(cloudExpiresAt(start), "2026-07-11T12:00:00.000Z");
+  assert.equal(cloudExpiresAt(start), "2026-07-04T12:00:00.000Z");
 });
 
 test("isCloudRecordingExpired respects cloudExpiresAt", () => {

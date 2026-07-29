@@ -173,12 +173,15 @@ export default function CaptureDetailScreen() {
     [encounter?.durationSeconds, encounter?.recording?.durationSeconds],
   );
 
-  const hasRecording = Boolean(
+  const expectsAudio = Boolean(
     recordingUri
-    || encounter?.recording
-    || encounter?.durationSeconds
-    || encounter?.transcript.trim(),
+    || encounter?.recording?.storagePath
+    || encounter?.recording?.sharedAudioUrl
+    || encounter?.recording?.localUri
+    || (encounter?.durationSeconds ?? 0) > 0
+    || Boolean(encounter?.recording),
   );
+  const hasTranscript = Boolean(encounter?.transcript.trim());
 
   async function persist(next: EncounterPayload) {
     if (!session?.access_token) return;
@@ -211,22 +214,13 @@ export default function CaptureDetailScreen() {
       return;
     }
 
-    if (uploadStatus === 'failed' && recordingUri) {
-      setApproveHint('Upload the recording first, then approve.');
-      setApproving(true);
-      const uploaded = await syncUpload(
-        session.access_token,
-        encounter.id,
-        recordingUri,
-        encounter.recording?.mimeType,
-      );
-      setApproving(false);
-      if (!uploaded) return;
-    } else if (
+    const needsUpload = Boolean(
       recordingUri?.startsWith('file')
       && !cloudReady
-      && uploadStatus !== 'none'
-    ) {
+      && uploadStatus !== 'uploaded',
+    );
+
+    if (needsUpload && recordingUri) {
       setApproving(true);
       const uploaded = await syncUpload(
         session.access_token,
@@ -236,7 +230,7 @@ export default function CaptureDetailScreen() {
       );
       setApproving(false);
       if (!uploaded) {
-        setApproveHint('Could not upload the recording. You can still approve the written summary, or retry upload.');
+        setApproveHint('Could not upload the recording. Retry upload, or approve the written summary only after upload succeeds.');
         return;
       }
     }
@@ -337,24 +331,26 @@ export default function CaptureDetailScreen() {
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Review the summary, save your edits, and approve the guest view when you are ready.</Body>
+      <Body>Review the summary, save your edits, and share with guests from the follow-up plan when ready.</Body>
 
-      {hasRecording ? (
+      {expectsAudio || hasTranscript ? (
         <View style={styles.recorderCard}>
-          {recordingLoading ? (
-            <View style={styles.recordingLoading}>
-              <ActivityIndicator color={colors.ink} />
-              <Text style={styles.recordingMissing}>Loading recording…</Text>
-            </View>
-          ) : recordingUri ? (
-            <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
-          ) : (
-            <Text style={styles.recordingMissing}>
-              This recording was saved, but the audio file is missing from this device. Re-open the capture from the same phone if you just recorded it.
-            </Text>
-          )}
+          {expectsAudio ? (
+            recordingLoading ? (
+              <View style={styles.recordingLoading}>
+                <ActivityIndicator color={colors.ink} />
+                <Text style={styles.recordingMissing}>Loading recording…</Text>
+              </View>
+            ) : recordingUri ? (
+              <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
+            ) : (
+              <Text style={styles.recordingMissing}>
+                Audio is not on this device yet. If you just recorded here, try Record again — a saved file is required for playback and guest sharing.
+              </Text>
+            )
+          ) : null}
 
-          {encounter.transcript ? (
+          {hasTranscript ? (
             <CollapsibleTranscriptSection
               title="Full transcript"
               hint="Expand to edit the full transcript"
@@ -384,7 +380,31 @@ export default function CaptureDetailScreen() {
       </Panel>
 
       <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Guest sharing</Text>
+        <Text style={styles.sectionTitle}>Follow-up plan</Text>
+        {followUpSummary ? (
+          <>
+            <Text style={styles.label}>Private notes</Text>
+            <Text style={styles.summaryCopy}>
+              {followUpSummary.notes || 'No private notes added.'}
+            </Text>
+            <Text style={styles.label}>Channels</Text>
+            <Text style={styles.summaryCopy}>
+              {followUpSummary.channelLabels.length
+                ? followUpSummary.channelLabels.join(' · ')
+                : 'No follow-up channels selected.'}
+            </Text>
+            {followUpSummary.dueLabel ? (
+              <>
+                <Text style={styles.label}>Due</Text>
+                <Text style={styles.summaryCopy}>{followUpSummary.dueLabel}</Text>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <Text style={styles.summaryCopy}>No follow-up details yet.</Text>
+        )}
+
+        <Text style={[styles.label, styles.guestShareLabel]}>Guest sharing</Text>
         <View style={styles.statusRow}>
           {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
           <Text style={styles.summaryCopy}>
@@ -452,28 +472,6 @@ export default function CaptureDetailScreen() {
         ) : null}
       </Panel>
 
-      {followUpSummary ? (
-        <Panel style={styles.section}>
-          <Text style={styles.sectionTitle}>Follow-up plan</Text>
-          <Text style={styles.label}>Private notes</Text>
-          <Text style={styles.summaryCopy}>
-            {followUpSummary.notes || 'No private notes added.'}
-          </Text>
-          <Text style={styles.label}>Channels</Text>
-          <Text style={styles.summaryCopy}>
-            {followUpSummary.channelLabels.length
-              ? followUpSummary.channelLabels.join(' · ')
-              : 'No follow-up channels selected.'}
-          </Text>
-          {followUpSummary.dueLabel ? (
-            <>
-              <Text style={styles.label}>Due</Text>
-              <Text style={styles.summaryCopy}>{followUpSummary.dueLabel}</Text>
-            </>
-          ) : null}
-        </Panel>
-      ) : null}
-
       <View style={styles.actions}>
         <Button loading={saving} onPress={() => void persist(encounter)}>Save changes</Button>
         <Button variant="ghost" onPress={() => router.replace('/capture')}>Done</Button>
@@ -519,6 +517,7 @@ const styles = StyleSheet.create({
   section: { gap: spacing.x3 },
   sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  guestShareLabel: { marginTop: spacing.x4 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   helperCopy: { color: colors.muted, fontSize: 13, lineHeight: 20 },
   approveHint: { color: colors.danger, fontSize: 13, lineHeight: 20 },
