@@ -327,7 +327,6 @@ const styles = StyleSheet.create({
   modeToggleTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   modeToggleHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   tapPanel: {
-    marginTop: spacing.x4,
     width: '100%',
     padding: spacing.x4,
     borderRadius: radius.large,
