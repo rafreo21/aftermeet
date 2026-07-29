@@ -8,8 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  findNodeHandle,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -29,7 +27,6 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
   const { height: windowHeight } = useWindowDimensions();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
-  const sheetBodyRef = useRef<View>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -61,26 +58,13 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
   );
   const sheetPaddingBottom = Math.max(insets.bottom, spacing.x4);
 
+  // Keep the focused field reachable after the sheet resizes for the keyboard.
+  // Avoid measureLayout — Fabric requires a native host ref and ScrollView is not one.
   useEffect(() => {
     if (!visible || lift <= 0) return;
 
     const timer = setTimeout(() => {
-      const focused = TextInput.State?.currentlyFocusedInput?.();
-      const scrollNode = findNodeHandle(scrollRef.current);
-      if (!focused || !scrollNode || !sheetBodyRef.current) return;
-
-      focused.measureLayout(
-        scrollNode,
-        (_x, y) => {
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, y - spacing.x6),
-            animated: true,
-          });
-        },
-        () => {
-          scrollRef.current?.scrollToEnd({ animated: true });
-        },
-      );
+      scrollRef.current?.scrollToEnd({ animated: true });
     }, Platform.OS === 'ios' ? 60 : 120);
 
     return () => clearTimeout(timer);
@@ -126,7 +110,7 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
               <Text style={styles.close}>Close</Text>
             </Pressable>
           </View>
-          <View ref={sheetBodyRef} style={styles.bodyWrap}>
+          <View style={styles.bodyWrap}>
             <ScrollView
               ref={scrollRef}
               style={styles.scroll}
