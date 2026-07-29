@@ -13,25 +13,12 @@ function anthropicApiKey() {
   return process.env.ANTHROPIC_API_KEY?.trim() || "";
 }
 
-function googleSpeechApiKey() {
-  return process.env.GOOGLE_STT_API_KEY?.trim() || "";
-}
-
 function groqApiKey() {
   return process.env.GROQ_API_KEY?.trim() || "";
 }
 
 function transcriptionProvider() {
   return process.env.AFTERMEET_TRANSCRIPTION_PROVIDER?.trim().toLowerCase() || "";
-}
-
-/** Temporary test switch: AFTERMEET_TRANSCRIPTION_PROVIDER=google routes audio transcription to Google Cloud Speech-to-Text instead of Whisper (sync recognize, audio capped around 1 minute). */
-export function usesGoogleTranscription() {
-  return transcriptionProvider() === "google" && Boolean(googleSpeechApiKey());
-}
-
-export function googleSpeechConfig() {
-  return { apiKey: googleSpeechApiKey() };
 }
 
 /** Temporary test switch: AFTERMEET_TRANSCRIPTION_PROVIDER=groq routes audio transcription to Groq's free-tier, OpenAI-compatible Whisper endpoint instead of OpenAI's. */
@@ -72,7 +59,7 @@ export async function isAiConfigured() {
 }
 
 export async function isTranscriptionConfigured() {
-  if (usesGoogleTranscription() || usesGroqTranscription()) return true;
+  if (usesGroqTranscription()) return true;
   return isAiConfigured();
 }
 
