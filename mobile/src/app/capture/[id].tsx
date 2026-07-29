@@ -37,7 +37,7 @@ import {
 } from '@/lib/recording-metadata';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-type UploadStatus = 'idle' | 'uploading' | 'uploaded' | 'failed';
+type UploadStatus = 'idle' | 'uploading' | 'uploaded' | 'failed' | 'none';
 
 export default function CaptureDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,8 +45,10 @@ export default function CaptureDetailScreen() {
   const [encounter, setEncounter] = useState<EncounterPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadError, setUploadError] = useState('');
+  const [approveHint, setApproveHint] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successSheetOpen, setSuccessSheetOpen] = useState(false);
@@ -73,22 +75,25 @@ export default function CaptureDetailScreen() {
     : '';
 
   const isShared = encounter?.status === 'shared';
-  const cloudUploaded = Boolean(encounter?.recording?.sharedAudioUrl && encounter.recording.storagePath);
+  const cloudReady = Boolean(
+    uploadStatus === 'uploaded'
+    || encounter?.recording?.sharedAudioUrl
+    || encounter?.recording?.storagePath,
+  );
   const cloudAvailableUntil = formatCloudAvailableUntil(encounter?.recording?.cloudExpiresAt);
   const cloudExpired = isCloudRecordingExpired(encounter?.recording?.cloudExpiresAt);
 
-  async function syncUpload(localUri: string, mimeType?: string) {
-    if (!session?.access_token || !encounter) return;
+  async function syncUpload(
+    accessToken: string,
+    encounterId: string,
+    localUri: string,
+    mimeType?: string,
+  ) {
     setUploadStatus('uploading');
     setUploadError('');
     try {
-      const uploaded = await uploadEncounterRecording(
-        session.access_token,
-        encounter.id,
-        localUri,
-        mimeType,
-      );
-      await updateLocalRecordingSharedUrl(encounter.id, uploaded.sharedAudioUrl ?? '');
+      const uploaded = await uploadEncounterRecording(accessToken, encounterId, localUri, mimeType);
+      await updateLocalRecordingSharedUrl(encounterId, uploaded.sharedAudioUrl ?? '');
       setEncounter((current) => current ? {
         ...current,
         recording: {
@@ -109,9 +114,11 @@ export default function CaptureDetailScreen() {
         },
       } : current);
       setUploadStatus('uploaded');
+      return uploaded;
     } catch (caught) {
       setUploadStatus('failed');
       setUploadError(caught instanceof Error ? caught.message : 'Could not upload recording for guests.');
+      return null;
     }
   }
 
@@ -135,10 +142,14 @@ export default function CaptureDetailScreen() {
         setRecordingUri(uri);
         setRecordingLoading(false);
 
-        if (nextEncounter.recording?.sharedAudioUrl && nextEncounter.recording.storagePath) {
+        if (nextEncounter.recording?.sharedAudioUrl || nextEncounter.recording?.storagePath) {
           setUploadStatus('uploaded');
         } else if (uri?.startsWith('file')) {
-          void syncUpload(uri, nextEncounter.recording?.mimeType);
+          void syncUpload(session.access_token!, nextEncounter.id, uri, nextEncounter.recording?.mimeType);
+        } else if (nextEncounter.durationSeconds > 0 || nextEncounter.recording) {
+          setUploadStatus('none');
+        } else {
+          setUploadStatus('none');
         }
       } catch (caught) {
         if (cancelled) return;
@@ -155,7 +166,6 @@ export default function CaptureDetailScreen() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, session?.access_token]);
 
   const recordingDuration = useMemo(
@@ -173,6 +183,7 @@ export default function CaptureDetailScreen() {
   async function persist(next: EncounterPayload) {
     if (!session?.access_token) return;
     setSaving(true);
+    setApproveHint('');
     try {
       await saveEncounter(session.access_token, next);
       setEncounter(next);
@@ -188,39 +199,66 @@ export default function CaptureDetailScreen() {
 
   async function approveAndShare() {
     if (!encounter || !session?.access_token) return;
+    setApproveHint('');
+
     if (!encounter.sharedSummary.trim()) {
-      setErrorMessage('Add a share summary before approving the guest view.');
-      setErrorSheetOpen(true);
+      setApproveHint('Add a short share summary below, then approve.');
       return;
     }
-    const needsCloudUpload = Boolean(recordingUri || encounter.recording || encounter.durationSeconds);
-    if (needsCloudUpload && !cloudUploaded && uploadStatus !== 'uploaded') {
-      setErrorMessage('Upload the recording for guests first, or retry the upload below.');
-      setErrorSheetOpen(true);
+
+    if (uploadStatus === 'uploading') {
+      setApproveHint('Recording is still uploading. Try again in a moment.');
       return;
     }
+
+    if (uploadStatus === 'failed' && recordingUri) {
+      setApproveHint('Upload the recording first, then approve.');
+      setApproving(true);
+      const uploaded = await syncUpload(
+        session.access_token,
+        encounter.id,
+        recordingUri,
+        encounter.recording?.mimeType,
+      );
+      setApproving(false);
+      if (!uploaded) return;
+    } else if (
+      recordingUri?.startsWith('file')
+      && !cloudReady
+      && uploadStatus !== 'none'
+    ) {
+      setApproving(true);
+      const uploaded = await syncUpload(
+        session.access_token,
+        encounter.id,
+        recordingUri,
+        encounter.recording?.mimeType,
+      );
+      setApproving(false);
+      if (!uploaded) {
+        setApproveHint('Could not upload the recording. You can still approve the written summary, or retry upload.');
+        return;
+      }
+    }
+
     const next = { ...encounter, status: 'shared' as const };
-    setSaving(true);
+    setApproving(true);
     try {
       await saveEncounter(session.access_token, next);
       setEncounter(next);
-      setSuccessMessage('Guest view approved. You can share the link when you are ready.');
+      setApproveHint('');
+      setSuccessMessage('Guest view approved.');
       setSuccessSheetOpen(true);
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Could not approve the guest view.');
       setErrorSheetOpen(true);
     } finally {
-      setSaving(false);
+      setApproving(false);
     }
   }
 
   async function shareGuestLink() {
-    if (!guestUrl || !encounter) return;
-    if (!isShared) {
-      setErrorMessage('Approve the guest view first so the link opens the shared summary and recording.');
-      setErrorSheetOpen(true);
-      return;
-    }
+    if (!guestUrl || !encounter || !isShared) return;
     await Share.share({
       title: `${encounter.personName || encounter.title} · AfterMeet`,
       message: guestUrl,
@@ -299,66 +337,7 @@ export default function CaptureDetailScreen() {
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Review the share summary, approve what guests can see, then share the link when you are ready.</Body>
-
-      <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Guest sharing</Text>
-        <View style={styles.statusRow}>
-          {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
-          <Text style={styles.summaryCopy}>
-            {isShared
-              ? 'Approved. Guests can open the shared summary and recording link.'
-              : 'Draft only. Approve before sending the guest link.'}
-          </Text>
-        </View>
-        {cloudUploaded && cloudAvailableUntil && !cloudExpired ? (
-          <Text style={styles.helperCopy}>
-            Cloud copy available to guests until {cloudAvailableUntil} ({CLOUD_RECORDING_RETENTION_DAYS} days). You keep the local recording and full transcript.
-          </Text>
-        ) : null}
-        {cloudExpired ? (
-          <Text style={styles.helperCopy}>
-            The cloud copy expired. Guests still see the shared summary. You can play the recording locally on this phone.
-          </Text>
-        ) : null}
-        {uploadStatus === 'uploading' ? (
-          <View style={styles.statusRow}>
-            <ActivityIndicator color={colors.ink} size="small" />
-            <Text style={styles.helperCopy}>Uploading recording for guest sharing…</Text>
-          </View>
-        ) : null}
-        {uploadStatus === 'failed' ? (
-          <View style={styles.uploadFailed}>
-            <Text style={styles.uploadFailedText}>{uploadError || 'Upload failed.'}</Text>
-            {recordingUri ? (
-              <Button variant="secondary" onPress={() => void syncUpload(recordingUri, encounter.recording?.mimeType)}>
-                <CloudArrowUp size={18} color={colors.ink} />
-                Retry upload
-              </Button>
-            ) : null}
-          </View>
-        ) : null}
-        {!isShared ? (
-          <Button loading={saving} onPress={() => void approveAndShare()}>
-            Approve guest view
-          </Button>
-        ) : null}
-        {showEmailRecording ? (
-          <>
-            <Button variant="secondary" onPress={() => void emailRecordingWithDetails()}>
-              <EnvelopeSimple size={18} color={colors.ink} />
-              Email recording + details
-            </Button>
-            <Button variant="secondary" onPress={() => void shareRecordingFile()}>
-              <ShareNetwork size={18} color={colors.ink} />
-              Send recording file
-            </Button>
-            <Text style={styles.helperCopy}>
-              Use email for a pre-filled message with meeting details, or send the audio file directly through your share sheet.
-            </Text>
-          </>
-        ) : null}
-      </Panel>
+      <Body>Review the summary, save your edits, and approve the guest view when you are ready.</Body>
 
       {hasRecording ? (
         <View style={styles.recorderCard}>
@@ -392,13 +371,85 @@ export default function CaptureDetailScreen() {
         <Text style={styles.label}>Meeting recap</Text>
         <TextInput
           value={encounter.sharedSummary}
-          onChangeText={(value) => setEncounter({ ...encounter, sharedSummary: value })}
+          onChangeText={(value) => {
+            setApproveHint('');
+            setEncounter({ ...encounter, sharedSummary: value });
+          }}
           multiline
           scrollEnabled
           placeholder="What you discussed, decided, and who owns what next…"
           placeholderTextColor={colors.muted}
           style={[styles.input, styles.notesField]}
         />
+      </Panel>
+
+      <Panel style={styles.section}>
+        <Text style={styles.sectionTitle}>Guest sharing</Text>
+        <View style={styles.statusRow}>
+          {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
+          <Text style={styles.summaryCopy}>
+            {isShared
+              ? 'Approved. Guests can open the shared summary and recording.'
+              : 'Still a draft. Approve when the summary looks right.'}
+          </Text>
+        </View>
+        {cloudReady && cloudAvailableUntil && !cloudExpired ? (
+          <Text style={styles.helperCopy}>
+            Cloud recording available until {cloudAvailableUntil} ({CLOUD_RECORDING_RETENTION_DAYS} days).
+          </Text>
+        ) : null}
+        {cloudExpired ? (
+          <Text style={styles.helperCopy}>
+            The cloud recording expired. Guests still see the shared summary. You can play it locally on this phone.
+          </Text>
+        ) : null}
+        {uploadStatus === 'uploading' ? (
+          <View style={styles.statusRow}>
+            <ActivityIndicator color={colors.ink} size="small" />
+            <Text style={styles.helperCopy}>Uploading recording for guest sharing…</Text>
+          </View>
+        ) : null}
+        {uploadStatus === 'failed' ? (
+          <View style={styles.uploadFailed}>
+            <Text style={styles.uploadFailedText}>{uploadError || 'Upload failed.'}</Text>
+            {recordingUri ? (
+              <Button
+                variant="secondary"
+                onPress={() => void syncUpload(
+                  session.access_token!,
+                  encounter.id,
+                  recordingUri,
+                  encounter.recording?.mimeType,
+                )}>
+                <CloudArrowUp size={18} color={colors.ink} />
+                Retry upload
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
+        {approveHint ? <Text style={styles.approveHint}>{approveHint}</Text> : null}
+        {!isShared ? (
+          <Button loading={approving || uploadStatus === 'uploading'} onPress={() => void approveAndShare()}>
+            Approve guest view
+          </Button>
+        ) : guestUrl ? (
+          <Button variant="secondary" onPress={() => void shareGuestLink()}>
+            <ShareNetwork size={18} color={colors.ink} />
+            Share guest link
+          </Button>
+        ) : null}
+        {showEmailRecording ? (
+          <>
+            <Button variant="secondary" onPress={() => void emailRecordingWithDetails()}>
+              <EnvelopeSimple size={18} color={colors.ink} />
+              Email recording + details
+            </Button>
+            <Button variant="secondary" onPress={() => void shareRecordingFile()}>
+              <ShareNetwork size={18} color={colors.ink} />
+              Send recording file
+            </Button>
+          </>
+        ) : null}
       </Panel>
 
       {followUpSummary ? (
@@ -425,12 +476,6 @@ export default function CaptureDetailScreen() {
 
       <View style={styles.actions}>
         <Button loading={saving} onPress={() => void persist(encounter)}>Save changes</Button>
-        {guestUrl ? (
-          <Button variant="secondary" onPress={() => void shareGuestLink()}>
-            <ShareNetwork size={18} color={colors.ink} />
-            Share guest link
-          </Button>
-        ) : null}
         <Button variant="ghost" onPress={() => router.replace('/capture')}>Done</Button>
       </View>
 
@@ -476,6 +521,7 @@ const styles = StyleSheet.create({
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   helperCopy: { color: colors.muted, fontSize: 13, lineHeight: 20 },
+  approveHint: { color: colors.danger, fontSize: 13, lineHeight: 20 },
   uploadFailed: { gap: spacing.x2 },
   uploadFailedText: { color: colors.danger, fontSize: 13, lineHeight: 20 },
   input: {

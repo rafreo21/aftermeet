@@ -1,15 +1,16 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Dimensions,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  findNodeHandle,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -23,11 +24,12 @@ type BottomSheetProps = PropsWithChildren<{
   footer?: ReactNode;
 }>;
 
-const SHEET_MAX_HEIGHT = Dimensions.get('window').height * 0.82;
-
 export function BottomSheet({ visible, title, onClose, footer, children }: BottomSheetProps) {
   const insets = useAppInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const sheetBodyRef = useRef<View>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -50,10 +52,39 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
     };
   }, [visible]);
 
-  const sheetPaddingBottom = Math.max(insets.bottom, spacing.x4) + keyboardHeight;
-  const sheetMaxHeight = keyboardHeight > 0
-    ? Math.min(SHEET_MAX_HEIGHT, Dimensions.get('window').height - keyboardHeight - spacing.x4)
-    : SHEET_MAX_HEIGHT;
+  // Lift the whole sheet above the keyboard. Modal windows on Android do not
+  // resize with softwareKeyboardLayoutMode, so padding must live on this root.
+  const lift = Math.max(0, keyboardHeight);
+  const sheetMaxHeight = Math.min(
+    windowHeight * 0.82,
+    Math.max(280, windowHeight - lift - Math.max(insets.top, spacing.x4) - spacing.x4),
+  );
+  const sheetPaddingBottom = Math.max(insets.bottom, spacing.x4);
+
+  useEffect(() => {
+    if (!visible || lift <= 0) return;
+
+    const timer = setTimeout(() => {
+      const focused = TextInput.State?.currentlyFocusedInput?.();
+      const scrollNode = findNodeHandle(scrollRef.current);
+      if (!focused || !scrollNode || !sheetBodyRef.current) return;
+
+      focused.measureLayout(
+        scrollNode,
+        (_x, y) => {
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, y - spacing.x6),
+            animated: true,
+          });
+        },
+        () => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        },
+      );
+    }, Platform.OS === 'ios' ? 60 : 120);
+
+    return () => clearTimeout(timer);
+  }, [lift, visible]);
 
   return (
     <Modal
@@ -62,40 +93,54 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
       animationType="slide"
       statusBarTranslucent
       onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close sheet" onPress={onClose} style={styles.backdrop} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-          style={styles.keyboard}
-          pointerEvents="box-none">
-          <View
-            style={[
-              styles.sheet,
-              {
-                maxHeight: sheetMaxHeight,
-                paddingBottom: sheetPaddingBottom,
-              },
-            ]}>
-            <View style={styles.handle} />
-            <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
-              <Pressable accessibilityRole="button" onPress={onClose} hitSlop={12}>
-                <Text style={styles.close}>Close</Text>
-              </Pressable>
-            </View>
+      <View style={[styles.root, { paddingBottom: lift }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close sheet"
+          onPress={() => {
+            Keyboard.dismiss();
+            onClose();
+          }}
+          style={styles.backdrop}
+        />
+        <View
+          style={[
+            styles.sheet,
+            {
+              maxHeight: sheetMaxHeight,
+              // Force a bounded height while the keyboard is open so ScrollView can scroll.
+              height: lift > 0 ? sheetMaxHeight : undefined,
+              paddingBottom: sheetPaddingBottom,
+            },
+          ]}>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <Text style={styles.title}>{title}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                Keyboard.dismiss();
+                onClose();
+              }}
+              hitSlop={12}>
+              <Text style={styles.close}>Close</Text>
+            </Pressable>
+          </View>
+          <View ref={sheetBodyRef} style={styles.bodyWrap}>
             <ScrollView
+              ref={scrollRef}
               style={styles.scroll}
               contentContainerStyle={styles.body}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+              keyboardDismissMode="on-drag"
+              nestedScrollEnabled
               showsVerticalScrollIndicator={false}
               bounces={false}>
               {children}
             </ScrollView>
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
           </View>
-        </KeyboardAvoidingView>
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
+        </View>
       </View>
     </Modal>
   );
@@ -108,13 +153,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(22, 51, 0, 0.48)',
   },
   backdrop: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 0,
-  },
-  keyboard: {
-    width: '100%',
-    justifyContent: 'flex-end',
-    zIndex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   sheet: {
     width: '100%',
@@ -145,8 +184,19 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.ink, fontSize: 18, fontWeight: '800' },
   close: { color: colors.muted, fontSize: 14, fontWeight: '700' },
-  scroll: { flexGrow: 0 },
-  body: { gap: spacing.x4, paddingBottom: spacing.x2 },
+  bodyWrap: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  scroll: {
+    flexGrow: 1,
+  },
+  body: {
+    gap: spacing.x4,
+    paddingBottom: spacing.x2,
+    flexGrow: 1,
+  },
   footer: {
     marginTop: spacing.x4,
     paddingTop: spacing.x2,
