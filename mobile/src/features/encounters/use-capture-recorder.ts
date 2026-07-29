@@ -54,6 +54,7 @@ type UseCaptureRecorderOptions = {
 const RECORDING_OPTIONS = {
   ...RecordingPresets.HIGH_QUALITY,
   isMeteringEnabled: true,
+  directory: recordingsDirectory(),
 };
 
 /** Hard cap for on-device capture — auto Finish when reached. */
@@ -275,11 +276,15 @@ export function useCaptureRecorder({
   }, [liveTranscript]);
 
   const startExpoAudioRecording = useCallback(async () => {
+    await ensureRecordingsDirectory();
     await setAudioModeAsync({
       allowsRecording: true,
       playsInSilentMode: true,
     });
-    await audioRecorder.prepareToRecordAsync(RECORDING_OPTIONS);
+    await audioRecorder.prepareToRecordAsync({
+      ...RECORDING_OPTIONS,
+      directory: recordingsDirectory(),
+    });
     audioRecorder.record();
   }, [audioRecorder]);
 
