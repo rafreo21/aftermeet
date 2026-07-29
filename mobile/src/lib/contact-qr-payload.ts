@@ -60,8 +60,37 @@ function appendLabeledUrl(lines: string[], itemIndex: number, label: string, hre
   lines.push(`item${itemIndex}.X-ABLabel:${escapeVcard(label)}`);
 }
 
+export type MobileContactQrOptions = {
+  /** Drop bio, address, and extra social links so the vCard fits in a QR code. */
+  compact?: boolean;
+  /** Name, primary contact methods, and AfterMeet card URL only. */
+  minimal?: boolean;
+};
+
+function shouldIncludeMethod(method: ContactMethod, options: MobileContactQrOptions) {
+  if (options.minimal) {
+    return method.type === 'email' || method.type === 'phone';
+  }
+  if (options.compact) {
+    return method.type !== 'address';
+  }
+  return true;
+}
+
+function shouldIncludeLabeledUrl(method: ContactMethod, options: MobileContactQrOptions) {
+  if (options.minimal) return false;
+  if (options.compact) {
+    return method.type === 'linkedin' || method.type === 'website' || method.type === 'link';
+  }
+  return true;
+}
+
 /** Offline-capable QR payload with contact details and the card URL. */
-export function buildMobileContactQrPayload(card: MobileCard, cardUrl: string): string {
+export function buildMobileContactQrPayload(
+  card: MobileCard,
+  cardUrl: string,
+  options: MobileContactQrOptions = {},
+): string {
   const visible = cardWithCompanyVisibility(card);
   const showCompany = showsCompanyDetails(visible);
   const { firstName, lastName } = splitFullName(visible.name);
@@ -80,18 +109,27 @@ export function buildMobileContactQrPayload(card: MobileCard, cardUrl: string): 
   let primaryWebsite: string | null = null;
   let itemIndex = 1;
 
+  let emailAdded = false;
+  let phoneAdded = false;
+
   for (const method of visible.methods) {
     const value = method.value.trim();
-    if (!value) continue;
+    if (!value || !shouldIncludeMethod(method, options)) continue;
 
     if (method.type === 'email') {
+      if (options.minimal && emailAdded) continue;
       lines.push(`EMAIL;TYPE=INTERNET:${escapeVcard(value)}`);
+      emailAdded = true;
       continue;
     }
 
     if (method.type === 'phone') {
+      if (options.minimal && phoneAdded) continue;
       const tel = normalizeTel(value);
-      if (tel.length >= 5) lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
+      if (tel.length >= 5) {
+        lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
+        phoneAdded = true;
+      }
       continue;
     }
 
@@ -99,7 +137,9 @@ export function buildMobileContactQrPayload(card: MobileCard, cardUrl: string): 
       const tel = normalizeTel(value);
       if (tel.length >= 5) lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
       const href = contactMethodHref(method);
-      if (href?.startsWith('http')) labeledUrls.push({ label: methodLabel(method), href });
+      if (href?.startsWith('http') && shouldIncludeLabeledUrl(method, options)) {
+        labeledUrls.push({ label: methodLabel(method), href });
+      }
       continue;
     }
 
@@ -109,7 +149,7 @@ export function buildMobileContactQrPayload(card: MobileCard, cardUrl: string): 
     }
 
     const href = contactMethodHref(method);
-    if (!href?.startsWith('http')) continue;
+    if (!href?.startsWith('http') || !shouldIncludeLabeledUrl(method, options)) continue;
 
     if ((method.type === 'website' || method.type === 'link') && !primaryWebsite) {
       primaryWebsite = href;
@@ -120,6 +160,10 @@ export function buildMobileContactQrPayload(card: MobileCard, cardUrl: string): 
 
   if (primaryWebsite) {
     lines.push(`URL:${escapeVcard(primaryWebsite)}`);
+  }
+
+  if (options.compact) {
+    labeledUrls.splice(2);
   }
 
   for (const entry of labeledUrls) {
@@ -137,8 +181,16 @@ export function buildMobileContactQrPayload(card: MobileCard, cardUrl: string): 
     }
   }
 
-  const noteParts = [visible.bio.trim(), cardPage ? `AfterMeet card: ${cardPage}` : ''].filter(Boolean);
-  lines.push(`NOTE:${escapeVcard(noteParts.join('\n\n'))}`);
+  const noteParts: string[] = [];
+  if (!options.minimal && !options.compact && visible.bio.trim()) {
+    noteParts.push(visible.bio.trim());
+  }
+  if (!options.minimal && !options.compact && cardPage) {
+    noteParts.push(`AfterMeet card: ${cardPage}`);
+  }
+  if (noteParts.length) {
+    lines.push(`NOTE:${escapeVcard(noteParts.join('\n\n'))}`);
+  }
   lines.push('END:VCARD');
 
   return lines.join('\r\n');

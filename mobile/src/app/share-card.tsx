@@ -24,6 +24,7 @@ import {
   addGoogleWalletPass,
   fetchWalletAvailability,
 } from '@/features/card/wallet-actions';
+import { readQuickShareQrMode, writeQuickShareQrMode } from '@/lib/quick-share-preferences';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function ShareCardScreen() {
@@ -47,7 +48,13 @@ export default function ShareCardScreen() {
   const onlineQrEnabled = qrMode === 'online';
 
   const setOnlineQrEnabled = useCallback((enabled: boolean) => {
-    setQrMode(enabled ? 'online' : 'offline');
+    const mode: QrShareMode = enabled ? 'online' : 'offline';
+    setQrMode(mode);
+    void writeQuickShareQrMode(mode);
+  }, []);
+
+  useEffect(() => {
+    void readQuickShareQrMode().then(setQrMode);
   }, []);
 
   useEffect(() => {

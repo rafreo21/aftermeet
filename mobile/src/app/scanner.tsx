@@ -44,7 +44,7 @@ export default function ScannerScreen() {
         router.replace(`/connections/${encodeURIComponent(connection.id)}`);
         return;
       }
-      setError('This card could not be added to your connections.');
+      setError('This card could not be added. Ask them to publish their card, then try again.');
       setLocked(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not open this card.');
@@ -65,7 +65,7 @@ export default function ScannerScreen() {
       return;
     }
     if (/^BEGIN:VCARD/i.test(result.data.trim())) {
-      setError('This contact card is not linked to an AfterMeet profile.');
+      setError('Offline contact QR with no AfterMeet link. Save it in your phone contacts, or ask them to turn on Online contact QR.');
       setLocked(false);
       return;
     }
@@ -141,6 +141,9 @@ export default function ScannerScreen() {
           </View>
         </View>
         {linking ? <ActivityIndicator color={colors.white} style={styles.spinner} /> : null}
+        {!linking && !error ? (
+          <Text style={styles.helper}>Adds AfterMeet cards to your network. Visitors should use their phone camera instead.</Text>
+        ) : null}
         {error ? (
           <View style={styles.errorWrap}>
             <Text style={styles.errorText}>{error}</Text>
@@ -180,6 +183,14 @@ const styles = StyleSheet.create({
   cornerBL: { ...corner, bottom: 0, left: 0, borderBottomWidth: 5, borderLeftWidth: 5, borderBottomLeftRadius: 12 },
   cornerBR: { ...corner, bottom: 0, right: 0, borderBottomWidth: 5, borderRightWidth: 5, borderBottomRightRadius: 12 },
   spinner: { marginTop: spacing.x3 },
+  helper: {
+    marginTop: spacing.x4,
+    color: colors.white,
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.92,
+  },
   errorWrap: { marginTop: spacing.x4, gap: spacing.x2, alignItems: 'center' },
   errorText: { color: colors.white, textAlign: 'center', fontWeight: '600' },
   permission: { flex: 1, paddingHorizontal: spacing.x6, justifyContent: 'center', gap: spacing.x4, backgroundColor: colors.canvas },

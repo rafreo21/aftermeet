@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import type { MobileCard } from '@/features/card/types';
-import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
+import { buildOfflineQrPayload } from '@/lib/offline-qr-payload';
 import { QR_LOGO } from '@/lib/widget-qr';
 import { colors } from '@/theme/tokens';
 
@@ -26,12 +26,14 @@ type BrandedQrCodeProps = {
 function resolvePayload({ value, card, cardUrl, mode = 'online' }: BrandedQrCodeProps) {
   if (mode === 'offline') {
     if (card && cardUrl?.trim()) {
-      return buildMobileContactQrPayload(card, cardUrl.trim());
+      return buildOfflineQrPayload(card, cardUrl.trim());
     }
-    return value?.trim() ?? '';
+    const fallback = value?.trim() ?? '';
+    return fallback ? { payload: fallback, tier: 'minimal' as const, ecl: 'M' as const } : null;
   }
 
-  return cardUrl?.trim() || value?.trim() || '';
+  const payload = cardUrl?.trim() || value?.trim() || '';
+  return payload ? { payload, tier: 'full' as const, ecl: 'H' as const } : null;
 }
 
 export function BrandedQrCode({
@@ -44,7 +46,7 @@ export function BrandedQrCode({
   color = colors.ink,
   backgroundColor = colors.white,
 }: BrandedQrCodeProps) {
-  const payload = useMemo(
+  const resolved = useMemo(
     () => resolvePayload({ value, card, cardUrl, mode }),
     [value, card, cardUrl, mode],
   );
@@ -52,9 +54,9 @@ export function BrandedQrCode({
 
   useEffect(() => {
     setRenderError('');
-  }, [payload]);
+  }, [resolved?.payload, resolved?.ecl]);
 
-  if (!payload) {
+  if (!resolved?.payload) {
     return (
       <View style={[styles.frame, { width: size, height: size }, style]}>
         <Text style={styles.placeholder}>QR</Text>
@@ -76,12 +78,12 @@ export function BrandedQrCode({
   return (
     <View style={[styles.frame, { width: size, height: size }, style]}>
       <QRCode
-        key={payload}
-        value={payload}
+        key={`${resolved.payload}:${resolved.ecl}`}
+        value={resolved.payload}
         size={size}
         color={color}
         backgroundColor={backgroundColor}
-        ecl="H"
+        ecl={resolved.ecl}
         onError={(error) => {
           setRenderError(error instanceof Error ? error.message : 'Could not render this QR code.');
         }}
