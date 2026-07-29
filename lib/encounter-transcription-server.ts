@@ -1,10 +1,25 @@
 import "server-only";
 
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
+import ffmpegPath from "ffmpeg-static";
 import { transcribe } from "ai";
 
-import { isAiConfigured, prepareAiAuth, transcriptionModel, usesDirectOpenAi } from "./ai-provider";
+import {
+  googleSpeechConfig,
+  isTranscriptionConfigured,
+  prepareAiAuth,
+  transcriptionModel,
+  usesDirectOpenAi,
+  usesGoogleTranscription,
+} from "./ai-provider";
 import { cleanLiveTranscript } from "./transcript-cleanup";
 
+const execFileAsync = promisify(execFile);
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 function guessMimeFromFileName(fileName: string) {
@@ -56,6 +71,74 @@ async function transcribeWithOpenAiWhisper(
   return payload?.text?.trim() || "";
 }
 
+function extensionForMime(mimeType: string, fileName: string) {
+  const lower = mimeType.toLowerCase();
+  if (lower.includes("wav")) return "wav";
+  if (lower.includes("mpeg") || lower.includes("mp3")) return "mp3";
+  if (lower.includes("aac")) return "aac";
+  if (lower.includes("caf")) return "caf";
+  if (lower.includes("flac")) return "flac";
+  if (lower.includes("webm")) return "webm";
+  if (lower.includes("ogg")) return "ogg";
+  if (lower.includes("mp4")) return "m4a";
+  const match = /\.([a-z0-9]+)$/i.exec(fileName);
+  return match ? match[1].toLowerCase() : "m4a";
+}
+
+/** Google's recognize API needs a raw encoding it lists explicitly — M4A/AAC isn't one, so transcode to mono 16kHz FLAC first. */
+async function transcodeToFlac(audio: Uint8Array, sourceExtension: string) {
+  if (!ffmpegPath) throw new Error("ffmpeg binary is not available for audio conversion.");
+  const dir = await mkdtemp(join(tmpdir(), "aftermeet-stt-"));
+  const inputPath = join(dir, `input.${sourceExtension}`);
+  const outputPath = join(dir, "output.flac");
+  try {
+    await writeFile(inputPath, audio);
+    await execFileAsync(ffmpegPath, ["-y", "-i", inputPath, "-ac", "1", "-ar", "16000", "-c:a", "flac", outputPath]);
+    return await readFile(outputPath);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Google Cloud Speech-to-Text synchronous recognize — Google caps sync requests at ~1 minute of audio; longer recordings need the async long-running-recognize flow, not implemented here. */
+async function transcribeWithGoogleSpeech(
+  audio: Uint8Array,
+  options: { language?: string; mimeType: string; fileName: string },
+) {
+  const { apiKey } = googleSpeechConfig();
+  if (!apiKey) throw new Error("GOOGLE_STT_API_KEY is not configured.");
+
+  const flac = await transcodeToFlac(audio, extensionForMime(options.mimeType, options.fileName));
+
+  const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      config: {
+        encoding: "FLAC",
+        sampleRateHertz: 16000,
+        languageCode: options.language || "en-US",
+        enableAutomaticPunctuation: true,
+      },
+      audio: { content: flac.toString("base64") },
+    }),
+  });
+
+  const payload = await response.json().catch(() => null) as {
+    results?: Array<{ alternatives?: Array<{ transcript?: string }> }>;
+    error?: { message?: string };
+  } | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Google Speech-to-Text failed (${response.status}).`);
+  }
+
+  return (payload?.results ?? [])
+    .map((result) => result.alternatives?.[0]?.transcript?.trim() || "")
+    .filter(Boolean)
+    .join(" ");
+}
+
 export async function transcribeEncounterAudio(
   audio: Uint8Array,
   options?: { language?: string; mimeType?: string; fileName?: string },
@@ -72,7 +155,7 @@ export async function transcribeEncounterAudio(
     throw new Error("Recording is larger than 25 MB. Choose a shorter or compressed recording.");
   }
 
-  if (!(await isAiConfigured())) {
+  if (!(await isTranscriptionConfigured())) {
     throw new Error("Server transcription is not configured yet. Add OPENAI_API_KEY, or paste a transcript manually.");
   }
 
@@ -82,13 +165,15 @@ export async function transcribeEncounterAudio(
   const { fileName, mimeType } = resolveMimeAndName(options);
 
   try {
-    const rawText = usesDirectOpenAi()
-      ? await transcribeWithOpenAiWhisper(audio, { language, mimeType, fileName })
-      : (await transcribe({
-          model: transcriptionModel(),
-          audio,
-          providerOptions: language ? { openai: { language } } : undefined,
-        })).text.trim();
+    const rawText = usesGoogleTranscription()
+      ? await transcribeWithGoogleSpeech(audio, { language, mimeType, fileName })
+      : usesDirectOpenAi()
+        ? await transcribeWithOpenAiWhisper(audio, { language, mimeType, fileName })
+        : (await transcribe({
+            model: transcriptionModel(),
+            audio,
+            providerOptions: language ? { openai: { language } } : undefined,
+          })).text.trim();
 
     const transcript = cleanLiveTranscript(rawText);
     if (!transcript) {

@@ -3,7 +3,7 @@ import "server-only";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
-import { isAiConfigured, languageModel, prepareAiAuth } from "./ai-provider";
+import { isAiConfigured, languageModel, prepareAiAuth, textTemperature } from "./ai-provider";
 import { capturedProfileFullName } from "./contacts.ts";
 import { buildLinkedInCaptureContext } from "./linkedin-page-capture.ts";
 import type { CapturedProfile } from "./page-profile-capture";
@@ -85,7 +85,7 @@ export async function enrichCapturedProfile(profile: CapturedProfile, pageText: 
       "Visible page text:",
       pageText.slice(0, 8000),
     ].join("\n"),
-    temperature: 0.1,
+    temperature: textTemperature(0.1),
   });
 
   return {

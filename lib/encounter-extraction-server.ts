@@ -8,7 +8,7 @@ import {
   type EncounterExtractionDraft,
   type ExtractionOwnerContext,
 } from "./encounter-extraction";
-import { isAiConfigured, languageModel, prepareAiAuth } from "./ai-provider";
+import { isAiConfigured, languageModel, prepareAiAuth, textTemperature } from "./ai-provider";
 import { normalizeTranscriptForExtraction } from "./transcript-cleanup";
 
 const extractionSchema = z.object({
@@ -166,7 +166,7 @@ export async function extractEncounterDraft(
       output: Output.object({ schema: extractionSchema }),
       system: buildExtractionSystemPrompt(ownerContext),
       prompt: buildExtractionPrompt(normalizedTranscript, personName, ownerContext, personHints),
-      temperature: 0.2,
+      temperature: textTemperature(0.2),
     });
 
     const output = result.output;

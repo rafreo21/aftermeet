@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["sharp", "@resvg/resvg-js"],
+  serverExternalPackages: ["sharp", "@resvg/resvg-js", "ffmpeg-static"],
   outputFileTracingIncludes: {
     "/api/mobile/share-assets/[slug]": [
       "./public/aftermeet-mark.png",
@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
       "./lib/aftermeet-logo-base64.ts",
       "./lib/share-asset-fonts-data.ts",
     ],
+    "/api/encounters/transcribe": ["./node_modules/ffmpeg-static/ffmpeg"],
   },
 };
 

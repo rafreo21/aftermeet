@@ -7,7 +7,7 @@ import { buildHeuristicOutboundDraft, type OutboundDraftContent } from "./outbou
 import type { ActionLinkContext } from "./action-links";
 import type { Encounter, EncounterAction } from "./encounters";
 import { isAiExtractionConfigured } from "./encounter-extraction-server";
-import { languageModel, prepareAiAuth } from "./ai-provider";
+import { languageModel, prepareAiAuth, textTemperature } from "./ai-provider";
 
 const draftSchema = z.object({
   subject: z.string().describe("Email subject line, or empty for LinkedIn-style messages"),
@@ -50,7 +50,7 @@ export async function generateOutboundDraft(input: {
         `Private notes: ${input.encounter.privateNotes}`,
         `Transcript excerpt: ${input.encounter.transcript.slice(0, 1200)}`,
       ].join("\n"),
-      temperature: 0.4,
+      temperature: textTemperature(0.4),
     });
 
     return {
