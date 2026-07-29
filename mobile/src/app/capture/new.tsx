@@ -249,7 +249,7 @@ export default function CaptureWizardScreen() {
 
   const transcribeFromServer = useCallback(async (uri: string, meta?: ImportRecordingMeta) => {
     if (!session?.access_token) {
-      throw new Error('Sign in to transcribe imported recordings.');
+      throw new Error('Sign in to auto-transcribe this recording, or paste what was said.');
     }
     const fileName = meta?.fileName || draftRef.current.importFileName || undefined;
     const mimeType = meta?.mimeType || draftRef.current.importMimeType || undefined;

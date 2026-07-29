@@ -58,19 +58,23 @@ export function supportsNativeSpeechRecording() {
   return Boolean(speechModule?.supportsRecording?.());
 }
 
-/** Live STT + persisted audio via speech module (when native recording is supported). */
+/** Live STT + best-effort persisted audio via the speech module. */
 export function shouldUseUnifiedSpeechCapture() {
   return isNativeSpeechTranscriptionAvailable() && supportsNativeSpeechRecording();
 }
 
 /**
- * Only use unified when the speech module can persist audio.
- * transcript-only gives live words but no file on Finish — never use it for Record.
- * Otherwise expo-audio (`none`) saves the file; transcript comes from the server after Finish.
+ * Prefer on-device live transcript whenever speech recognition exists.
+ * Always request persisted audio (unified) — some devices still only deliver
+ * live words; Finish then keeps the transcript and soft-warns if no file.
  */
 export function resolveSpeechCaptureMode(): SpeechCaptureMode {
-  if (shouldUseUnifiedSpeechCapture()) return 'unified';
+  if (isNativeSpeechTranscriptionAvailable()) return 'unified';
   return 'none';
+}
+
+export function canUseLiveSpeechCapture() {
+  return isNativeSpeechTranscriptionAvailable();
 }
 
 function joinRecordingPath(directory: string, fileName: string) {
