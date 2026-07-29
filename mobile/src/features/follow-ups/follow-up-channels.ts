@@ -19,8 +19,6 @@ export const FOLLOW_UP_CHANNELS: Array<{ id: FollowUpChannel; label: string }> =
   { id: 'tiktok', label: 'TikTok' },
 ];
 
-export const MAX_FOLLOW_UP_CHANNELS = 2;
-
 export function defaultFollowUpTitle(channel: FollowUpChannel) {
   switch (channel) {
     case 'email': return 'Follow up by email';
@@ -68,7 +66,6 @@ export function normalizeFollowUpChannels(values: string[] | undefined): FollowU
     if (!isFollowUpChannel(value)) continue;
     if (next.includes(value)) continue;
     next.push(value);
-    if (next.length >= MAX_FOLLOW_UP_CHANNELS) break;
   }
   return next;
 }
@@ -79,7 +76,6 @@ export function followUpChannelsFromEncounter(actions: Array<{ channel: string }
     if (!isFollowUpChannel(action.channel)) continue;
     if (channels.includes(action.channel)) continue;
     channels.push(action.channel);
-    if (channels.length >= MAX_FOLLOW_UP_CHANNELS) break;
   }
   return channels;
 }
@@ -91,9 +87,6 @@ export function followUpDueFromEncounter(actions: Array<{ dueAt?: string }>) {
 export function toggleFollowUpChannel(current: FollowUpChannel[], channel: FollowUpChannel): FollowUpChannel[] {
   if (current.includes(channel)) {
     return current.filter((entry) => entry !== channel);
-  }
-  if (current.length >= MAX_FOLLOW_UP_CHANNELS) {
-    return [current[0], channel];
   }
   return [...current, channel];
 }

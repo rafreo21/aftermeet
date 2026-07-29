@@ -1,7 +1,8 @@
+import { File } from 'expo-file-system';
+
 import {
   MAX_BASE64_TRANSCRIBE_BYTES,
   guessRecordingFileName,
-  guessRecordingMimeType,
   prepareAudioFile,
   prepareAudioUpload,
   type PreparedAudioUpload,
@@ -213,7 +214,7 @@ export function buildEncounterPayload(input: {
     for (const assignee of assignees) {
       if (!assignee.name.trim()) continue;
       const groupId = createId();
-      for (const channel of channels.slice(0, 2)) {
+      for (const channel of channels) {
         actions.push({
           id: createId(),
           title: displayFollowUpTitle(sanitizedFollowUpTitle, channel),
@@ -335,11 +336,7 @@ async function transcribeViaMultipart(
   language?: string,
 ) {
   const formData = new FormData();
-  formData.append('audio', {
-    uri: prepared.uri,
-    name: prepared.fileName,
-    type: prepared.mimeType,
-  } as unknown as Blob);
+  formData.append('audio', new File(prepared.uri) as unknown as Blob, prepared.fileName);
   formData.append('fileName', prepared.fileName);
   formData.append('mimeType', prepared.mimeType);
   if (language?.trim()) formData.append('lang', language.trim());
@@ -406,14 +403,9 @@ export async function uploadEncounterRecording(
   accessToken: string,
   encounterId: string,
   uri: string,
-  mimeType?: string,
 ) {
   const formData = new FormData();
-  formData.append('audio', {
-    uri,
-    name: guessRecordingFileName(uri),
-    type: mimeType || guessRecordingMimeType(uri),
-  } as unknown as Blob);
+  formData.append('audio', new File(uri) as unknown as Blob, guessRecordingFileName(uri));
 
   const response = await mobileFetch(`/api/encounters/${encounterId}/recording`, accessToken, {
     method: 'POST',

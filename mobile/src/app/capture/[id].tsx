@@ -92,7 +92,7 @@ export default function CaptureDetailScreen() {
     setUploadStatus('uploading');
     setUploadError('');
     try {
-      const uploaded = await uploadEncounterRecording(accessToken, encounterId, localUri, mimeType);
+      const uploaded = await uploadEncounterRecording(accessToken, encounterId, localUri);
       await updateLocalRecordingSharedUrl(encounterId, uploaded.sharedAudioUrl ?? '');
       setEncounter((current) => current ? {
         ...current,
@@ -403,8 +403,10 @@ export default function CaptureDetailScreen() {
         ) : (
           <Text style={styles.summaryCopy}>No follow-up details yet.</Text>
         )}
+      </Panel>
 
-        <Text style={[styles.label, styles.guestShareLabel]}>Guest sharing</Text>
+      <Panel style={styles.section}>
+        <Text style={styles.sectionTitle}>Guest sharing</Text>
         <View style={styles.statusRow}>
           {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
           <Text style={styles.summaryCopy}>
@@ -460,14 +462,17 @@ export default function CaptureDetailScreen() {
         ) : null}
         {showEmailRecording ? (
           <>
-            <Button variant="secondary" onPress={() => void emailRecordingWithDetails()}>
-              <EnvelopeSimple size={18} color={colors.ink} />
-              Email recording + details
-            </Button>
-            <Button variant="secondary" onPress={() => void shareRecordingFile()}>
-              <ShareNetwork size={18} color={colors.ink} />
-              Send recording file
-            </Button>
+            <Text style={[styles.label, styles.guestShareLabel]}>Or share the recording another way</Text>
+            <View style={styles.secondaryActionsRow}>
+              <Button variant="ghost" style={styles.secondaryActionsRowItem} onPress={() => void emailRecordingWithDetails()}>
+                <EnvelopeSimple size={18} color={colors.ink} />
+                Email
+              </Button>
+              <Button variant="ghost" style={styles.secondaryActionsRowItem} onPress={() => void shareRecordingFile()}>
+                <ShareNetwork size={18} color={colors.ink} />
+                Send file
+              </Button>
+            </View>
           </>
         ) : null}
       </Panel>
@@ -523,6 +528,8 @@ const styles = StyleSheet.create({
   approveHint: { color: colors.danger, fontSize: 13, lineHeight: 20 },
   uploadFailed: { gap: spacing.x2 },
   uploadFailedText: { color: colors.danger, fontSize: 13, lineHeight: 20 },
+  secondaryActionsRow: { flexDirection: 'row', gap: spacing.x2 },
+  secondaryActionsRowItem: { flex: 1 },
   input: {
     minHeight: 48,
     paddingHorizontal: spacing.x4,

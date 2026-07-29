@@ -64,7 +64,6 @@ import {
 import { fetchEncounterRecords } from '@/features/follow-ups/follow-up-api';
 import {
   FOLLOW_UP_CHANNELS,
-  MAX_FOLLOW_UP_CHANNELS,
   toggleFollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
 import { useCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/use-capture-recorder';
@@ -609,7 +608,6 @@ export default function CaptureWizardScreen() {
             token,
             draft.encounterId,
             recording.localUri,
-            recording.mimeType,
           );
           recording = {
             ...recording,
@@ -745,7 +743,7 @@ export default function CaptureWizardScreen() {
                 style={[styles.input, styles.textarea]}
               />
               <Text style={styles.label}>Follow-up channels</Text>
-              <Text style={styles.fieldHint}>Pick one or two. Each channel becomes its own action.</Text>
+              <Text style={styles.fieldHint}>Pick as many as you'd like. Each channel becomes its own action.</Text>
               <View style={styles.channelRow}>
                 {FOLLOW_UP_CHANNELS.map((channel) => {
                   const selected = draft.followUpChannels.includes(channel.id);
@@ -769,9 +767,6 @@ export default function CaptureWizardScreen() {
                   );
                 })}
               </View>
-              {draft.followUpChannels.length >= MAX_FOLLOW_UP_CHANNELS ? (
-                <Text style={styles.fieldHint}>Two channels selected. Tap one to swap it.</Text>
-              ) : null}
               <FollowUpDuePicker
                 dueAt={draft.dueAt}
                 onChange={(dueAt) => updateDraft({ dueAt })}

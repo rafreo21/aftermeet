@@ -174,7 +174,7 @@ Shared recordings are a **temporary cloud bridge** (3 days). Hosts keep local au
 - [x] Mobile capture **Record-only** (import parked for a later build)
 - [x] **1-hour** recording auto-stop
 - [x] Prefer durable on-device audio (no transcript-only primary path); keep local file after guest upload
-- [x] Guest sharing lives under **Follow-up plan** on review; approve uploads local file first when needed
+- [x] Guest sharing is its own card on review, separate from Follow-up plan; approve uploads local file first when needed
 
 ### Phase 2 — Real AI extraction (Loop 03 / Slice 8)
 
