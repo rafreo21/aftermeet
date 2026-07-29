@@ -48,6 +48,43 @@ test("buildCardVcard normalizes phone numbers for contact apps", () => {
   assert.match(body, /TEL;TYPE=CELL,VOICE:\+447473177720/);
 });
 
+test("buildCardVcard keeps custom labels on email, phone, and link fields", () => {
+  const { body } = buildCardVcard({
+    fullName: "Raphael Okojie",
+    cardUrl: "https://aftermeet.app/c/card",
+    methods: [
+      { method_type: "email", value: "rafreo21@gmail.com", label: "Personal" },
+      { method_type: "phone", value: "+447473177720", label: "Mobile" },
+      { method_type: "link", value: "https://rafreo.webflow.io", label: "View my work" },
+      { method_type: "paypal", value: "@rafreo", label: "Pay with PayPal" },
+    ],
+  });
+
+  assert.match(body, /item1\.EMAIL;TYPE=INTERNET:rafreo21@gmail.com/);
+  assert.match(body, /item1\.X-ABLabel:Personal/);
+  assert.match(body, /item2\.TEL;TYPE=CELL,VOICE:\+447473177720/);
+  assert.match(body, /item2\.X-ABLabel:Mobile/);
+  assert.match(body, /item3\.URL:https:\/\/rafreo\.webflow\.io/);
+  assert.match(body, /item3\.X-ABLabel:View my work/);
+  assert.match(body, /item4\.URL:https:\/\/paypal\.me\/rafreo/);
+  assert.match(body, /item4\.X-ABLabel:Pay with PayPal/);
+});
+
+test("buildCardVcard exports skype and fallback note values", () => {
+  const { body } = buildCardVcard({
+    fullName: "Alex Morgan",
+    cardUrl: "https://aftermeet.app/c/alex",
+    methods: [
+      { method_type: "skype", value: "alex.morgan", label: "Skype" },
+      { method_type: "discord", value: "alex#1234", label: "Discord" },
+    ],
+  });
+
+  assert.match(body, /item1\.URL:skype:alex\.morgan\?chat/);
+  assert.match(body, /item1\.X-ABLabel:Skype/);
+  assert.match(body, /NOTE:.*Discord: alex#1234/s);
+});
+
 test("buildCardVcard embeds profile and company logo photos", () => {
   const { body } = buildCardVcard({
     fullName: "Raphael Okojie",

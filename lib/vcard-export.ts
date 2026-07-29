@@ -91,6 +91,194 @@ function appendLabeledUrl(lines: string[], itemIndex: number, label: string, hre
   lines.push(`item${itemIndex}.X-ABLabel:${escapeVcard(label)}`);
 }
 
+function defaultMethodLabel(methodType: string) {
+  return METHOD_LABELS[methodType] || methodType;
+}
+
+function hasCustomMethodLabel(method: CardVcardMethod) {
+  const custom = method.label?.trim();
+  if (!custom) return false;
+  const defaults = new Set([
+    defaultMethodLabel(method.method_type),
+    method.method_type,
+  ].map((entry) => entry.toLowerCase()));
+  return !defaults.has(custom.toLowerCase());
+}
+
+function appendLabeledItemField(
+  lines: string[],
+  itemIndex: number,
+  field: "EMAIL" | "TEL" | "URL",
+  fieldParams: string,
+  value: string,
+  label: string,
+) {
+  lines.push(`item${itemIndex}.${field}${fieldParams}:${escapeVcard(value)}`);
+  lines.push(`item${itemIndex}.X-ABLabel:${escapeVcard(label)}`);
+}
+
+export type VcardMethodAppendOptions = {
+  /** Drop website methods when company details are hidden. */
+  showCompanyDetails?: boolean;
+  /** Name, one email, and one phone only. */
+  minimal?: boolean;
+  /** Drop address and trim labeled URLs for QR size. */
+  compact?: boolean;
+  /** Cap labeled URL count after primary website handling (offline QR). */
+  maxLabeledUrls?: number;
+};
+
+function shouldIncludeVcardMethod(method: CardVcardMethod, options: VcardMethodAppendOptions) {
+  if (options.minimal) {
+    return method.method_type === "email" || method.method_type === "phone";
+  }
+  if (options.compact && method.method_type === "address") {
+    return false;
+  }
+  if (!(options.showCompanyDetails ?? true) && method.method_type === "website") {
+    return false;
+  }
+  return true;
+}
+
+function shouldIncludeVcardLabeledUrl(method: CardVcardMethod, options: VcardMethodAppendOptions) {
+  if (options.minimal) return false;
+  if (options.compact) {
+    return method.method_type === "linkedin"
+      || method.method_type === "website"
+      || method.method_type === "link";
+  }
+  return true;
+}
+
+/** Append every card method to vCard lines; nothing with a value is silently dropped. */
+export function appendVcardMethods(
+  lines: string[],
+  methods: CardVcardMethod[],
+  options: VcardMethodAppendOptions = {},
+): { itemIndex: number; noteExtras: string[] } {
+  const labeledUrls: Array<{ label: string; href: string }> = [];
+  const noteExtras: string[] = [];
+  let primaryWebsite: string | null = null;
+  let itemIndex = 1;
+  let emailCount = 0;
+  let phoneCount = 0;
+  const phoneNumbers = new Set<string>();
+
+  for (const method of methods) {
+    const value = method.value.trim();
+    if (!value || !shouldIncludeVcardMethod(method, options)) continue;
+
+    const label = methodLabel(method);
+    const href = contactMethodHref({ type: method.method_type, value });
+    const customLabel = hasCustomMethodLabel(method);
+
+    if (method.method_type === "email") {
+      if (options.minimal && emailCount > 0) continue;
+      if (customLabel || emailCount > 0) {
+        appendLabeledItemField(lines, itemIndex, "EMAIL", ";TYPE=INTERNET", value, label);
+        itemIndex += 1;
+      } else {
+        lines.push(`EMAIL;TYPE=INTERNET:${escapeVcard(value)}`);
+      }
+      emailCount += 1;
+      continue;
+    }
+
+    if (method.method_type === "phone") {
+      const tel = normalizeTel(value);
+      if (tel.length < 5) {
+        noteExtras.push(`${label}: ${value}`);
+        continue;
+      }
+      if (options.minimal && phoneCount > 0) continue;
+      if (customLabel || phoneCount > 0) {
+        appendLabeledItemField(lines, itemIndex, "TEL", ";TYPE=CELL,VOICE", tel, label);
+        itemIndex += 1;
+      } else {
+        lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
+      }
+      phoneNumbers.add(tel);
+      phoneCount += 1;
+      continue;
+    }
+
+    if (method.method_type === "whatsapp") {
+      const tel = normalizeTel(value);
+      if (tel.length >= 5 && !phoneNumbers.has(tel)) {
+        if (customLabel || phoneCount > 0) {
+          appendLabeledItemField(lines, itemIndex, "TEL", ";TYPE=CELL,VOICE", tel, label);
+          itemIndex += 1;
+        } else {
+          lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
+        }
+        phoneNumbers.add(tel);
+        phoneCount += 1;
+      }
+      if (href && shouldIncludeVcardLabeledUrl(method, options)) {
+        labeledUrls.push({ label, href });
+      } else if (!href) {
+        noteExtras.push(`${label}: ${value}`);
+      }
+      continue;
+    }
+
+    if (method.method_type === "address") {
+      lines.push(`ADR;TYPE=WORK:;;${escapeVcard(value)};;;;`);
+      continue;
+    }
+
+    if (method.method_type === "website" || method.method_type === "link" || method.method_type === "calendly") {
+      if (!href) {
+        noteExtras.push(`${label}: ${value}`);
+        continue;
+      }
+      const usePrimary = !primaryWebsite && !customLabel && href.startsWith("http");
+      if (usePrimary) {
+        primaryWebsite = href;
+        continue;
+      }
+      if (shouldIncludeVcardLabeledUrl(method, options)) {
+        labeledUrls.push({ label, href });
+      }
+      continue;
+    }
+
+    if (!href) {
+      noteExtras.push(`${label}: ${value}`);
+      continue;
+    }
+
+    if (!shouldIncludeVcardLabeledUrl(method, options)) continue;
+
+    if (href.startsWith("http") || href.startsWith("skype:") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+      labeledUrls.push({ label, href });
+      continue;
+    }
+
+    noteExtras.push(`${label}: ${value}`);
+  }
+
+  if (primaryWebsite) {
+    lines.push(`URL:${escapeVcard(primaryWebsite)}`);
+  }
+
+  let urlsToWrite = labeledUrls;
+  if (typeof options.maxLabeledUrls === "number") {
+    urlsToWrite = labeledUrls.slice(0, options.maxLabeledUrls);
+  } else if (options.compact) {
+    urlsToWrite = labeledUrls.slice(0, 2);
+  }
+
+  for (const entry of urlsToWrite) {
+    if (primaryWebsite && entry.href === primaryWebsite) continue;
+    appendLabeledUrl(lines, itemIndex, entry.label, entry.href);
+    itemIndex += 1;
+  }
+
+  return { itemIndex, noteExtras };
+}
+
 export type VcardImageFields = Pick<
   CardVcardInput,
   "profilePhoto" | "companyLogoPhoto" | "profilePhotoUrl" | "companyLogoUrl" | "coverPhotoUrl" | "showCompanyDetails"
@@ -170,9 +358,6 @@ export async function fetchVcardImage(url: string): Promise<VcardEmbeddedImage |
 export function buildCardVcard(input: CardVcardInput) {
   const whenWeMetNote = buildWhenWeMetNote(input.cardUrl, input.scannedAt);
   const showCompany = input.showCompanyDetails ?? true;
-  const methods = showCompany
-    ? input.methods
-    : input.methods.filter((method) => method.method_type !== "website");
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
@@ -186,76 +371,29 @@ export function buildCardVcard(input: CardVcardInput) {
   if (input.jobTitle?.trim()) lines.push(`TITLE:${escapeVcard(input.jobTitle.trim())}`);
   if (showCompany && input.company?.trim()) lines.push(`ORG:${escapeVcard(input.company.trim())}`);
 
-  const labeledUrls: Array<{ label: string; href: string }> = [];
-  let primaryWebsite: string | null = null;
-  let itemIndex = 1;
+  const { itemIndex, noteExtras } = appendVcardMethods(lines, input.methods, {
+    showCompanyDetails: showCompany,
+  });
 
-  for (const method of methods) {
-    const value = method.value.trim();
-    if (!value) continue;
-
-    if (method.method_type === "email") {
-      lines.push(`EMAIL;TYPE=INTERNET:${escapeVcard(value)}`);
-      continue;
-    }
-
-    if (method.method_type === "phone") {
-      const tel = normalizeTel(value);
-      if (tel.length >= 5) lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
-      continue;
-    }
-
-    if (method.method_type === "whatsapp") {
-      const tel = normalizeTel(value);
-      if (tel.length >= 5) lines.push(`TEL;TYPE=CELL,VOICE:${escapeVcard(tel)}`);
-      const href = contactMethodHref({ type: method.method_type, value });
-      if (href?.startsWith("http")) {
-        labeledUrls.push({ label: methodLabel(method), href });
-      }
-      continue;
-    }
-
-    if (method.method_type === "address") {
-      lines.push(`ADR;TYPE=WORK:;;${escapeVcard(value)};;;;`);
-      continue;
-    }
-
-    const href = contactMethodHref({ type: method.method_type, value });
-    if (!href?.startsWith("http")) continue;
-
-    if ((method.method_type === "website" || method.method_type === "link") && !primaryWebsite) {
-      primaryWebsite = href;
-    }
-
-    labeledUrls.push({ label: methodLabel(method), href });
-  }
-
-  if (primaryWebsite) {
-    lines.push(`URL:${escapeVcard(primaryWebsite)}`);
-  }
-
-  for (const entry of labeledUrls) {
-    if (primaryWebsite && entry.href === primaryWebsite) continue;
-    appendLabeledUrl(lines, itemIndex, entry.label, entry.href);
-    itemIndex += 1;
-  }
-
+  let nextItemIndex = itemIndex;
   const cardPage = input.cardUrl.trim();
   if (cardPage) {
-    const cardLinked =
-      primaryWebsite === cardPage || labeledUrls.some((entry) => entry.href === cardPage);
-    if (!cardLinked) {
-      appendLabeledUrl(lines, itemIndex, "AfterMeet card", cardPage);
-      itemIndex += 1;
+    const cardAlreadyLinked = lines.some((line) => line.includes(cardPage));
+    if (!cardAlreadyLinked) {
+      appendLabeledUrl(lines, nextItemIndex, "AfterMeet card", cardPage);
+      nextItemIndex += 1;
     }
   }
 
   if (input.coverPhotoUrl?.trim()) {
-    appendLabeledUrl(lines, itemIndex, "Cover photo", input.coverPhotoUrl.trim());
-    itemIndex += 1;
+    appendLabeledUrl(lines, nextItemIndex, "Cover photo", input.coverPhotoUrl.trim());
   }
 
-  const noteParts = [input.bio?.trim(), whenWeMetNote].filter(Boolean);
+  const noteParts = [
+    input.bio?.trim(),
+    ...noteExtras,
+    whenWeMetNote,
+  ].filter(Boolean);
   lines.push(`NOTE:${escapeVcard(noteParts.join("\n\n"))}`);
   lines.push("END:VCARD");
 

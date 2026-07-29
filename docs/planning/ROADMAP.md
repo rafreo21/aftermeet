@@ -1,15 +1,32 @@
 # AfterMeet product roadmap
 
 Status: Living backlog  
-Last updated: 2026-07-26
+Last updated: 2026-07-29
 
 Single source of truth for **what we’re building**, **why**, and **in what order**. Complements [MVP vertical slice plan](../product/11-mvp-vertical-slice-plan.md) (delivery slices) and [MVP.md](./MVP.md) (scope).
 
 ---
 
-## Product promise (one line)
+## Two products, one platform
+
+AfterMeet is split into two product lines. **Most of what ships today is the consumer product.** Some features already exist in code but belong on the **business product** roadmap — we keep them visible here and will refine scope in a later pass.
+
+| | **Consumer product** | **Business product** |
+|---|----------------------|----------------------|
+| **Who** | Solo professionals, founders, consultants, and **visitors** who scan a card | Small teams and agencies (2–20 people) who need shared records, CRM sync, and outbound |
+| **Job to be done** | Share identity, capture people, remember context, follow up in one tap | Activate relationship data across a team — CRM, campaigns, attribution, org cards |
+| **Status** | **Current focus** — pilot and polish | **Later** — shown below; detailed planning TBD |
+| **Loops** | 01 Share identity · 02 Capture people · 03 Remember context | 04 Activate data (+ team/workspace layer) |
+
+Shared platform (auth, cards, encounters, Postgres) serves both. Business features build on consumer foundations; they are not a separate app.
+
+---
+
+## Product promise (consumer)
 
 **Capture the moment first; contact details sync when someone adds you; AI writes the context from the transcript; follow-up is one tap to call, meet, email, or share a file** — using whatever account they’ve connected.
+
+*(Business product promise — CRM-grade activation for teams — to be defined.)*
 
 ---
 
@@ -19,7 +36,7 @@ One continuous loop where **the moment is the source of truth**, and **contact d
 
 ---
 
-## User journeys
+## User journeys (consumer)
 
 Both paths should feel like **the same product**, not two separate flows.
 
@@ -40,7 +57,7 @@ Both paths should feel like **the same product**, not two separate flows.
 
 ---
 
-## What “simple” means
+## What “simple” means (consumer)
 
 | Today (shaky) | Target |
 |---------------|--------|
@@ -53,7 +70,7 @@ Both paths should feel like **the same product**, not two separate flows.
 
 ---
 
-## Capture flow (target)
+## Capture flow (consumer target)
 
 | Step | Name | What happens |
 |------|------|----------------|
@@ -63,7 +80,7 @@ Both paths should feel like **the same product**, not two separate flows.
 | 4 | **Follow-up** | One clear next action, action-oriented (see below). Drop “Another action” for now. |
 | 5 | **Review** | Approve private vs shared; share guest link when ready. |
 
-### Follow-up actions (target)
+### Follow-up actions (consumer)
 
 | Type | Behaviour |
 |------|-----------|
@@ -87,29 +104,39 @@ Integrations roll out in phases: deep links first (call, LinkedIn), then calenda
 
 ## The four loops
 
-| Loop | Next (backlog) | In app today |
-|------|----------------|--------------|
-| **01 Share identity** | CRM-grade team cards | QR, public link, vCard, email signature, **Wallet passes + NFC programming** |
-| **02 Capture people** | CRM-grade imports, server-backed contacts | Reciprocal exchange, imports, manual add, inbound queue; **badge scan + LinkedIn import on web** |
-| **03 Remember context** | Seamless capture ↔ contact merge | Consent, 5-step wizard, server AI extraction, action follow-ups |
-| **04 Activate data** | Autonomous outbound | **HubSpot sync, CRM export, campaigns + attribution analytics** |
+### Consumer loops (01–03) — current product
+
+| Loop | Consumer backlog | In app today |
+|------|------------------|--------------|
+| **01 Share identity** | Wallet + NFC polish, app store links | QR, public link, vCard, email signature, Wallet passes + NFC (env / device dependent) |
+| **02 Capture people** | Pilot validation, mobile parity polish | Reciprocal exchange, imports, manual add, inbound queue; badge scan + LinkedIn import on web |
+| **03 Remember context** | AI hardening, inbox polish | Consent, capture wizard, server AI extraction, action follow-ups |
+
+### Business loop (04) — later
+
+| Loop | Business backlog | In app today (may move / refocus) |
+|------|------------------|-----------------------------------|
+| **04 Activate data** | Team workflows, review-first outbound, attribution | HubSpot sync, campaigns, team analytics — **prototype / early code; not consumer pilot scope** |
 
 ---
 
-## What’s already aligned
+## What’s already aligned (consumer)
 
 - QR / card sharing and public page
 - Reciprocal exchange form + inbound captures on Contacts
-- 4-step encounter wizard (Record → Context → Follow-up → Review)
-- Transcript → suggested draft (client heuristics, not real AI)
-- Follow-up inbox from encounter actions
+- Capture wizard (Record → Context → Connect → Follow-up → Review)
+- Server AI extraction and action-oriented follow-ups
+- Visitor onboarding → People you’ve met
 - Google OAuth (owner sign-in)
+- Server-backed contacts, encounters, and cards (cross-device)
 
 ---
 
-## Gaps to close (master checklist)
+## Consumer product — phases
 
-### Phase 1 — Unify person + capture (Loop 02 + 03)
+These phases are the **consumer pilot** scope. Checklist reflects build status; pilot validation (two-phone QR loop, wallet env, etc.) may still be open.
+
+### Phase 1 — Unify person + capture (Loops 02 + 03)
 
 - [x] Remove **email field** from capture context step
 - [x] Link **encounter ↔ contact ↔ card exchange** by ID
@@ -120,7 +147,7 @@ Integrations roll out in phases: deep links first (call, LinkedIn), then calenda
 
 ### Phase 2 — Real AI extraction (Loop 03 / Slice 8)
 
-- [x] Server-side AI from transcript / notes (replace `transcriptDraft` heuristics)
+- [x] Server-side AI from transcript / notes (replace client heuristics)
 - [x] Auto-fill: private notes, shared summary, follow-up text, suggested channel
 - [x] AI runs by default after transcript available — not optional “regenerate” only
 - [x] Confidence / uncertainty markers; never overwrite raw transcript
@@ -131,8 +158,8 @@ Integrations roll out in phases: deep links first (call, LinkedIn), then calenda
 - [x] Remove **“Another action”** follow-up type
 - [x] Call → `tel:` when number present
 - [x] LinkedIn → open profile
-- [x] Schedule meeting → Meet / Zoom / Outlook integrations (deep links: Google Calendar + Outlook Calendar)
-- [x] Send email / file → Gmail / Outlook + Drive / Dropbox by connected account (deep links: Gmail, Outlook, Mail app, Drive)
+- [x] Schedule meeting → Meet / Zoom / Outlook (deep links: Google Calendar + Outlook Calendar)
+- [x] Send email / file → Gmail / Outlook + Drive / Dropbox by connected account (deep links)
 - [x] Review + Inbox surfaces show **Do it** buttons, not just labels
 
 ### Phase 4 — Visitor onboarding (Loop 02)
@@ -152,42 +179,71 @@ Integrations roll out in phases: deep links first (call, LinkedIn), then calenda
 - [x] Google Wallet pass
 - [x] NFC tap-to-open card
 
-### Phase 7 — Activate data (Loop 04 — later)
+### Phase 7 — Consumer platform (sync + personal accounts)
 
-- [x] CRM sync (HubSpot private app integration)
-- [x] Campaigns, attribution, team analytics
-- [x] Autonomous outbound only after review-first habit is proven
-
-### Phase 8 — Production platform (Loops 01 + 02)
-
-Cross-device persistence and connected-account depth. Team features come after personal records are fully server-backed.
+Personal cross-device persistence and connected accounts for **solo users**. (Team layer moves to business product.)
 
 - [x] **Server-backed contacts** — Postgres source of truth; migrate localStorage; sync on save; hydrate on load
-- [x] **Encounters read sync** — list + hydrate encounters from server (writes already sync)
+- [x] **Encounters read sync** — list + hydrate encounters from server
 - [x] **Card library server hydration** — load/edit cards from server, not localStorage-only
-- [x] **Connected accounts** — OAuth for Gmail, Outlook, Google Calendar (API send/schedule, not just deep links)
-- [x] **Team workspaces + team cards** — shared workspace, org templates, member cards (post-MVP exclusion lift)
+- [x] **Connected accounts** — OAuth for Gmail, Outlook, Google Calendar (personal send/schedule)
+
+---
+
+## Business product — phases (later)
+
+Shown for continuity. **Not consumer pilot scope.** Scope, packaging, and UX will be defined in a dedicated business product pass. Some items already exist in code and may be refactored or gated when we split surfaces.
+
+### Business Phase 1 — Activate data (Loop 04)
+
+- [x] CRM sync (HubSpot private app integration) — *revisit for business packaging*
+- [x] Campaigns, attribution, team analytics — *revisit for business packaging*
+- [ ] Autonomous outbound only after review-first habit is proven
+
+### Business Phase 2 — Team workspace
+
+- [x] **Team workspaces + team cards** — shared workspace, org templates, member cards — *move behind business tier*
+- [ ] CRM-grade team cards (brand lock, admin controls)
+- [ ] CRM-grade imports and server-backed directory at org level
+- [ ] Team provisioning, roles, and billing (TBD)
+
+### Business Phase 3 — Outbound and ROI (TBD)
+
+- [ ] Review-first campaign sends
+- [ ] Event / channel attribution
+- [ ] Pipeline and follow-through reporting for teams
+
+*Detailed requirements, pricing, and GTM — discuss when consumer pilot is stable.*
 
 ---
 
 ## Build order
 
+### Consumer (now)
+
 | Order | Focus | Loops |
 |-------|--------|-------|
-| **1** | Unlink email from capture + encounter ↔ contact ↔ exchange linking + Connect step + server sync | 02, 03 |
-| **2** | Real AI extraction (Slice 8) | 03 |
-| **3** | Action-oriented follow-up — call & LinkedIn first, then Meet / Gmail / Drive | 03 |
-| **4** | Visitor onboarding + “people you’ve met” | 02 |
-| **5** | Badge / LinkedIn scan flows | 02 |
-| **6** | Wallet passes + NFC | 01 |
-| **7** | CRM sync | 04 |
-| **8** | Server-backed contacts → encounter/card hydrate → connected accounts → team | 01, 02 |
+| **1** | Unify person + capture + server sync | 02, 03 |
+| **2** | Real AI extraction | 03 |
+| **3** | Action-oriented follow-up | 03 |
+| **4** | Visitor onboarding + People you’ve met | 02 |
+| **5** | Badge / LinkedIn scan | 02 |
+| **6** | Wallet passes + NFC polish | 01 |
+| **7** | Consumer platform sync + personal connected accounts | 01, 02, 03 |
+
+### Business (later)
+
+| Order | Focus | Loops |
+|-------|--------|-------|
+| **B1** | HubSpot / CRM sync (business packaging) | 04 |
+| **B2** | Team workspaces + org cards | 04 |
+| **B3** | Campaigns, attribution, outbound | 04 |
 
 ---
 
-## Current sprint focus (recommended next)
+## Current sprint focus (consumer)
 
-**Phase 8 complete.** Next recommended focus: wallet passes + NFC (Phase 6) or real AI extraction hardening (Phase 2/Slice 8), depending on pilot priorities.
+**Consumer phases 1–7 (build) largely complete.** Recommended next: **Phase 6 polish** (wallet env, NFC on device, app store links) and **pilot validation** (QR → save → share-back → follow-up on two phones). Business product planning is intentionally deferred.
 
 ---
 
