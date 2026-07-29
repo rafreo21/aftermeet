@@ -14,7 +14,7 @@ import {
   NativeSpeechCapture,
   isNativeSpeechTranscriptionAvailable,
   resolveSpeechCaptureMode,
-  shouldAttemptUnifiedSpeechCapture,
+  shouldUseUnifiedSpeechCapture,
   type SpeechCaptureMode,
 } from '@/features/encounters/native-speech-transcript';
 import { isSupportedAudioImport } from '@/features/encounters/audio-upload';
@@ -312,24 +312,15 @@ export function useCaptureRecorder({
       setSpeechAudioLevel(0);
       setRecordingState('recording');
 
-      // Speech-first: live transcript needs the mic. expo-audio + speech together
-      // fights over the mic and live words stop appearing.
-      if (shouldAttemptUnifiedSpeechCapture()) {
+      // Finish must always leave a file. Only use speech recording when the
+      // native module can persist audio (unified). Never use transcript-only —
+      // that streams words but saves nothing on Finish.
+      if (shouldUseUnifiedSpeechCapture()) {
         setCaptureMode('unified');
         captureModeRef.current = 'unified';
         speechCaptureRef.current.resetSession();
         const unifiedStarted = await startSpeechCapture('unified');
         if (unifiedStarted) {
-          startSpeechTimer();
-          return;
-        }
-        speechCaptureRef.current.abort();
-        speechCaptureRef.current.resetSession();
-
-        setCaptureMode('transcript-only');
-        captureModeRef.current = 'transcript-only';
-        const liveStarted = await startSpeechCapture('transcript-only');
-        if (liveStarted) {
           startSpeechTimer();
           return;
         }
@@ -402,6 +393,7 @@ export function useCaptureRecorder({
       let cleaned = liveTranscript.finalizeTranscript();
 
       if (uri) {
+        // Always try to enrich thin live text from the saved file after Finish.
         if (!liveSttReceivedRef.current || cleaned.trim().length < 20) {
           cleaned = await maybeTranscribeFromServer(uri, cleaned);
         } else if (cleaned) {
@@ -412,19 +404,12 @@ export function useCaptureRecorder({
         setPlaybackSource(uri);
         onRecordingUriChange(uri, 'recorded');
         setPlaybackReady(true);
-      } else if (cleaned) {
-        onTranscriptFinalizedRef.current?.(cleaned);
-        // Live STT worked but this device did not persist audio — keep transcript.
-        if (captureModeRef.current === 'transcript-only') {
-          onErrorRef.current('Live transcript is ready. Audio file was not saved on this device — guest recording share needs a re-record on a device that supports audio capture.');
-        } else {
-          onErrorRef.current('Recording stopped without a saved audio file. Try Record again — audio is required for playback and guest sharing.');
-        }
       } else {
-        onErrorRef.current('Recording stopped, but the audio file could not be saved on this device.');
+        if (cleaned) onTranscriptFinalizedRef.current?.(cleaned);
+        onErrorRef.current('Finish stopped the session, but no audio file was saved. Tap Record again and speak — we need the file for playback and sharing.');
       }
     } catch {
-      onErrorRef.current('Recording stopped, but the audio file could not be saved on this device.');
+      onErrorRef.current('Finish stopped the session, but no audio file was saved. Tap Record again and speak — we need the file for playback and sharing.');
     }
   }, [
     audioRecorder,
@@ -582,11 +567,15 @@ export function useCaptureRecorder({
           ? 'Recording. Transcript appears when you tap Finish (requires sign-in)'
           : usingSpeechCapture
             ? 'Check mic and speech permissions in Settings'
-            : 'Type or paste what was said';
+            : 'Recording audio. Transcript appears when you tap Finish';
       default:
-        return 'Editable meeting record';
+        return usingSpeechCapture
+          ? 'Editable meeting record'
+          : recordingState === 'recording' || recordingState === 'paused'
+            ? 'Recording audio. Transcript appears when you tap Finish'
+            : 'Editable meeting record';
     }
-  }, [liveTranscript.transcriptStatus, usingSpeechCapture]);
+  }, [liveTranscript.transcriptStatus, recordingState, usingSpeechCapture]);
 
   return {
     recordingState,

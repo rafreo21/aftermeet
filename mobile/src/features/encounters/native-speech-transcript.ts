@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { joinSpeechResults } from '@/lib/live-transcript-merge';
 
@@ -57,25 +58,49 @@ export function supportsNativeSpeechRecording() {
   return Boolean(speechModule?.supportsRecording?.());
 }
 
-/** Live STT + persisted audio via speech module (Android 13+). */
+/** Live STT + persisted audio via speech module (when native recording is supported). */
 export function shouldUseUnifiedSpeechCapture() {
   return isNativeSpeechTranscriptionAvailable() && supportsNativeSpeechRecording();
 }
 
 /**
- * Capture mode for live STT + optional on-device file.
- * Android's mic is exclusive — do not run expo-audio and speech recognition together
- * (that killed live transcript). Prefer speech-first; expo-audio only when STT is unavailable.
+ * Only use unified when the speech module can persist audio.
+ * transcript-only gives live words but no file on Finish — never use it for Record.
+ * Otherwise expo-audio (`none`) saves the file; transcript comes from the server after Finish.
  */
 export function resolveSpeechCaptureMode(): SpeechCaptureMode {
   if (shouldUseUnifiedSpeechCapture()) return 'unified';
-  if (isNativeSpeechTranscriptionAvailable()) return 'transcript-only';
   return 'none';
 }
 
-/** Try unified (file + live) even when supportsRecording() is conservative. */
-export function shouldAttemptUnifiedSpeechCapture() {
-  return isNativeSpeechTranscriptionAvailable();
+function joinRecordingPath(directory: string, fileName: string) {
+  const base = directory.endsWith('/') ? directory : `${directory}/`;
+  return `${base}${fileName}`;
+}
+
+async function fileExists(uri: string) {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    return Boolean(info.exists);
+  } catch {
+    return false;
+  }
+}
+
+async function findLatestCaptureAudio(directory: string) {
+  try {
+    const base = directory.endsWith('/') ? directory : `${directory}/`;
+    const entries = await FileSystem.readDirectoryAsync(base);
+    const captures = entries
+      .filter((name) => /^capture-\d+\.(wav|m4a|mp3|aac|caf)$/i.test(name))
+      .sort();
+    const latest = captures[captures.length - 1];
+    if (!latest) return null;
+    const uri = `${base}${latest}`;
+    return (await fileExists(uri)) ? uri : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeVolume(value: number) {
@@ -314,7 +339,16 @@ export class NativeSpeechCapture {
 
   async stop(): Promise<string | null> {
     this.active = false;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     if (!speechModule) return null;
+
+    const expectedUri =
+      this.persistRecording && this.outputDirectory && this.sessionOutputFileName
+        ? joinRecordingPath(this.outputDirectory, this.sessionOutputFileName)
+        : null;
 
     const waitForAudio = new Promise<string | null>((resolve) => {
       if (!this.persistRecording) {
@@ -326,7 +360,7 @@ export class NativeSpeechCapture {
         return;
       }
       this.recordingDone = () => resolve(this.recordingUri);
-      setTimeout(() => resolve(this.recordingUri), 1500);
+      setTimeout(() => resolve(this.recordingUri), 3500);
     });
 
     try {
@@ -335,7 +369,15 @@ export class NativeSpeechCapture {
       // ignore
     }
 
-    const uri = await waitForAudio;
+    let uri = await waitForAudio;
+
+    if ((!uri || !(await fileExists(uri))) && expectedUri && (await fileExists(expectedUri))) {
+      uri = expectedUri;
+    }
+    if (!uri && this.persistRecording && this.outputDirectory) {
+      uri = await findLatestCaptureAudio(this.outputDirectory);
+    }
+
     this.cleanup();
     return uri;
   }
