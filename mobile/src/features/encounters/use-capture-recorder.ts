@@ -14,7 +14,6 @@ import {
   NativeSpeechCapture,
   isNativeSpeechTranscriptionAvailable,
   resolveSpeechCaptureMode,
-  shouldUseUnifiedSpeechCapture,
   type SpeechCaptureMode,
 } from '@/features/encounters/native-speech-transcript';
 import { isSupportedAudioImport } from '@/features/encounters/audio-upload';
@@ -329,22 +328,8 @@ export function useCaptureRecorder({
       setSpeechAudioLevel(0);
       setRecordingState('recording');
 
-      // Only use speech capture when the device can persist audio too.
-      // Live-only STT on this phone left Finish with no file.
-      if (shouldUseUnifiedSpeechCapture()) {
-        setCaptureMode('unified');
-        captureModeRef.current = 'unified';
-        speechCaptureRef.current.resetSession();
-        const unifiedStarted = await startSpeechCapture('unified');
-        if (unifiedStarted) {
-          startSpeechTimer();
-          return;
-        }
-        speechCaptureRef.current.abort();
-        speechCaptureRef.current.resetSession();
-      }
-
-      // Durable file via expo-audio; OpenAI Whisper fills the transcript on Finish.
+      // Always record with expo-audio so Finish saves a real file on every device.
+      // OpenAI Whisper builds the transcript after Finish.
       setCaptureMode('none');
       captureModeRef.current = 'none';
       liveTranscript.markListening();
@@ -353,7 +338,7 @@ export function useCaptureRecorder({
       onErrorRef.current('Could not start recording. Check microphone permission and try again.');
       setRecordingState('idle');
     }
-  }, [liveTranscript, publishDuration, startExpoAudioRecording, startSpeechCapture, startSpeechTimer]);
+  }, [liveTranscript, publishDuration, startExpoAudioRecording]);
 
   const pauseOrResume = useCallback(async () => {
     if (recordingStateRef.current === 'recording') {

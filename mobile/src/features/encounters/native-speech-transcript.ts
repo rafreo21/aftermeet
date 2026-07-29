@@ -58,19 +58,19 @@ export function supportsNativeSpeechRecording() {
   return Boolean(speechModule?.supportsRecording?.());
 }
 
-/** Live STT + persisted audio via speech module (when native recording is supported). */
-export function shouldUseUnifiedSpeechCapture() {
-  return isNativeSpeechTranscriptionAvailable() && supportsNativeSpeechRecording();
-}
-
 /**
- * Only use the speech module when it can also save audio.
- * Otherwise Record uses expo-audio (file on Finish) + OpenAI Whisper for transcript.
- * Live-only speech leaves no file on many Android phones (this device included).
+ * Record always needs a durable on-device file (playback + guest share).
+ * Speech-module "recording" is unreliable on many Androids (live words, no WAV),
+ * so capture recording uses expo-audio only. Transcript comes from OpenAI Whisper on Finish.
+ * Live on-device STT can return later on devices we have verified write audio.
  */
 export function resolveSpeechCaptureMode(): SpeechCaptureMode {
-  if (shouldUseUnifiedSpeechCapture()) return 'unified';
   return 'none';
+}
+
+/** Kept for diagnostics / future dual-path experiments. */
+export function shouldUseUnifiedSpeechCapture() {
+  return false;
 }
 
 function joinRecordingPath(directory: string, fileName: string) {
