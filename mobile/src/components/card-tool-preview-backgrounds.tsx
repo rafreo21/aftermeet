@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   virtualContent: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     paddingTop: 12,

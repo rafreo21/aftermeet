@@ -7,12 +7,14 @@ import {
   EnvelopeSimple,
   Monitor,
   PencilSimple,
+  QrCode,
+  ShareNetwork,
   SquaresFour,
   Wallet,
   Watch,
 } from 'phosphor-react-native';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CardToolErrorSheet } from '@/components/card-tool-error-sheet';
@@ -199,6 +201,15 @@ export default function CardToolsScreen() {
     setSuccessMessage('');
   }
 
+  async function shareCardLink() {
+    if (!card) return;
+    await Share.share({
+      title: `${card.name} · AfterMeet`,
+      message: `${card.name}\n${subtitle}\n${publicUrl}`.trim(),
+      url: publicUrl,
+    });
+  }
+
   async function copySignature(kind: 'plain' | 'html') {
     if (!card) return;
 
@@ -255,7 +266,7 @@ export default function CardToolsScreen() {
             <Eyebrow>Card tools</Eyebrow>
             <Text style={styles.title}>{card.label || card.name || 'Untitled card'}</Text>
             <Body style={styles.subtitle}>
-              Wallet, widgets, NFC, and sharing extras for this card.
+              Share from your phone first. Wallet, NFC, and extras live below.
             </Body>
             <View style={styles.cardMetaRow}>
               <View style={styles.themeMeta}>
@@ -293,11 +304,30 @@ export default function CardToolsScreen() {
             </Panel>
           ) : null}
 
+          {published ? (
+            <Panel style={styles.heroPanel}>
+              <Text style={styles.sectionLabel}>Quick share</Text>
+              <View style={styles.heroActions}>
+                <Button onPress={() => router.push(`/share-card?id=${card.id}`)}>
+                  <QrCode size={18} color={colors.ink} weight="bold" />
+                  Show QR
+                </Button>
+                <Button variant="secondary" onPress={() => void shareCardLink()}>
+                  <ShareNetwork size={18} color={colors.ink} weight="bold" />
+                  Share link
+                </Button>
+              </View>
+            </Panel>
+          ) : null}
+
           <Panel style={styles.toolList}>
+            <Text style={styles.sectionLabel}>Share on device</Text>
             <ToolRow
               icon={<Wallet size={22} color={colors.ink} weight="bold" />}
               title="Wallet"
-              subtitle="Add your pass to Apple or Google Wallet"
+              subtitle={Platform.OS === 'ios'
+                ? 'Add your pass to Apple Wallet'
+                : 'Add your pass to Google Wallet'}
               onPress={() => openSheet('wallet')}
             />
             <ToolRow
@@ -305,7 +335,12 @@ export default function CardToolsScreen() {
               title="NFC"
               subtitle="Tap to share on Android, or program NFC tags"
               onPress={() => openSheet('nfc')}
+              isLast
             />
+          </Panel>
+
+          <Panel style={styles.toolList}>
+            <Text style={styles.sectionLabel}>More tools</Text>
             <ToolRow
               icon={<SquaresFour size={22} color={colors.ink} weight="bold" />}
               title="Home screen widgets"
@@ -462,6 +497,18 @@ const styles = StyleSheet.create({
     gap: spacing.x4,
   },
   panelTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  sectionLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.x1,
+    paddingTop: spacing.x2,
+    paddingBottom: spacing.x1,
+  },
+  heroPanel: { gap: spacing.x3 },
+  heroActions: { gap: spacing.x2 },
   toolList: { gap: 0, paddingVertical: spacing.x1 },
   toolRow: {
     flexDirection: 'row',

@@ -103,6 +103,14 @@
   letter-spacing: -.05em;
 }
 .public-card-role { margin: 14px 0 0; font-weight: 700; }
+.public-card-step-kicker {
+  margin: 0 0 12px;
+  color: #71806b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
 .public-card-bio { margin: 18px 0 0; color: #53634d; line-height: 1.55; }
 .public-card-step-top {
   padding: 20px 24px 0;
@@ -330,6 +338,23 @@
   background: #f7f9f5;
   border-color: #c5cfc0;
   color: #163300;
+}
+.public-card-share-back {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 2px solid #163300;
+  border-radius: 8px;
+  background: #fff;
+  color: #163300;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+}
+.public-card-share-back:hover {
+  background: #f1f4ef;
 }
 .public-card-methods { margin: 18px 0 20px; display: grid; gap: 8px; }
 .public-card-method-link {

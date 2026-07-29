@@ -1,11 +1,12 @@
 import * as Brightness from 'expo-brightness';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ContactlessPayment, Scan, ShareNetwork } from 'phosphor-react-native';
+import { ContactlessPayment, Scan, ShareNetwork, Wallet } from 'phosphor-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Share, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { Body, Button, PageHeader, ScreenFrame } from '@/components/ui';
+import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { showsCompanyDetails } from '@/features/card/company-display';
 import {
@@ -17,11 +18,17 @@ import {
   stopTapToShare,
   TAP_TO_SHARE_REBUILD_MESSAGE,
 } from '@/features/card/nfc-hce-actions';
+import {
+  addAppleWalletPass,
+  addGoogleWalletPass,
+  fetchWalletAvailability,
+} from '@/features/card/wallet-actions';
 import { QR_LOGO } from '@/lib/widget-qr';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function ShareCardScreen() {
   const { id, slug } = useLocalSearchParams<{ id?: string; slug?: string }>();
+  const { session } = useAuth();
   const { card: activeCard, cards, getCardById, cardPublicUrl } = useCard();
   const card = (id ? getCardById(id) : undefined)
     || (slug ? cards.find((item) => item.slug === slug) : undefined)
@@ -32,6 +39,28 @@ export default function ShareCardScreen() {
   const tapNativeReady = isTapToShareNativeReady();
   const [tapActive, setTapActive] = useState(false);
   const [tapMessage, setTapMessage] = useState(tapNativeReady ? '' : TAP_TO_SHARE_REBUILD_MESSAGE);
+  const [walletAvailable, setWalletAvailable] = useState<boolean | null>(null);
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletNote, setWalletNote] = useState('');
+
+  useEffect(() => {
+    if (!card.slug || !session?.access_token || card.status !== 'published') {
+      setWalletAvailable(null);
+      setWalletNote('');
+      return;
+    }
+
+    let cancelled = false;
+    void fetchWalletAvailability(card.slug, session.access_token).then((result) => {
+      if (cancelled) return;
+      setWalletAvailable(result.available);
+      setWalletNote(result.message);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [card.slug, card.status, session?.access_token]);
 
   useEffect(() => {
     let original = 0.5;
@@ -75,6 +104,24 @@ export default function ShareCardScreen() {
     });
   }
 
+  async function addToWallet() {
+    if (!card.slug || !session?.access_token) return;
+    setWalletBusy(true);
+    try {
+      if (Platform.OS === 'ios') {
+        await addAppleWalletPass(card.slug, session.access_token);
+      } else if (Platform.OS === 'android') {
+        await addGoogleWalletPass(card.slug, session.access_token);
+      }
+    } catch (error) {
+      setWalletNote(error instanceof Error ? error.message : 'Could not open Wallet.');
+    } finally {
+      setWalletBusy(false);
+    }
+  }
+
+  const walletLabel = Platform.OS === 'ios' ? 'Add to Apple Wallet' : 'Add to Google Wallet';
+
   return (
     <ScreenFrame style={styles.frame}>
       <PageHeader eyebrow="Quick Share" title="Scan to connect" titleStyle={styles.title} />
@@ -114,7 +161,11 @@ export default function ShareCardScreen() {
             {tapMessage ? <Text style={styles.tapMessage}>{tapMessage}</Text> : null}
           </View>
         ) : (
-          <Text style={styles.helperInline}>On iPhone, share with the QR code or Apple Wallet pass.</Text>
+          <Text style={styles.helperInline}>
+            {walletAvailable
+              ? 'Share with the QR code or add your pass to Wallet.'
+              : 'Share with the QR code. Wallet opens here once it is configured on the server.'}
+          </Text>
         )}
       </ScrollView>
       <View style={styles.actions}>
@@ -127,6 +178,18 @@ export default function ShareCardScreen() {
             <ContactlessPayment size={18} color={colors.ink} weight="bold" />
             {tapActive ? 'Stop tap to share' : 'Tap to share'}
           </Button>
+        ) : null}
+        {walletAvailable ? (
+          <Button
+            style={styles.actionButton}
+            variant="secondary"
+            loading={walletBusy}
+            onPress={() => void addToWallet()}>
+            <Wallet size={18} color={colors.ink} weight="bold" />
+            {walletLabel}
+          </Button>
+        ) : walletNote ? (
+          <Text style={styles.walletNote}>{walletNote}</Text>
         ) : null}
         <Button style={styles.actionButton} onPress={shareCard}>
           <ShareNetwork size={18} color={colors.ink} /> Share
@@ -181,6 +244,7 @@ const styles = StyleSheet.create({
   tapBody: { color: colors.muted, fontSize: 13, textAlign: 'center', lineHeight: 18 },
   tapMessage: { color: colors.inkSoft, fontSize: 12, textAlign: 'center' },
   helperInline: { marginTop: spacing.x3, color: colors.muted, fontSize: 12, textAlign: 'center' },
+  walletNote: { color: colors.muted, fontSize: 12, textAlign: 'center', lineHeight: 17 },
   actions: { gap: spacing.x2 },
   actionButton: { alignSelf: 'stretch' },
   helper: { color: colors.muted, fontSize: 11, textAlign: 'center' },
