@@ -62,7 +62,7 @@ function PublicCardView({
   themeColor,
   methods,
   onSaveContact,
-  onContinueWithoutSaving,
+  onShareBack,
 }: {
   ownerName: string;
   jobTitle: string | null;
