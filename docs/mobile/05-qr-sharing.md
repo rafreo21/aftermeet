@@ -22,13 +22,24 @@ This is the primary visitor flow. Do not use vCard-only QRs for events where sha
 - QR encodes a vCard with contact details and an embedded AfterMeet card link
 - Preference is remembered on the device
 
-**Visitor with phone camera (no internet required for save)**
+**Visitor with phone camera**
 
 1. Camera scans QR → Contacts app opens
 2. Contact saves locally with phone, email, and AfterMeet link
-3. Share-back happens only after they open the AfterMeet link when online
+3. **Profile photo** and **company logo** use image URLs in the vCard (Contacts fetches them when the phone is online at save time)
+4. **Cover photo** is linked as a labeled URL in the contact (not shown as a banner in stock Contacts apps)
+5. Share-back happens after they open the **AfterMeet card** link when online
 
 Heavy cards automatically use a compact or minimal vCard so the QR still renders.
+
+## vCard images (iOS and Android)
+
+| Save path | Profile photo | Company logo | Cover |
+|-----------|---------------|--------------|-------|
+| **Save to contacts** on card page (`/c/{slug}/contact.vcf`) | Embedded base64 | Embedded `LOGO` | Labeled URL |
+| **Offline QR / NFC vCard** | Image URL in QR | Image URL in QR (full/compact tiers) | Labeled URL (full tier only) |
+
+Stock **Contacts** apps show the profile photo in the avatar. Company logo and cover art support varies by OS and contact app.
 
 ## AfterMeet in-app scanner
 
@@ -37,7 +48,8 @@ Quick Scan inside the app is for **AfterMeet users** adding cards to their netwo
 | Scan type | In-app scanner | Phone camera |
 |-----------|----------------|--------------|
 | Online URL QR | Adds to connections | Opens card page |
-| Offline vCard QR | Adds if AfterMeet link present | Saves to Contacts |
+| Offline vCard QR with AfterMeet link | Adds to connections | Saves to Contacts |
+| Offline vCard QR without link | Error — ask for online QR | Saves to Contacts only |
 
 ## Before testing
 

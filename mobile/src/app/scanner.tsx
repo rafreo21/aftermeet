@@ -65,7 +65,7 @@ export default function ScannerScreen() {
       return;
     }
     if (/^BEGIN:VCARD/i.test(result.data.trim())) {
-      setError('Offline contact QR with no AfterMeet link. Save it in your phone contacts, or ask them to turn on Online contact QR.');
+      setError('This offline QR has no AfterMeet link. Save it in Contacts, or ask them to turn on Online contact QR for share-back.');
       setLocked(false);
       return;
     }

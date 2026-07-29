@@ -36,6 +36,15 @@ export async function writePublishedBaseline(card: MobileCard) {
   await writeBaselineMap(map);
 }
 
+/** Seed baseline for cards published before baseline tracking existed. */
+export async function ensurePublishedBaseline(card: MobileCard) {
+  if (card.status !== 'published' || !card.id) return null;
+  const existing = await readPublishedBaseline(card.id);
+  if (existing) return existing;
+  await writePublishedBaseline(card);
+  return cardDraftSignature({ ...card, status: 'published' });
+}
+
 export async function clearPublishedBaseline(cardId: string) {
   if (!cardId) return;
   const map = await readBaselineMap();

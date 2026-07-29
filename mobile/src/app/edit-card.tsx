@@ -11,6 +11,7 @@ import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader } from '@/components/ui';
 import { cardDraftSignature, cardNeedsPublish } from '@/lib/card-draft';
 import {
+  ensurePublishedBaseline,
   readPublishedBaseline,
   writePublishedBaseline,
 } from '@/lib/published-baseline';
@@ -130,7 +131,7 @@ export default function EditCardScreen() {
       initializedCardId.current = id;
       setDraft(next);
       setBaselineReady(false);
-      void readPublishedBaseline(next.id || id).then((baseline) => {
+      void ensurePublishedBaseline(next).then((baseline) => {
         setPublishedBaseline(baseline);
         setBaselineReady(true);
       });

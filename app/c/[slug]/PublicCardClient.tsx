@@ -151,7 +151,7 @@ function PublicCardView({
             Share my details back
           </button>
           <p className="public-card-private">
-            One tap saves {ownerName} to your phone. You can send your details back anytime.
+            One tap saves {ownerName} to your phone with profile photo when available. Open the AfterMeet link in the contact later to share your details back.
           </p>
         </div>
       </div>

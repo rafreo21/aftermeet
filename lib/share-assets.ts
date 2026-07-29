@@ -20,6 +20,7 @@ export type ShareAssetProfile = {
   themeColor?: string;
   photoUrl?: string;
   companyLogoUrl?: string;
+  coverPhotoUrl?: string;
   showCompany?: boolean;
   methods?: Array<{ method_type: string; value: string; label?: string | null }>;
 };

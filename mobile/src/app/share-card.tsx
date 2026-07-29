@@ -196,7 +196,7 @@ export default function ShareCardScreen() {
                 <Text style={styles.modeToggleHint}>
                   {onlineQrEnabled
                     ? 'Scans open your card page so visitors can share back.'
-                    : 'Scanners save your contact without internet.'}
+                    : 'Scanners save your contact offline. Profile photo loads when they save if they are online.'}
                 </Text>
               </Pressable>
               <Switch

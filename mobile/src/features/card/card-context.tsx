@@ -20,7 +20,7 @@ import { uploadCardImagesForPublish } from '@/features/card/card-image-upload';
 import { describePublishError, formatPublishError, type PublishCardResult, validateCardForPublish } from '@/features/card/publish-card';
 import { readEnv } from '@/lib/env';
 import { mobileFetch } from '@/lib/mobile-api';
-import { clearPublishedBaseline, writePublishedBaseline } from '@/lib/published-baseline';
+import { clearPublishedBaseline, ensurePublishedBaseline, writePublishedBaseline } from '@/lib/published-baseline';
 import { getSupabase } from '@/lib/supabase';
 
 type CardValue = {
@@ -195,6 +195,11 @@ export function CardProvider({ children }: PropsWithChildren) {
         .limit(MAX_CARDS);
       if (remoteRows?.length) {
         const remoteCards = remoteRows.map((row) => remoteRowToMobileCard(row));
+        await Promise.all(
+          remoteCards
+            .filter((item) => item.status === 'published')
+            .map((item) => ensurePublishedBaseline(item)),
+        );
         const nextActiveId = getActiveCardId(remoteCards, activeCardIdRef.current);
         await persistCards(remoteCards, nextActiveId);
         return;

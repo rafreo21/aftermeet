@@ -91,6 +91,11 @@ function appendLabeledUrl(lines: string[], itemIndex: number, label: string, hre
   lines.push(`item${itemIndex}.X-ABLabel:${escapeVcard(label)}`);
 }
 
+export type VcardImageFields = Pick<
+  CardVcardInput,
+  "profilePhoto" | "companyLogoPhoto" | "profilePhotoUrl" | "companyLogoUrl" | "coverPhotoUrl" | "showCompanyDetails"
+>;
+
 function vcardImageType(mimeType: string) {
   const normalized = mimeType.toLowerCase();
   if (normalized.includes("png")) return "PNG";
@@ -120,7 +125,7 @@ function appendImageUri(lines: string[], property: string, url: string) {
   lines.push(foldVcardLine(`${property};VALUE=URI:${escapeVcard(url.trim())}`));
 }
 
-function appendVcardImages(lines: string[], input: CardVcardInput) {
+export function appendVcardImages(lines: string[], input: VcardImageFields) {
   if (input.profilePhoto) {
     appendEmbeddedImage(lines, "PHOTO", input.profilePhoto);
   } else if (input.profilePhotoUrl?.trim()) {

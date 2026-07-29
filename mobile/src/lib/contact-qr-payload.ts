@@ -1,5 +1,7 @@
 import { cardWithCompanyVisibility, showsCompanyDetails } from '@/features/card/company-display';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
+import { publicCardImageUrl } from '../../../lib/card-assets';
+import { appendVcardImages, type VcardImageFields } from '../../../lib/vcard-export';
 import { contactMethodHref } from '@/lib/contact-methods';
 
 const METHOD_LABELS: Record<string, string> = {
@@ -85,6 +87,29 @@ function shouldIncludeLabeledUrl(method: ContactMethod, options: MobileContactQr
   return true;
 }
 
+function vcardImageFields(card: MobileCard, options: MobileContactQrOptions): VcardImageFields {
+  const showCompany = showsCompanyDetails(card);
+  const profilePhotoUrl = publicCardImageUrl(card.photo);
+  const companyLogoUrl = showCompany ? publicCardImageUrl(card.companyLogo) : null;
+  const coverPhotoUrl = publicCardImageUrl(card.coverPhoto);
+
+  if (options.minimal) {
+    return profilePhotoUrl ? { profilePhotoUrl } : {};
+  }
+  if (options.compact) {
+    return {
+      ...(profilePhotoUrl ? { profilePhotoUrl } : {}),
+      ...(companyLogoUrl ? { companyLogoUrl, showCompanyDetails: true } : {}),
+    };
+  }
+  return {
+    profilePhotoUrl,
+    companyLogoUrl,
+    coverPhotoUrl,
+    showCompanyDetails: showCompany,
+  };
+}
+
 /** Offline-capable QR payload with contact details and the card URL. */
 export function buildMobileContactQrPayload(
   card: MobileCard,
@@ -101,6 +126,8 @@ export function buildMobileContactQrPayload(
     `N:${escapeVcard(lastName)};${escapeVcard(firstName)};;;`,
     `FN:${escapeVcard(visible.name.trim())}`,
   ];
+
+  appendVcardImages(lines, vcardImageFields(visible, options));
 
   if (visible.role.trim()) lines.push(`TITLE:${escapeVcard(visible.role.trim())}`);
   if (showCompany && visible.company.trim()) lines.push(`ORG:${escapeVcard(visible.company.trim())}`);
@@ -178,7 +205,13 @@ export function buildMobileContactQrPayload(
       primaryWebsite === cardPage || labeledUrls.some((entry) => entry.href === cardPage);
     if (!cardLinked) {
       appendLabeledUrl(lines, itemIndex, 'AfterMeet card', cardPage);
+      itemIndex += 1;
     }
+  }
+
+  const coverUrl = vcardImageFields(visible, options).coverPhotoUrl;
+  if (!options.minimal && !options.compact && coverUrl?.trim()) {
+    appendLabeledUrl(lines, itemIndex, 'Cover photo', coverUrl.trim());
   }
 
   const noteParts: string[] = [];

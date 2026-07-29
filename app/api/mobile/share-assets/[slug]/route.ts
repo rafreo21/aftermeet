@@ -34,7 +34,7 @@ async function loadShareAssetProfile(
   });
   const { data, error } = await supabase
     .from("cards")
-    .select("slug, full_name, job_title, company, theme_color, profile_image_url, company_logo_url, show_company_details, status, card_methods(method_type, value, label, sort_order)")
+    .select("slug, full_name, job_title, company, theme_color, profile_image_url, company_logo_url, cover_image_url, show_company_details, status, card_methods(method_type, value, label, sort_order)")
     .eq("slug", slug.toLowerCase())
     .eq("workspace_id", workspaceId)
     .eq("status", "published")
@@ -50,6 +50,7 @@ async function loadShareAssetProfile(
     themeColor: data.theme_color ?? "#9fe870",
     photoUrl: data.profile_image_url ?? "",
     companyLogoUrl: data.company_logo_url ?? "",
+    coverPhotoUrl: data.cover_image_url ?? "",
     showCompany: data.show_company_details ?? true,
     methods: [...(data.card_methods || [])]
       .sort((a, b) => a.sort_order - b.sort_order)

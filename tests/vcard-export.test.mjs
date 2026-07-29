@@ -77,6 +77,25 @@ test("buildCardVcard falls back to photo URIs when embeds are unavailable", () =
   assert.match(body, /LOGO;VALUE=URI:https:\/\/cdn\.example\/logo\.png/);
 });
 
+test("shareAssetProfileToVcardInput includes public image URLs", async () => {
+  const { shareAssetProfileToVcardInput } = await import("../lib/contact-qr.ts");
+  const input = shareAssetProfileToVcardInput({
+    name: "Alex Morgan",
+    role: "Designer",
+    company: "Acme",
+    cardUrl: "https://aftermeet.app/c/alex",
+    photoUrl: "https://cdn.example/profile.jpg",
+    companyLogoUrl: "https://cdn.example/logo.png",
+    coverPhotoUrl: "https://cdn.example/cover.jpg",
+    showCompany: true,
+    methods: [],
+  });
+
+  assert.equal(input.profilePhotoUrl, "https://cdn.example/profile.jpg");
+  assert.equal(input.companyLogoUrl, "https://cdn.example/logo.png");
+  assert.equal(input.coverPhotoUrl, "https://cdn.example/cover.jpg");
+});
+
 test("buildCardVcard slugifies the download filename", () => {
   const { filename } = buildCardVcard({
     fullName: "Raphael Okojie",

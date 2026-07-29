@@ -1,5 +1,6 @@
 import type { CardVcardInput } from "./vcard-export.ts";
 import { buildCardVcard } from "./vcard-export.ts";
+import { publicCardImageUrl } from "./card-assets.ts";
 import type { ShareAssetProfile } from "./share-assets.ts";
 
 /** QR payload that saves contact details offline; includes the card URL when online. */
@@ -8,13 +9,17 @@ export function buildContactQrPayload(input: CardVcardInput): string {
 }
 
 export function shareAssetProfileToVcardInput(profile: ShareAssetProfile): CardVcardInput {
+  const showCompany = profile.showCompany !== false;
   return {
     fullName: profile.name,
     jobTitle: profile.role,
     company: profile.company,
     bio: "",
     cardUrl: profile.cardUrl,
-    showCompanyDetails: profile.showCompany,
+    showCompanyDetails: showCompany,
+    profilePhotoUrl: publicCardImageUrl(profile.photoUrl),
+    companyLogoUrl: showCompany ? publicCardImageUrl(profile.companyLogoUrl) : null,
+    coverPhotoUrl: publicCardImageUrl(profile.coverPhotoUrl),
     methods: (profile.methods ?? []).map((method) => ({
       method_type: method.method_type,
       value: method.value,
