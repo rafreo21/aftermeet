@@ -17,11 +17,16 @@ export async function downloadShareAsset(
   slug: string,
   type: ShareAssetType,
   accessToken: string,
+  options?: { themeColor?: string },
 ) {
   const env = readEnv();
   if (!env) throw new Error('App configuration is missing.');
 
-  const url = `${env.publicCardBaseUrl}/api/mobile/share-assets/${encodeURIComponent(slug)}?type=${type}`;
+  const params = new URLSearchParams({ type });
+  if (options?.themeColor?.trim()) {
+    params.set('themeColor', options.themeColor.trim());
+  }
+  const url = `${env.publicCardBaseUrl}/api/mobile/share-assets/${encodeURIComponent(slug)}?${params.toString()}`;
   const filename = `aftermeet-${type}-${slug}.${assetExtension(type)}`;
   const path = `${FileSystem.cacheDirectory}${filename}`;
 
@@ -71,5 +76,5 @@ export function watchSetupInstructions(platform: 'ios' | 'android') {
 }
 
 export function virtualBackgroundInstructions() {
-  return 'Downloads a 1920×1080 JPG for Zoom, Google Meet, and Teams.';
+  return 'Downloads a 1920×1080 JPG for Zoom, Google Meet, and Teams. Uses your card color and is laid out for mirrored self-view in those apps.';
 }

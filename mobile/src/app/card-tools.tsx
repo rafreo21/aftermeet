@@ -31,7 +31,6 @@ import {
 } from '@/features/card/card-tool-sheets';
 import { syncCardToolsForCard } from '@/features/card/card-tools-sync';
 import { useCard } from '@/features/card/card-context';
-import { CardThemeGradient } from '@/components/card-theme-gradient';
 import { themeSurfaceStyle } from '@/features/card/theme-colors';
 import { fetchWalletAvailability } from '@/features/card/wallet-actions';
 import { buildHtmlSignature, buildPlainSignature } from '@/lib/email-signature';
@@ -259,9 +258,10 @@ export default function CardToolsScreen() {
               Wallet, widgets, NFC, and sharing extras for this card.
             </Body>
             <View style={styles.cardMetaRow}>
-              <CardThemeGradient theme={card.theme} style={styles.themeChip}>
-                <Text style={[styles.themeChipText, { color: theme.color }]}>{theme.backgroundColor}</Text>
-              </CardThemeGradient>
+              <View style={styles.themeMeta}>
+                <View style={[styles.themeSwatch, { backgroundColor: theme.backgroundColor }]} />
+                <Text style={styles.themeCode}>{theme.backgroundColor}</Text>
+              </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Edit this card"
@@ -418,12 +418,30 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
     marginTop: spacing.x2,
   },
-  themeChip: {
-    paddingHorizontal: 10,
+  themeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x2,
+    paddingHorizontal: spacing.x2,
     paddingVertical: 6,
     borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
-  themeChipText: { fontSize: 11, fontWeight: '800' },
+  themeSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(22, 51, 0, 0.12)',
+  },
+  themeCode: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   editLink: {
     flexDirection: 'row',
     alignItems: 'center',

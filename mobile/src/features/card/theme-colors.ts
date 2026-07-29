@@ -83,6 +83,16 @@ export function themeGradientStops(hex: string): ThemeGradientStops {
   return [highlight, base, shadow];
 }
 
+/** Soft vertical wash used by exported virtual backgrounds (matches server share assets). */
+export function themeVirtualBackgroundGradientStops(hex: string): readonly [string, string] {
+  const base = normalizeThemeColor(hex);
+  return [mixHex(base, WHITE, 0.55), mixHex(base, WHITE, 0.78)];
+}
+
+export function themeWalletBackgroundColor(hex: string) {
+  return normalizeThemeColor(hex);
+}
+
 export function themeGradientCss(hex: string) {
   const [highlight, base, shadow] = themeGradientStops(hex);
   return `linear-gradient(135deg, ${highlight} 0%, ${base} 48%, ${shadow} 100%)`;

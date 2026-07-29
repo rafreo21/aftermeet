@@ -20,6 +20,11 @@ export const VIRTUAL_BG_PANEL = {
   radius: 20,
 } as const;
 
+/** Left-side slot used in exports so Meet/Zoom self-view mirror places the card top-right. */
+export function virtualBackgroundPanelLeftForVideoApps() {
+  return VIRTUAL_BG_PANEL.canvasWidth - VIRTUAL_BG_PANEL.x - VIRTUAL_BG_PANEL.width;
+}
+
 export type VirtualBackgroundLayout = {
   subtitle: string;
   nameX: number;

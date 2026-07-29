@@ -2,8 +2,11 @@ import sharp from "sharp";
 
 import { buildBrandedQrDataUri, buildBrandedQrPngBuffer } from "./branded-qr.ts";
 import { loadShareAssetFontsBase64, shareAssetFontStyles } from "./share-asset-fonts.ts";
+import { normalizeThemeColor, themeGradientStops } from "./theme-contrast.ts";
+import { buildVirtualBackgroundGradientPng } from "./virtual-background-gradient.ts";
 import {
   buildVirtualBackgroundLayout,
+  virtualBackgroundPanelLeftForVideoApps,
   VIRTUAL_BG_PANEL,
 } from "./virtual-background-layout.ts";
 import { buildVirtualBackgroundPanelPng } from "./virtual-background-panel-image.ts";
@@ -28,17 +31,17 @@ function escapeXml(value: string) {
     .replaceAll("'", "&apos;");
 }
 
-function normalizeHex(hex: string | undefined, fallback = "#9FE870") {
-  const trimmed = hex?.trim() || fallback;
-  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
-}
-
-function tint(hex: string, amount: number) {
-  const normalized = hex.replace("#", "");
-  if (normalized.length !== 6) return hex;
-  const channels = [0, 2, 4].map((index) => Number.parseInt(normalized.slice(index, index + 2), 16));
-  const mixed = channels.map((channel) => Math.round(channel + (255 - channel) * amount));
-  return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+function cardThemeBackgroundGradientMarkup(themeColor: string | undefined) {
+  const [highlight, base, shadow] = themeGradientStops(normalizeThemeColor(themeColor));
+  const width = VIRTUAL_BG_PANEL.canvasWidth;
+  const height = VIRTUAL_BG_PANEL.canvasHeight;
+  return [
+    `<linearGradient id="cardThemeBg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${width}" y2="${height}">`,
+    `<stop offset="0%" stop-color="${highlight}"/>`,
+    `<stop offset="48%" stop-color="${base}"/>`,
+    `<stop offset="100%" stop-color="${shadow}"/>`,
+    `</linearGradient>`,
+  ].join("");
 }
 
 /** @deprecated Use buildBrandedQrDataUri instead. */
@@ -51,25 +54,21 @@ export async function buildBrandedQrAsset(cardUrl: string, renderSize = 1024) {
 }
 
 async function buildVirtualBackgroundSvgDocument(profile: ShareAssetProfile) {
-  const theme = normalizeHex(profile.themeColor);
-  const softTop = tint(theme, 0.55);
-  const softBottom = tint(theme, 0.78);
   const name = escapeXml(profile.name.trim() || "Your name");
   const layout = buildVirtualBackgroundLayout(profile);
   const fonts = await loadShareAssetFontsBase64();
   const qrRenderSize = VIRTUAL_BG_PANEL.qrSize * 5;
   const qrDataUri = await buildBrandedQrDataUri(profile.cardUrl, qrRenderSize);
+  const width = VIRTUAL_BG_PANEL.canvasWidth;
+  const height = VIRTUAL_BG_PANEL.canvasHeight;
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" viewBox="0 0 ${VIRTUAL_BG_PANEL.canvasWidth} ${VIRTUAL_BG_PANEL.canvasHeight}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
     `<defs>`,
     `<style>${shareAssetFontStyles(fonts.regular, fonts.bold)}</style>`,
-    `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">`,
-    `<stop offset="0%" stop-color="${softTop}"/>`,
-    `<stop offset="100%" stop-color="${softBottom}"/>`,
-    `</linearGradient>`,
+    cardThemeBackgroundGradientMarkup(profile.themeColor),
     `</defs>`,
-    `<rect width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" fill="url(#bg)"/>`,
+    `<rect width="${width}" height="${height}" fill="url(#cardThemeBg)"/>`,
     `<rect x="${VIRTUAL_BG_PANEL.x}" y="${VIRTUAL_BG_PANEL.y}" width="${VIRTUAL_BG_PANEL.width}" height="${VIRTUAL_BG_PANEL.height}" rx="${VIRTUAL_BG_PANEL.radius}" fill="#FFFFFF" fill-opacity="0.94"/>`,
     `<text x="${layout.nameX}" y="${layout.nameY}" fill="#163300" font-family="Inter, Arial, sans-serif" font-size="${VIRTUAL_BG_PANEL.nameFontSize}" font-weight="700">${name}</text>`,
     layout.subtitle
@@ -88,34 +87,21 @@ export async function buildVirtualBackgroundSvg(profile: ShareAssetProfile) {
 
 /** JPG export for Zoom, Google Meet, and Teams. */
 export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
-  const theme = normalizeHex(profile.themeColor);
-  const softTop = tint(theme, 0.55);
-  const softBottom = tint(theme, 0.78);
-
-  const backgroundSvg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}">`,
-    `<defs>`,
-    `<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">`,
-    `<stop offset="0%" stop-color="${softTop}"/>`,
-    `<stop offset="100%" stop-color="${softBottom}"/>`,
-    `</linearGradient>`,
-    `</defs>`,
-    `<rect width="${VIRTUAL_BG_PANEL.canvasWidth}" height="${VIRTUAL_BG_PANEL.canvasHeight}" fill="url(#bg)"/>`,
-    `</svg>`,
-  ].join("");
+  const panelLeft = virtualBackgroundPanelLeftForVideoApps();
 
   const [background, panelPngRaw] = await Promise.all([
-    sharp(Buffer.from(backgroundSvg)).png().toBuffer(),
+    buildVirtualBackgroundGradientPng(profile.themeColor),
     buildVirtualBackgroundPanelPng(profile, 2),
   ]);
 
   const panelPng = await sharp(panelPngRaw)
     .resize(VIRTUAL_BG_PANEL.width, VIRTUAL_BG_PANEL.height)
+    .flop()
     .png()
     .toBuffer();
 
   return sharp(background)
-    .composite([{ input: panelPng, top: VIRTUAL_BG_PANEL.y, left: VIRTUAL_BG_PANEL.x }])
+    .composite([{ input: panelPng, top: VIRTUAL_BG_PANEL.y, left: panelLeft }])
     .jpeg({ quality: 92, mozjpeg: true })
     .toBuffer();
 }

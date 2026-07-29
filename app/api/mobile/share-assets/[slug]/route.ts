@@ -11,6 +11,7 @@ import {
 import { buildBrandedQrDataUri } from "../../../../../lib/branded-qr.ts";
 import { getAppUserFromRequest } from "../../../../../lib/auth/mobile-api-auth";
 import { readPublicSupabaseConfig } from "../../../../../lib/supabase/env";
+import { normalizeThemeColor } from "../../../../../lib/theme-contrast.ts";
 
 function cardUrlForSlug(slug: string, request: Request) {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
@@ -52,6 +53,12 @@ async function loadShareAssetProfile(
   };
 }
 
+function applyThemeOverride(profile: ShareAssetProfile, request: Request) {
+  const themeOverride = new URL(request.url).searchParams.get("themeColor")?.trim();
+  if (!themeOverride) return profile;
+  return { ...profile, themeColor: normalizeThemeColor(themeOverride) };
+}
+
 export async function GET(request: Request, context: { params: Promise<{ slug: string }> }) {
   const authHeader = request.headers.get("Authorization");
   const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
@@ -84,10 +91,11 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
     }, { status: 400 });
   }
 
-  const profile = await loadShareAssetProfile(normalized, request, user.workspaceId, accessToken);
-  if (!profile) {
+  const loaded = await loadShareAssetProfile(normalized, request, user.workspaceId, accessToken);
+  if (!loaded) {
     return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
   }
+  const profile = applyThemeOverride(loaded, request);
 
   try {
     const asset = type === "virtual-background"

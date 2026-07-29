@@ -14,7 +14,7 @@ import { Platform, Image, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
 
 import { BrandedQrPreview } from '@/components/branded-qr-preview';
-import { CardThemeGradient } from '@/components/card-theme-gradient';
+import { VirtualBackgroundPreviewBackground, WalletPreviewBackground } from '@/components/card-tool-preview-backgrounds';
 import { Body, Button } from '@/components/ui';
 import { showsCompanyDetails } from '@/features/card/company-display';
 import type { themeSurfaceStyle } from '@/features/card/theme-colors';
@@ -90,7 +90,7 @@ export function WalletToolSheetContent({
   return (
     <View style={styles.sheetBody}>
       <Body>Your card appears in Wallet with name, role, company, and a scannable QR code. Apple and Google render the pass scan code themselves; your AfterMeet mark appears on the pass header.</Body>
-      <CardThemeGradient theme={card.theme} style={styles.walletPreview}>
+      <WalletPreviewBackground theme={card.theme} style={styles.walletPreview}>
         <Text style={[styles.walletHeader, { color: theme.softColor }]}>AfterMeet Card</Text>
         <View style={styles.walletFields}>
           <View style={styles.walletField}>
@@ -113,7 +113,7 @@ export function WalletToolSheetContent({
         <View style={styles.walletQrPreview}>
           <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={112} />
         </View>
-      </CardThemeGradient>
+      </WalletPreviewBackground>
       {Platform.OS === 'ios' ? (
         <>
           <Button
@@ -484,21 +484,22 @@ export function BackgroundToolSheetContent({
   return (
     <View style={styles.sheetBody}>
       <Body>{virtualBackgroundInstructions()}</Body>
-      <CardThemeGradient theme={card.theme} style={styles.backgroundPreview}>
+      <VirtualBackgroundPreviewBackground theme={card.theme} style={styles.backgroundPreview}>
         <VirtualBackgroundPanelPreview
           name={card.name}
           subtitle={subtitle}
           cardUrl={publicUrl}
           slug={card.slug}
           accessToken={accessToken}
+          panelWidth={200}
         />
-      </CardThemeGradient>
+      </VirtualBackgroundPreviewBackground>
       <Button
         loading={busy === 'background'}
         disabled={!accessToken || !published}
         onPress={() => void run('background', async () => {
           if (!accessToken) throw new Error('Sign in required.');
-          await downloadShareAsset(card.slug, 'virtual-background', accessToken);
+          await downloadShareAsset(card.slug, 'virtual-background', accessToken, { themeColor: card.theme });
         }, { successMessage: 'Virtual background downloaded. Import it in your meeting app.' })}>
         <Monitor size={18} color={colors.ink} weight="bold" />
         Download virtual background
@@ -519,7 +520,6 @@ const styles = StyleSheet.create({
   sheetBody: { gap: spacing.x3 },
   note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   walletPreview: {
-    borderRadius: radius.medium,
     padding: spacing.x4,
     gap: spacing.x3,
   },
@@ -685,9 +685,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backgroundPreview: {
-    borderRadius: radius.medium,
-    padding: spacing.x4,
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
+    width: '100%',
   },
 });

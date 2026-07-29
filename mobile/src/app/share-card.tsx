@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { Body, Button, PageHeader, ScreenFrame } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
+import { showsCompanyDetails } from '@/features/card/company-display';
 import {
   isTapToShareActive,
   isTapToShareNativeReady,
@@ -26,6 +27,7 @@ export default function ShareCardScreen() {
     || (slug ? cards.find((item) => item.slug === slug) : undefined)
     || activeCard;
   const publicUrl = cardPublicUrl(card);
+  const showCompany = showsCompanyDetails(card);
   const tapSupported = isTapToShareSupported();
   const tapNativeReady = isTapToShareNativeReady();
   const [tapActive, setTapActive] = useState(false);
@@ -68,7 +70,7 @@ export default function ShareCardScreen() {
   async function shareCard() {
     await Share.share({
       title: `${card.name} · AfterMeet`,
-      message: `${card.name}\n${card.role}${card.company ? ` at ${card.company}` : ''}\n${publicUrl}`,
+      message: `${card.name}\n${card.role}${showCompany && card.company ? ` at ${card.company}` : ''}\n${publicUrl}`,
       url: publicUrl,
     });
   }
@@ -78,8 +80,8 @@ export default function ShareCardScreen() {
       <PageHeader eyebrow="Quick Share" title="Scan to connect" titleStyle={styles.title} />
       <Body style={styles.cardLine}>
         {card.name}
-        {card.role || card.company
-          ? ` · ${[card.role, card.company].filter(Boolean).join(' · ')}`
+        {card.role || (showCompany && card.company)
+          ? ` · ${[card.role, showCompany ? card.company : ''].filter(Boolean).join(' · ')}`
           : ''}
       </Body>
       <ScrollView

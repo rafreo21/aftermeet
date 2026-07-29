@@ -57,34 +57,70 @@ test("html email signature includes structured layout and card link", async () =
   assert.match(html, /data:image\/png;base64,abc/);
 });
 
-test("virtual background svg uses side-by-side layout with embedded font and branded qr", async () => {
+test("virtual background svg uses card theme gradient and side-by-side layout", async () => {
   const { buildVirtualBackgroundSvg } = await import("../lib/share-assets.ts");
+  const { themeGradientStops } = await import("../lib/theme-contrast.ts");
+  const [highlight, base, shadow] = themeGradientStops("#5146E5");
   const svg = await buildVirtualBackgroundSvg({
     name: "Alex Morgan",
     role: "Consultant",
     company: "Northstar",
     cardUrl: "https://aftermeet.app/c/alex-morgan",
-    themeColor: "#9FE870",
+    themeColor: "#5146E5",
   });
   assert.match(svg, /Alex Morgan/);
   assert.match(svg, /font-family="Inter/);
   assert.match(svg, /Scan to save my contact/);
   assert.match(svg, /width="120"/);
   assert.match(svg, /data:image\/png;base64,/);
+  assert.match(svg, new RegExp(`stop-color="${highlight}"`));
+  assert.match(svg, new RegExp(`stop-color="${base}"`));
+  assert.match(svg, new RegExp(`stop-color="${shadow}"`));
+  assert.match(svg, /x2="1920" y2="1080"/);
 });
 
-test("virtual background jpeg export is a valid image", async () => {
+test("virtual background jpeg export uses card theme gradient and video-app panel layout", async () => {
   const { buildVirtualBackgroundJpeg } = await import("../lib/share-assets.ts");
-  const jpeg = await buildVirtualBackgroundJpeg({
+  const { themeGradientStops } = await import("../lib/theme-contrast.ts");
+  const { virtualBackgroundPanelLeftForVideoApps } = await import("../lib/virtual-background-layout.ts");
+  const profile = {
     name: "Alex Morgan",
     role: "Consultant",
     company: "Northstar",
     cardUrl: "https://aftermeet.app/c/alex-morgan",
-    themeColor: "#9FE870",
-  });
+    themeColor: "#5146E5",
+  };
+
+  const jpeg = await buildVirtualBackgroundJpeg(profile);
   assert.ok(jpeg.length > 10_000);
   assert.equal(jpeg[0], 0xff);
   assert.equal(jpeg[1], 0xd8);
+
+  const sharp = (await import("sharp")).default;
+  const { data, info } = await sharp(jpeg).raw().toBuffer({ resolveWithObject: true });
+  const [highlight] = themeGradientStops("#5146E5");
+  const highlightRgb = [
+    Number.parseInt(highlight.slice(1, 3), 16),
+    Number.parseInt(highlight.slice(3, 5), 16),
+    Number.parseInt(highlight.slice(5, 7), 16),
+  ];
+
+  function px(x, y) {
+    const i = (y * info.width + x) * info.channels;
+    return [data[i], data[i + 1], data[i + 2]];
+  }
+
+  const topLeft = px(20, 20);
+  assert.ok(
+    Math.abs(topLeft[0] - highlightRgb[0]) < 24
+      && Math.abs(topLeft[1] - highlightRgb[1]) < 24
+      && Math.abs(topLeft[2] - highlightRgb[2]) < 24,
+    `expected theme gradient near ${highlight}, got rgb(${topLeft.join(",")})`,
+  );
+
+  const panelLeft = virtualBackgroundPanelLeftForVideoApps();
+  const panelSample = px(panelLeft + 20, 80);
+  assert.ok(panelSample.every((channel) => channel > 230), `expected white card panel on the left side of export, got rgb(${panelSample.join(",")})`);
 });
 
 test("watch face svg includes personal card label", async () => {
