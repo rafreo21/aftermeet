@@ -58,23 +58,19 @@ export function supportsNativeSpeechRecording() {
   return Boolean(speechModule?.supportsRecording?.());
 }
 
-/** Live STT + best-effort persisted audio via the speech module. */
+/** Live STT + persisted audio via speech module (when native recording is supported). */
 export function shouldUseUnifiedSpeechCapture() {
   return isNativeSpeechTranscriptionAvailable() && supportsNativeSpeechRecording();
 }
 
 /**
- * Prefer on-device live transcript whenever speech recognition exists.
- * Always request persisted audio (unified) — some devices still only deliver
- * live words; Finish then keeps the transcript and soft-warns if no file.
+ * Only use the speech module when it can also save audio.
+ * Otherwise Record uses expo-audio (file on Finish) + OpenAI Whisper for transcript.
+ * Live-only speech leaves no file on many Android phones (this device included).
  */
 export function resolveSpeechCaptureMode(): SpeechCaptureMode {
-  if (isNativeSpeechTranscriptionAvailable()) return 'unified';
+  if (shouldUseUnifiedSpeechCapture()) return 'unified';
   return 'none';
-}
-
-export function canUseLiveSpeechCapture() {
-  return isNativeSpeechTranscriptionAvailable();
 }
 
 function joinRecordingPath(directory: string, fileName: string) {

@@ -12,9 +12,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveTranscript, type LiveTranscriptStatus } from '@/features/encounters/live-transcript';
 import {
   NativeSpeechCapture,
-  canUseLiveSpeechCapture,
   isNativeSpeechTranscriptionAvailable,
   resolveSpeechCaptureMode,
+  shouldUseUnifiedSpeechCapture,
   type SpeechCaptureMode,
 } from '@/features/encounters/native-speech-transcript';
 import { isSupportedAudioImport } from '@/features/encounters/audio-upload';
@@ -284,6 +284,23 @@ export function useCaptureRecorder({
     audioRecorder.record();
   }, [audioRecorder]);
 
+  const stopExpoAudioRecording = useCallback(async () => {
+    try {
+      if (audioRecorder.isRecording) {
+        await audioRecorder.stop();
+      }
+    } catch {
+      // still try to read uri below
+    }
+    // Expo sometimes exposes the URI a tick after stop.
+    let uri = audioRecorder.uri ?? recorderState.url ?? null;
+    if (!uri) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      uri = audioRecorder.uri ?? recorderState.url ?? null;
+    }
+    return uri;
+  }, [audioRecorder, recorderState.url]);
+
   const stopSpeechCapture = useCallback(async () => {
     clearSpeechTimer();
     return speechCaptureRef.current.stop();
@@ -312,9 +329,9 @@ export function useCaptureRecorder({
       setSpeechAudioLevel(0);
       setRecordingState('recording');
 
-      // Live transcript first (speech module). Always request file persistence;
-      // Finish resolves the WAV when the device wrote one.
-      if (canUseLiveSpeechCapture()) {
+      // Only use speech capture when the device can persist audio too.
+      // Live-only STT on this phone left Finish with no file.
+      if (shouldUseUnifiedSpeechCapture()) {
         setCaptureMode('unified');
         captureModeRef.current = 'unified';
         speechCaptureRef.current.resetSession();
@@ -327,7 +344,7 @@ export function useCaptureRecorder({
         speechCaptureRef.current.resetSession();
       }
 
-      // No on-device speech — record audio and transcribe after Finish.
+      // Durable file via expo-audio; OpenAI Whisper fills the transcript on Finish.
       setCaptureMode('none');
       captureModeRef.current = 'none';
       liveTranscript.markListening();
@@ -356,7 +373,7 @@ export function useCaptureRecorder({
       liveTranscript.resetForRecording();
       setRecordingState('recording');
       if (usingSpeechCapture) {
-        const started = await startSpeechCapture(captureModeRef.current);
+        const started = await startSpeechCapture('unified');
         if (started) startSpeechTimer();
       } else {
         audioRecorder.record();
@@ -385,19 +402,16 @@ export function useCaptureRecorder({
         uri = await stopSpeechCapture();
         speechCaptureRef.current.resetSession();
       } else {
-        await audioRecorder.stop();
-        uri = audioRecorder.uri ?? recorderState.url;
+        uri = await stopExpoAudioRecording();
       }
 
       publishDuration(seconds);
       let cleaned = liveTranscript.finalizeTranscript();
 
       if (uri) {
-        // Always try to enrich thin live text from the saved file after Finish.
+        // Always run Whisper when we did not get rich live STT (expo-audio path).
         if (!liveSttReceivedRef.current || cleaned.trim().length < 20) {
-          cleaned = await maybeTranscribeFromServer(uri, cleaned, undefined, {
-            force: !liveSttReceivedRef.current,
-          });
+          cleaned = await maybeTranscribeFromServer(uri, cleaned, undefined, { force: true });
         } else if (cleaned) {
           onTranscriptFinalizedRef.current?.(cleaned);
         }
@@ -406,26 +420,25 @@ export function useCaptureRecorder({
         setPlaybackSource(uri);
         onRecordingUriChange(uri, 'recorded');
         setPlaybackReady(true);
+        onErrorRef.current('');
       } else if (cleaned.trim()) {
-        // Live words worked; this device did not write an audio file.
         onTranscriptFinalizedRef.current?.(cleaned);
         onErrorRef.current(
-          'Transcript is ready. This phone did not save an audio file — you can keep going; playback and guest recording need a device that supports audio capture.',
+          'Transcript is ready, but no audio file was saved. Tap Record again — we need the file for playback and guest sharing.',
         );
       } else {
-        onErrorRef.current('Finish stopped the session, but no audio or transcript was saved. Tap Record and try again.');
+        onErrorRef.current('Finish stopped the session, but no audio was saved. Tap Record and try again.');
       }
     } catch {
       onErrorRef.current('Finish stopped the session, but nothing was saved. Tap Record and try again.');
     }
   }, [
-    audioRecorder,
     liveTranscript,
     maybeTranscribeFromServer,
     onRecordingUriChange,
     publishDuration,
-    recorderState.url,
     seconds,
+    stopExpoAudioRecording,
     stopSpeechCapture,
     usingSpeechCapture,
   ]);
@@ -566,9 +579,11 @@ export function useCaptureRecorder({
       case 'receiving':
         return 'Receiving speech live';
       case 'listening':
-        return 'Listening for words…';
+        return usingSpeechCapture
+          ? 'Listening for words…'
+          : 'Recording audio…';
       case 'transcribing':
-        return 'Transcribing recording…';
+        return 'Transcribing with OpenAI…';
       case 'unavailable':
         return isExpoGo()
           ? 'Recording. Transcript appears when you tap Finish (requires sign-in)'
