@@ -2,7 +2,7 @@ import * as Brightness from 'expo-brightness';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ContactlessPayment, Scan, ShareNetwork, Wallet } from 'phosphor-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, Share, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Share, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { BrandedQrCode, type QrShareMode } from '@/components/branded-qr-code';
 import { GoogleWalletIcon } from '@/components/google-wallet-icon';
@@ -44,6 +44,11 @@ export default function ShareCardScreen() {
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletNote, setWalletNote] = useState('');
   const [qrMode, setQrMode] = useState<QrShareMode>('online');
+  const onlineQrEnabled = qrMode === 'online';
+
+  const setOnlineQrEnabled = useCallback((enabled: boolean) => {
+    setQrMode(enabled ? 'online' : 'offline');
+  }, []);
 
   useEffect(() => {
     if (!card.slug || !session?.access_token || card.status !== 'published') {
@@ -160,37 +165,40 @@ export default function ShareCardScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         bounces={false}>
         {publicUrl ? (
           <View style={styles.qrSection}>
             <View style={styles.qr}>
-              <BrandedQrCode card={card} cardUrl={publicUrl} mode={qrMode} size={280} />
+              <BrandedQrCode
+                key={qrMode}
+                card={card}
+                cardUrl={publicUrl}
+                mode={qrMode}
+                size={280}
+              />
             </View>
             <View style={styles.modeToggle}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ selected: qrMode === 'online' }}
-                onPress={() => setQrMode('online')}
-                style={({ pressed }) => [
-                  styles.modeOption,
-                  qrMode === 'online' && styles.modeOptionActive,
-                  pressed && styles.modeOptionPressed,
-                ]}>
-                <Text style={[styles.modeLabel, qrMode === 'online' && styles.modeLabelActive]}>Online</Text>
-                <Text style={styles.modeHint}>Opens your card page so they can share back</Text>
+                onPress={() => setOnlineQrEnabled(!onlineQrEnabled)}
+                style={styles.modeToggleCopy}>
+                <Text style={styles.modeToggleTitle}>
+                  {onlineQrEnabled ? 'Online contact QR' : 'Offline contact QR active'}
+                </Text>
+                <Text style={styles.modeToggleHint}>
+                  {onlineQrEnabled
+                    ? 'Scans open your card page so visitors can share back.'
+                    : 'Scanners save your contact without internet.'}
+                </Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: qrMode === 'offline' }}
-                onPress={() => setQrMode('offline')}
-                style={({ pressed }) => [
-                  styles.modeOption,
-                  qrMode === 'offline' && styles.modeOptionActive,
-                  pressed && styles.modeOptionPressed,
-                ]}>
-                <Text style={[styles.modeLabel, qrMode === 'offline' && styles.modeLabelActive]}>Offline</Text>
-                <Text style={styles.modeHint}>Saves your contact without internet</Text>
-              </Pressable>
+              <Switch
+                accessibilityLabel={onlineQrEnabled ? 'Online contact QR' : 'Offline contact QR active'}
+                value={onlineQrEnabled}
+                onValueChange={setOnlineQrEnabled}
+                trackColor={{ false: colors.line, true: colors.accent }}
+                thumbColor={colors.white}
+              />
             </View>
           </View>
         ) : (
@@ -306,25 +314,18 @@ const styles = StyleSheet.create({
   modeToggle: {
     width: '100%',
     flexDirection: 'row',
-    gap: spacing.x2,
-  },
-  modeOption: {
-    flex: 1,
-    padding: spacing.x3,
-    borderRadius: radius.large,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.x4,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.surfaceMuted,
-    gap: spacing.x1,
   },
-  modeOptionActive: {
-    borderColor: colors.accent,
-    backgroundColor: '#eef8e8',
-  },
-  modeOptionPressed: { opacity: 0.86 },
-  modeLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  modeLabelActive: { color: colors.ink },
-  modeHint: { color: colors.muted, fontSize: 11, lineHeight: 15 },
+  modeToggleCopy: { flex: 1, gap: 4 },
+  modeToggleTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  modeToggleHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   tapPanel: {
     marginTop: spacing.x4,
     width: '100%',

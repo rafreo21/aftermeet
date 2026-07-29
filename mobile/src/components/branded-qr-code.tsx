@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -43,12 +44,28 @@ export function BrandedQrCode({
   color = colors.ink,
   backgroundColor = colors.white,
 }: BrandedQrCodeProps) {
-  const payload = resolvePayload({ value, card, cardUrl, mode });
+  const payload = useMemo(
+    () => resolvePayload({ value, card, cardUrl, mode }),
+    [value, card, cardUrl, mode],
+  );
+  const [renderError, setRenderError] = useState('');
+
+  useEffect(() => {
+    setRenderError('');
+  }, [payload]);
 
   if (!payload) {
     return (
       <View style={[styles.frame, { width: size, height: size }, style]}>
         <Text style={styles.placeholder}>QR</Text>
+      </View>
+    );
+  }
+
+  if (renderError) {
+    return (
+      <View style={[styles.frame, styles.errorFrame, { width: size, height: size }, style]}>
+        <Text style={styles.errorText}>{renderError}</Text>
       </View>
     );
   }
@@ -59,11 +76,15 @@ export function BrandedQrCode({
   return (
     <View style={[styles.frame, { width: size, height: size }, style]}>
       <QRCode
+        key={payload}
         value={payload}
         size={size}
         color={color}
         backgroundColor={backgroundColor}
         ecl="H"
+        onError={(error) => {
+          setRenderError(error instanceof Error ? error.message : 'Could not render this QR code.');
+        }}
       />
       <View
         pointerEvents="none"
@@ -106,5 +127,17 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     fontWeight: '800',
+  },
+  errorFrame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  errorText: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    fontWeight: '600',
   },
 });
