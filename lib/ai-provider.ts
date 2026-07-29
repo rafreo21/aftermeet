@@ -17,14 +17,33 @@ function googleSpeechApiKey() {
   return process.env.GOOGLE_STT_API_KEY?.trim() || "";
 }
 
+function groqApiKey() {
+  return process.env.GROQ_API_KEY?.trim() || "";
+}
+
+function transcriptionProvider() {
+  return process.env.AFTERMEET_TRANSCRIPTION_PROVIDER?.trim().toLowerCase() || "";
+}
+
 /** Temporary test switch: AFTERMEET_TRANSCRIPTION_PROVIDER=google routes audio transcription to Google Cloud Speech-to-Text instead of Whisper (sync recognize, audio capped around 1 minute). */
 export function usesGoogleTranscription() {
-  const provider = process.env.AFTERMEET_TRANSCRIPTION_PROVIDER?.trim().toLowerCase();
-  return provider === "google" && Boolean(googleSpeechApiKey());
+  return transcriptionProvider() === "google" && Boolean(googleSpeechApiKey());
 }
 
 export function googleSpeechConfig() {
   return { apiKey: googleSpeechApiKey() };
+}
+
+/** Temporary test switch: AFTERMEET_TRANSCRIPTION_PROVIDER=groq routes audio transcription to Groq's free-tier, OpenAI-compatible Whisper endpoint instead of OpenAI's. */
+export function usesGroqTranscription() {
+  return transcriptionProvider() === "groq" && Boolean(groqApiKey());
+}
+
+export function groqTranscriptionConfig() {
+  return {
+    apiKey: groqApiKey(),
+    model: process.env.AFTERMEET_GROQ_MODEL?.trim() || "whisper-large-v3-turbo",
+  };
 }
 
 /** Temporary test switch: AFTERMEET_TEXT_PROVIDER=claude routes summaries/extraction/drafts to Claude. Transcription always stays on Whisper — Claude has no audio input. */
@@ -53,7 +72,7 @@ export async function isAiConfigured() {
 }
 
 export async function isTranscriptionConfigured() {
-  if (usesGoogleTranscription()) return true;
+  if (usesGoogleTranscription() || usesGroqTranscription()) return true;
   return isAiConfigured();
 }
 

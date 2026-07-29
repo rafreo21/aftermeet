@@ -11,11 +11,13 @@ import { transcribe } from "ai";
 
 import {
   googleSpeechConfig,
+  groqTranscriptionConfig,
   isTranscriptionConfigured,
   prepareAiAuth,
   transcriptionModel,
   usesDirectOpenAi,
   usesGoogleTranscription,
+  usesGroqTranscription,
 } from "./ai-provider";
 import { cleanLiveTranscript } from "./transcript-cleanup";
 
@@ -67,6 +69,36 @@ async function transcribeWithOpenAiWhisper(
   const payload = await response.json().catch(() => null) as { text?: string; error?: { message?: string } } | null;
   if (!response.ok) {
     throw new Error(payload?.error?.message || `OpenAI transcription failed (${response.status}).`);
+  }
+  return payload?.text?.trim() || "";
+}
+
+/** Groq hosts open-source Whisper behind an OpenAI-compatible endpoint — same multipart shape, free tier, no billing-account requirement. */
+async function transcribeWithGroqWhisper(
+  audio: Uint8Array,
+  options: { language?: string; mimeType: string; fileName: string },
+) {
+  const { apiKey, model } = groqTranscriptionConfig();
+  if (!apiKey) throw new Error("GROQ_API_KEY is not configured.");
+
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([Buffer.from(audio)], { type: options.mimeType }),
+    options.fileName,
+  );
+  form.append("model", model);
+  if (options.language) form.append("language", options.language);
+
+  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+
+  const payload = await response.json().catch(() => null) as { text?: string; error?: { message?: string } } | null;
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Groq transcription failed (${response.status}).`);
   }
   return payload?.text?.trim() || "";
 }
@@ -167,13 +199,15 @@ export async function transcribeEncounterAudio(
   try {
     const rawText = usesGoogleTranscription()
       ? await transcribeWithGoogleSpeech(audio, { language, mimeType, fileName })
-      : usesDirectOpenAi()
-        ? await transcribeWithOpenAiWhisper(audio, { language, mimeType, fileName })
-        : (await transcribe({
-            model: transcriptionModel(),
-            audio,
-            providerOptions: language ? { openai: { language } } : undefined,
-          })).text.trim();
+      : usesGroqTranscription()
+        ? await transcribeWithGroqWhisper(audio, { language, mimeType, fileName })
+        : usesDirectOpenAi()
+          ? await transcribeWithOpenAiWhisper(audio, { language, mimeType, fileName })
+          : (await transcribe({
+              model: transcriptionModel(),
+              audio,
+              providerOptions: language ? { openai: { language } } : undefined,
+            })).text.trim();
 
     const transcript = cleanLiveTranscript(rawText);
     if (!transcript) {
