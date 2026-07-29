@@ -114,6 +114,9 @@ export function RecordingPlayback({ uri, durationSeconds = 0, variant = 'full' }
   const elapsed = Math.max(0, Math.round(status.currentTime || 0));
   const total = Math.max(durationSeconds, Math.round(status.duration || 0), elapsed);
   const progress = total > 0 ? Math.min(1, elapsed / total) : 0;
+  const timeLabel = status.playing || (status.isLoaded && elapsed > 0 && elapsed < total)
+    ? `${formatDuration(elapsed)} / ${formatDuration(total)}`
+    : formatDuration(total);
 
   const statusLabel = useMemo(() => {
     if (playbackError) return playbackError;
@@ -131,7 +134,7 @@ export function RecordingPlayback({ uri, durationSeconds = 0, variant = 'full' }
           <Text style={styles.label}>Voice recording</Text>
           <Text style={styles.status}>{statusLabel}</Text>
         </View>
-        <Text style={styles.duration}>{formatDuration(total)}</Text>
+        <Text style={styles.duration}>{timeLabel}</Text>
       </View>
     );
   }

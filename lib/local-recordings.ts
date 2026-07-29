@@ -12,6 +12,7 @@ export type LocalRecordingMetadata = {
   audioLocation?: "user_device" | "server";
   storagePath?: string;
   sharedAudioUrl?: string;
+  cloudExpiresAt?: string | null;
 };
 
 const DATABASE_NAME = "aftermeet-private-audio";
@@ -71,6 +72,25 @@ export async function deleteLocalRecording(id: string) {
     transaction.onerror = () => reject(transaction.error || new Error("Could not delete local recording."));
   });
   database.close();
+}
+
+export async function readLocalRecording(id: string) {
+  const database = await openDatabase();
+  const result = await new Promise<{ blob: Blob; metadata: LocalRecordingMetadata } | null>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, "readonly");
+    const request = transaction.objectStore(STORE_NAME).get(id);
+    request.onsuccess = () => {
+      const value = request.result as { blob?: Blob; metadata?: LocalRecordingMetadata } | undefined;
+      if (!value?.blob || !value.metadata) {
+        resolve(null);
+        return;
+      }
+      resolve({ blob: value.blob, metadata: value.metadata });
+    };
+    request.onerror = () => reject(request.error || new Error("Could not read local recording."));
+  });
+  database.close();
+  return result;
 }
 
 export async function removeExpiredLocalRecordings() {

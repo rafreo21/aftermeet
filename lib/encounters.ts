@@ -158,6 +158,9 @@ export function encounterFromSharedPayload(payload: Record<string, unknown>): En
           expiresAt: null,
           createdAt: String(payload.startedAt ?? new Date().toISOString()),
           sharedAudioUrl: String((payload.recording as Record<string, unknown>).sharedAudioUrl ?? ""),
+          cloudExpiresAt: typeof (payload.recording as Record<string, unknown>).cloudExpiresAt === "string"
+            ? (payload.recording as Record<string, unknown>).cloudExpiresAt as string
+            : null,
         }
       : undefined,
     actions: Array.isArray(payload.actions) ? payload.actions as EncounterAction[] : [],

@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
 import { encounterFromSharedPayload, readEncounters, type Encounter } from "../../../lib/encounters";
 import { buildAuthHref } from "../../../lib/auth/visitor-intent";
+import { CLOUD_RECORDING_RETENTION_DAYS, formatRecordingAvailableUntil } from "../../../lib/recording-metadata";
 import { LinkButton } from "../../components/Button";
 import { BrandMark } from "../../components/BrandMark";
 import "../../app/product.css";
@@ -45,6 +47,8 @@ export default function GuestEncounterPage() {
       ? encounter.recording.sharedAudioUrl
       : `${window.location.origin}${encounter.recording.sharedAudioUrl}`)
     : null;
+  const recordingAvailableUntil = formatRecordingAvailableUntil(encounter.recording?.cloudExpiresAt);
+
   return (
     <main className="guest-page">
       <section className="guest-panel">
@@ -56,8 +60,28 @@ export default function GuestEncounterPage() {
           <article className="guest-summary">
             <span>Meeting recording</span>
             <audio controls preload="metadata" src={sharedRecordingUrl} style={{ width: "100%", marginTop: 12 }} />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12, alignItems: "center" }}>
+              <a className="button secondary small" href={sharedRecordingUrl} download={`${encounter.title.replace(/[^\w\- ]+/g, "").trim() || "aftermeet"}-recording.m4a`}>
+                <DownloadSimpleIcon size={16} weight="bold" />
+                Save to my device
+              </a>
+              {recordingAvailableUntil ? (
+                <small style={{ color: "var(--muted)" }}>
+                  Available online until {recordingAvailableUntil}. Download now to keep a copy after that.
+                </small>
+              ) : (
+                <small style={{ color: "var(--muted)" }}>
+                  Shared recordings stay online for {CLOUD_RECORDING_RETENTION_DAYS} days. Download to keep a copy on your phone.
+                </small>
+              )}
+            </div>
           </article>
-        ) : null}
+        ) : (
+          <article className="guest-summary">
+            <span>Meeting recording</span>
+            <p>The shared audio is no longer available online. The written summary below is still here for you.</p>
+          </article>
+        )}
         <article className="guest-summary"><span>What you agreed</span><p>{encounter.sharedSummary || "The shared summary is still being prepared."}</p></article>
         <section className="guest-actions">
           <h2>Your next steps</h2>

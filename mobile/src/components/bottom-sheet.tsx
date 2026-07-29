@@ -1,6 +1,8 @@
 import type { PropsWithChildren, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -25,6 +27,33 @@ const SHEET_MAX_HEIGHT = Dimensions.get('window').height * 0.82;
 
 export function BottomSheet({ visible, title, onClose, footer, children }: BottomSheetProps) {
   const insets = useAppInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (!visible) {
+      setKeyboardHeight(0);
+      return;
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [visible]);
+
+  const sheetPaddingBottom = Math.max(insets.bottom, spacing.x4) + keyboardHeight;
+  const sheetMaxHeight = keyboardHeight > 0
+    ? Math.min(SHEET_MAX_HEIGHT, Dimensions.get('window').height - keyboardHeight - spacing.x4)
+    : SHEET_MAX_HEIGHT;
 
   return (
     <Modal
@@ -36,16 +65,16 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
       <View style={styles.root}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close sheet" onPress={onClose} style={styles.backdrop} />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
           style={styles.keyboard}
           pointerEvents="box-none">
           <View
             style={[
               styles.sheet,
               {
-                maxHeight: SHEET_MAX_HEIGHT,
-                paddingBottom: Math.max(insets.bottom, spacing.x4),
+                maxHeight: sheetMaxHeight,
+                paddingBottom: sheetPaddingBottom,
               },
             ]}>
             <View style={styles.handle} />
@@ -59,6 +88,7 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
               style={styles.scroll}
               contentContainerStyle={styles.body}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
               showsVerticalScrollIndicator={false}
               bounces={false}>
               {children}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../lib/encounters";
+import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
 
@@ -61,18 +62,21 @@ export async function POST(request: Request) {
   const recording = body.recording && typeof body.recording === "object"
     ? body.recording as Record<string, unknown>
     : null;
-  const recordingMetadata = recording ? {
-    durationSeconds: typeof recording.durationSeconds === "number" ? recording.durationSeconds : 0,
-    fileSize: typeof recording.fileSize === "number" ? recording.fileSize : 0,
-    mimeType: typeof recording.mimeType === "string" ? recording.mimeType : "",
-    source: recording.source === "imported" ? "imported" : "recorded",
-    retention: typeof recording.retention === "string" ? recording.retention : "7_days",
-    expiresAt: typeof recording.expiresAt === "string" ? recording.expiresAt : null,
-    createdAt: typeof recording.createdAt === "string" ? recording.createdAt : null,
-    audioLocation: "user_device",
-  } : null;
 
   const supabase = await createApiSupabaseClient(request);
+  const { data: existingRow } = await supabase
+    .from("encounters")
+    .select("recording_metadata")
+    .eq("id", body.id)
+    .eq("workspace_id", user.workspaceId)
+    .maybeSingle();
+
+  const existingRecording = existingRow?.recording_metadata && typeof existingRow.recording_metadata === "object"
+    ? existingRow.recording_metadata as Record<string, unknown>
+    : null;
+
+  const recordingMetadata = mergeRecordingMetadataForSave(recording, existingRecording);
+
   const { error } = await supabase.from("encounters").upsert({
     id: body.id,
     workspace_id: user.workspaceId,

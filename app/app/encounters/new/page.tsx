@@ -38,6 +38,7 @@ import {
   saveLocalRecording,
   type AudioRetention,
 } from "../../../../lib/local-recordings";
+import { uploadEncounterRecording } from "../../../../lib/recording-upload";
 import "../../product.css";
 import "../../flow.css";
 
@@ -665,7 +666,7 @@ export default function NewEncounterPage() {
       }
     }
     const personEmail = linkedContact?.email ?? "";
-    const encounter: Encounter = {
+    let encounter: Encounter = {
       id,
       title: form.title.trim() || `Meeting with ${form.personName.trim()}`,
       personName: form.personName.trim(),
@@ -706,6 +707,20 @@ export default function NewEncounterPage() {
         setSaving(false);
         setError(result?.error || "Saved on this device, but cloud sync failed. Press “Save and review” to retry.");
         return;
+      }
+      if (audioBlobRef.current && recording) {
+        try {
+          const uploaded = await uploadEncounterRecording(id, audioBlobRef.current, recording.mimeType);
+          encounter = { ...encounter, recording: uploaded };
+          writeEncounter(encounter);
+          await fetch("/api/encounters", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(encounterToApiBody(encounter)),
+          });
+        } catch {
+          // review screen can retry upload
+        }
       }
     } catch {
       setSaving(false);

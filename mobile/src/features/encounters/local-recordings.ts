@@ -16,6 +16,8 @@ export type LocalRecordingMetadata = {
   localUri: string;
   storagePath?: string;
   sharedAudioUrl?: string;
+  cloudExpiresAt?: string | null;
+  audioLocation?: 'user_device' | 'server';
 };
 
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}aftermeet-recordings/`;
@@ -36,8 +38,7 @@ function metaUri(id: string) {
 }
 
 function expiryFor(retention: AudioRetention, createdAt: Date) {
-  if (retention === 'never') return null;
-  if (retention === 'after_transcription') return createdAt.toISOString();
+  if (retention === 'never' || retention === 'after_transcription') return null;
   const hours = retention === '24_hours' ? 24 : 24 * 7;
   return new Date(createdAt.getTime() + hours * 60 * 60 * 1000).toISOString();
 }
@@ -76,13 +77,20 @@ export async function saveLocalRecording(
 ): Promise<LocalRecordingMetadata> {
   await ensureRecordingsDirectory();
   const ext = guessExtension(sourceUri);
-  const destUri = `${RECORDINGS_DIR}${id}.${ext}`;
-  const sourceInfo = await FileSystem.getInfoAsync(sourceUri);
-  if (!sourceInfo.exists) {
-    throw new Error('Recording file is no longer available on this device.');
-  }
-  if (sourceUri !== destUri) {
-    await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+  let destUri = `${RECORDINGS_DIR}${id}.${ext}`;
+  const destInfo = await FileSystem.getInfoAsync(destUri);
+  if (!destInfo.exists) {
+    const sourceInfo = await FileSystem.getInfoAsync(sourceUri);
+    if (sourceInfo.exists && sourceUri !== destUri) {
+      await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+    } else {
+      const existingUri = await scanLocalRecordingFile(id);
+      if (existingUri) {
+        destUri = existingUri;
+      } else if (!sourceInfo.exists) {
+        throw new Error('Recording file is no longer available on this device.');
+      }
+    }
   }
   const info = await FileSystem.getInfoAsync(destUri);
   const createdAt = new Date();
@@ -99,6 +107,15 @@ export async function saveLocalRecording(
   return metadata;
 }
 
+async function scanLocalRecordingFile(id: string) {
+  await ensureRecordingsDirectory();
+  for (const ext of ['wav', 'm4a', 'mp3', 'aac', 'caf']) {
+    const uri = `${RECORDINGS_DIR}${id}.${ext}`;
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists) return uri;
+  }
+  return null;
+}
 export async function readLocalRecordingMetadata(id: string): Promise<LocalRecordingMetadata | null> {
   await ensureRecordingsDirectory();
   try {
@@ -112,15 +129,21 @@ export async function readLocalRecordingMetadata(id: string): Promise<LocalRecor
       storagePath?: string;
       sharedAudioUrl?: string;
     };
-    if (!parsed.audioFile) return null;
-    const info = await FileSystem.getInfoAsync(parsed.audioFile);
-    if (!info.exists) return null;
+    let audioFile = parsed.audioFile ?? (await scanLocalRecordingFile(id)) ?? undefined;
+    if (!audioFile) return null;
+    let info = await FileSystem.getInfoAsync(audioFile);
+    if (!info.exists) {
+      const fallback = await scanLocalRecordingFile(id);
+      if (!fallback) return null;
+      audioFile = fallback;
+      info = await FileSystem.getInfoAsync(audioFile);
+    }
     return {
       id,
-      localUri: parsed.audioFile,
+      localUri: audioFile,
       durationSeconds: parsed.durationSeconds ?? 0,
       fileSize: info.exists && 'size' in info ? (info.size ?? 0) : 0,
-      mimeType: parsed.mimeType || guessMimeType(parsed.audioFile),
+      mimeType: parsed.mimeType || guessMimeType(audioFile),
       source: 'recorded',
       retention: '7_days',
       expiresAt: parsed.expiresAt ?? null,
@@ -165,16 +188,26 @@ export async function removeExpiredLocalRecordings() {
 }
 
 export async function findLocalRecordingUri(id: string) {
-  const metadata = await readLocalRecordingMetadata(id);
-  if (metadata?.localUri) return metadata.localUri;
+  const scanned = await scanLocalRecordingFile(id);
+  if (scanned) return scanned;
 
-  await ensureRecordingsDirectory();
-  for (const ext of ['wav', 'm4a', 'mp3', 'aac', 'caf']) {
-    const uri = `${RECORDINGS_DIR}${id}.${ext}`;
-    const info = await FileSystem.getInfoAsync(uri);
-    if (info.exists) return uri;
+  try {
+    const raw = await FileSystem.readAsStringAsync(metaUri(id));
+    const parsed = JSON.parse(raw) as { audioFile?: string };
+    if (parsed.audioFile) {
+      const info = await FileSystem.getInfoAsync(parsed.audioFile);
+      if (info.exists) return parsed.audioFile;
+    }
+  } catch {
+    // ignore missing or invalid index
   }
   return null;
+}
+
+export async function updateLocalRecordingSharedUrl(id: string, sharedAudioUrl: string) {
+  const metadata = await readLocalRecordingMetadata(id);
+  if (!metadata) return;
+  await writeRecordingIndex({ ...metadata, sharedAudioUrl });
 }
 
 export function formatDuration(seconds: number) {

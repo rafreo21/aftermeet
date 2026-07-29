@@ -422,9 +422,9 @@ export async function uploadEncounterRecording(
   const payload = await response.json() as {
     ok?: boolean;
     error?: string;
-    recording?: { sharedAudioUrl?: string };
+    recording?: LocalRecordingMetadata;
   };
-  if (!response.ok || !payload.ok) {
+  if (!response.ok || !payload.ok || !payload.recording) {
     throw new Error(payload.error || 'Could not upload this recording for sharing.');
   }
   return payload.recording;
@@ -460,7 +460,10 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
             retention: encounter.recording.retention,
             expiresAt: encounter.recording.expiresAt,
             createdAt: encounter.recording.createdAt,
-            audioLocation: 'user_device',
+            audioLocation: encounter.recording.audioLocation ?? 'user_device',
+            storagePath: encounter.recording.storagePath,
+            sharedAudioUrl: encounter.recording.sharedAudioUrl,
+            cloudExpiresAt: encounter.recording.cloudExpiresAt ?? null,
           }
         : null,
     }),

@@ -1,6 +1,6 @@
 export type DuePreset = 'none' | 'today' | 'tomorrow' | 'in_3_days' | 'in_1_week' | 'custom';
 
-function toIsoDate(date: Date) {
+export function toIsoDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');

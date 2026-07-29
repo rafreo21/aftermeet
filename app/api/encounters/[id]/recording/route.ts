@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../../../lib/auth/api-request";
+import { cloudExpiresAt } from "../../../../../lib/recording-metadata";
 import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../lib/supabase/service";
 
 function guessExtension(mimeType: string) {
@@ -65,6 +66,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     audioLocation: "server",
     storagePath,
     sharedAudioUrl: `/api/encounters/share/${encounter.share_token}/recording`,
+    cloudExpiresAt: cloudExpiresAt(new Date()),
   };
 
   const { error: updateError } = await supabase

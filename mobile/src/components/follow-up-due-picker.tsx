@@ -1,14 +1,19 @@
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import {
   DUE_PRESETS,
   dueDateFromPreset,
   formatCustomDueDate,
   inferDuePreset,
   shiftDueDate,
+  toIsoDate,
   type DuePreset,
 } from '@/lib/due-date';
 import { CaretLeft, CaretRight } from 'phosphor-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BottomSheet } from '@/components/bottom-sheet';
+import { Button } from '@/components/ui';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type FollowUpDuePickerProps = {
@@ -16,8 +21,33 @@ type FollowUpDuePickerProps = {
   onChange: (dueAt: string) => void;
 };
 
+function dueDateValue(isoDate: string) {
+  const date = new Date(`${isoDate.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
 export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
   const activePreset = inferDuePreset(dueAt);
+  const [iosPickerOpen, setIosPickerOpen] = useState(false);
+  const [iosPickerDate, setIosPickerDate] = useState(() => dueDateValue(dueAt));
+
+  function openDatePicker(nextIso = dueAt) {
+    const value = dueDateValue(nextIso);
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value,
+        mode: 'date',
+        onChange: (event, date) => {
+          if (event.type === 'set' && date) {
+            onChange(toIsoDate(date));
+          }
+        },
+      });
+      return;
+    }
+    setIosPickerDate(value);
+    setIosPickerOpen(true);
+  }
 
   function selectPreset(preset: DuePreset) {
     if (preset === 'none') {
@@ -25,10 +55,17 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
       return;
     }
     if (preset === 'custom') {
-      onChange(dueAt.trim() || dueDateFromPreset('in_3_days'));
+      const nextDate = dueAt.trim() || dueDateFromPreset('in_3_days');
+      onChange(nextDate);
+      openDatePicker(nextDate);
       return;
     }
     onChange(dueDateFromPreset(preset));
+  }
+
+  function confirmIosDate() {
+    onChange(toIsoDate(iosPickerDate));
+    setIosPickerOpen(false);
   }
 
   return (
@@ -56,7 +93,13 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
             style={styles.stepButton}>
             <CaretLeft size={16} color={colors.ink} weight="bold" />
           </Pressable>
-          <Text style={styles.customDate}>{formatCustomDueDate(dueAt)}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open calendar"
+            onPress={() => openDatePicker(dueAt)}
+            style={styles.customDateButton}>
+            <Text style={styles.customDate}>{formatCustomDueDate(dueAt)}</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Next day"
@@ -74,6 +117,23 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
           No rush. Skip
         </Text>
       </Pressable>
+
+      {Platform.OS === 'ios' ? (
+        <BottomSheet
+          visible={iosPickerOpen}
+          title="Pick a date"
+          onClose={() => setIosPickerOpen(false)}
+          footer={<Button onPress={confirmIosDate}>Use this date</Button>}>
+          <DateTimePicker
+            value={iosPickerDate}
+            mode="date"
+            display="inline"
+            onChange={(_, date) => {
+              if (date) setIosPickerDate(date);
+            }}
+          />
+        </BottomSheet>
+      ) : null}
     </View>
   );
 }
@@ -109,6 +169,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
+  },
+  customDateButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.x2,
   },
   customDate: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   skip: {

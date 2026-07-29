@@ -152,7 +152,8 @@
           "nfcPermission": "Allow AfterMeet to program NFC tags and share your card when someone taps your phone."
         }
       ],
-      "./plugins/withAndroidNfcHce"
+      "./plugins/withAndroidNfcHce",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

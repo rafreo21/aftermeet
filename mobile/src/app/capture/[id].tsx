@@ -1,20 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Microphone, ShareNetwork } from 'phosphor-react-native';
+import { CheckCircle, CloudArrowUp, EnvelopeSimple, ShareNetwork } from 'phosphor-react-native';
+import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
-import { RecordingPlayback, RecordingPlayOrb } from '@/components/recording-playback';
+import { RecordingPlayback } from '@/components/recording-playback';
 import { ConnectionDetailSkeleton } from '@/components/skeleton';
 import { Body, Button, PageHeader, Panel, Screen } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
-  findLocalRecordingUri,
-  formatDuration,
-  readLocalRecordingMetadata,
-  resolveSharedRecordingUrl,
+  resolveEncounterRecordingUri,
+  updateLocalRecordingSharedUrl,
 } from '@/features/encounters/local-recordings';
 import {
   getEncounter,
@@ -28,12 +27,17 @@ import {
   FOLLOW_UP_CHANNELS,
 } from '@/features/follow-ups/follow-up-channels';
 import { formatDueLabel } from '@/lib/due-date';
+import { openEmailCompose } from '@/lib/email-compose';
 import { readEnv } from '@/lib/env';
+import { buildRecordingShareEmail, formatMeetingEmailDate } from '@/lib/recording-email';
+import {
+  CLOUD_RECORDING_RETENTION_DAYS,
+  formatCloudAvailableUntil,
+  isCloudRecordingExpired,
+} from '@/lib/recording-metadata';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-function resolveSharedRecordingUrlFromEncounter(recording?: EncounterPayload['recording']) {
-  return resolveSharedRecordingUrl(recording);
-}
+type UploadStatus = 'idle' | 'uploading' | 'uploaded' | 'failed';
 
 export default function CaptureDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,6 +45,8 @@ export default function CaptureDetailScreen() {
   const [encounter, setEncounter] = useState<EncounterPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [uploadError, setUploadError] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successSheetOpen, setSuccessSheetOpen] = useState(false);
@@ -66,63 +72,90 @@ export default function CaptureDetailScreen() {
     ? `${readEnv()!.publicCardBaseUrl}/e/${encounter.shareToken}`
     : '';
 
+  const isShared = encounter?.status === 'shared';
+  const cloudUploaded = Boolean(encounter?.recording?.sharedAudioUrl && encounter.recording.storagePath);
+  const cloudAvailableUntil = formatCloudAvailableUntil(encounter?.recording?.cloudExpiresAt);
+  const cloudExpired = isCloudRecordingExpired(encounter?.recording?.cloudExpiresAt);
+
+  async function syncUpload(localUri: string, mimeType?: string) {
+    if (!session?.access_token || !encounter) return;
+    setUploadStatus('uploading');
+    setUploadError('');
+    try {
+      const uploaded = await uploadEncounterRecording(
+        session.access_token,
+        encounter.id,
+        localUri,
+        mimeType,
+      );
+      await updateLocalRecordingSharedUrl(encounter.id, uploaded.sharedAudioUrl ?? '');
+      setEncounter((current) => current ? {
+        ...current,
+        recording: {
+          ...(current.recording ?? {
+            id: current.id,
+            durationSeconds: current.durationSeconds,
+            fileSize: 0,
+            mimeType: mimeType || 'audio/mp4',
+            source: 'recorded',
+            retention: '7_days',
+            expiresAt: null,
+            createdAt: current.startedAt,
+            localUri,
+          }),
+          ...uploaded,
+          localUri,
+          audioLocation: 'server',
+        },
+      } : current);
+      setUploadStatus('uploaded');
+    } catch (caught) {
+      setUploadStatus('failed');
+      setUploadError(caught instanceof Error ? caught.message : 'Could not upload recording for guests.');
+    }
+  }
+
   useEffect(() => {
     if (!session?.access_token || !id) {
       setLoading(false);
       setRecordingLoading(false);
       return;
     }
-    void Promise.all([
-      getEncounter(session.access_token, id),
-      findLocalRecordingUri(id),
-      readLocalRecordingMetadata(id),
-    ])
-      .then(async ([nextEncounter, localUri]) => {
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const nextEncounter = await getEncounter(session.access_token!, id);
+        if (cancelled) return;
         setEncounter(nextEncounter);
-        let uri = localUri || resolveSharedRecordingUrlFromEncounter(nextEncounter.recording);
-        if (!uri && localUri && session.access_token) {
-          try {
-            const uploaded = await uploadEncounterRecording(
-              session.access_token,
-              nextEncounter.id,
-              localUri,
-              nextEncounter.recording?.mimeType,
-            );
-            if (uploaded?.sharedAudioUrl) {
-              uri = resolveSharedRecordingUrlFromEncounter({ sharedAudioUrl: uploaded.sharedAudioUrl } as EncounterPayload['recording']) || localUri;
-              setEncounter((current) => current ? {
-                ...current,
-                recording: {
-                  ...(current.recording ?? {
-                    id: current.id,
-                    durationSeconds: current.durationSeconds,
-                    fileSize: 0,
-                    mimeType: 'audio/mp4',
-                    source: 'recorded',
-                    retention: '7_days',
-                    expiresAt: null,
-                    createdAt: current.startedAt,
-                    localUri,
-                  }),
-                  sharedAudioUrl: uploaded.sharedAudioUrl,
-                  audioLocation: 'server',
-                },
-              } : current);
-            }
-          } catch {
-            uri = localUri;
-          }
-        }
+
+        const uri = await resolveEncounterRecordingUri(id, nextEncounter.recording);
+        if (cancelled) return;
         setRecordingUri(uri);
-      })
-      .catch((caught) => {
+        setRecordingLoading(false);
+
+        if (nextEncounter.recording?.sharedAudioUrl && nextEncounter.recording.storagePath) {
+          setUploadStatus('uploaded');
+        } else if (uri?.startsWith('file')) {
+          void syncUpload(uri, nextEncounter.recording?.mimeType);
+        }
+      } catch (caught) {
+        if (cancelled) return;
         setErrorMessage(caught instanceof Error ? caught.message : 'Could not load this meeting.');
         setErrorSheetOpen(true);
-      })
-      .finally(() => {
-        setLoading(false);
-        setRecordingLoading(false);
-      });
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setRecordingLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, session?.access_token]);
 
   const recordingDuration = useMemo(
@@ -130,7 +163,12 @@ export default function CaptureDetailScreen() {
     [encounter?.durationSeconds, encounter?.recording?.durationSeconds],
   );
 
-  const hasRecording = Boolean(recordingUri || encounter?.recording || encounter?.durationSeconds);
+  const hasRecording = Boolean(
+    recordingUri
+    || encounter?.recording
+    || encounter?.durationSeconds
+    || encounter?.transcript.trim(),
+  );
 
   async function persist(next: EncounterPayload) {
     if (!session?.access_token) return;
@@ -148,12 +186,76 @@ export default function CaptureDetailScreen() {
     }
   }
 
+  async function approveAndShare() {
+    if (!encounter || !session?.access_token) return;
+    if (!encounter.sharedSummary.trim()) {
+      setErrorMessage('Add a share summary before approving the guest view.');
+      setErrorSheetOpen(true);
+      return;
+    }
+    const needsCloudUpload = Boolean(recordingUri || encounter.recording || encounter.durationSeconds);
+    if (needsCloudUpload && !cloudUploaded && uploadStatus !== 'uploaded') {
+      setErrorMessage('Upload the recording for guests first, or retry the upload below.');
+      setErrorSheetOpen(true);
+      return;
+    }
+    const next = { ...encounter, status: 'shared' as const };
+    setSaving(true);
+    try {
+      await saveEncounter(session.access_token, next);
+      setEncounter(next);
+      setSuccessMessage('Guest view approved. You can share the link when you are ready.');
+      setSuccessSheetOpen(true);
+    } catch (caught) {
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not approve the guest view.');
+      setErrorSheetOpen(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function shareGuestLink() {
     if (!guestUrl || !encounter) return;
+    if (!isShared) {
+      setErrorMessage('Approve the guest view first so the link opens the shared summary and recording.');
+      setErrorSheetOpen(true);
+      return;
+    }
     await Share.share({
       title: `${encounter.personName || encounter.title} · AfterMeet`,
       message: guestUrl,
       url: guestUrl,
+    });
+  }
+
+  async function emailRecordingWithDetails() {
+    if (!encounter || !guestUrl) return;
+    const email = buildRecordingShareEmail({
+      title: encounter.title,
+      personName: encounter.personName,
+      personEmail: encounter.personEmail,
+      guestUrl,
+      sharedSummary: encounter.sharedSummary,
+      meetingDate: formatMeetingEmailDate(encounter.startedAt),
+      cloudExpired: isCloudRecordingExpired(encounter.recording?.cloudExpiresAt),
+    });
+    await openEmailCompose(email);
+  }
+
+  async function shareRecordingFile() {
+    if (!recordingUri || !encounter) return;
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(recordingUri, {
+        mimeType: encounter.recording?.mimeType || 'audio/mp4',
+        dialogTitle: 'Send meeting recording',
+      });
+      return;
+    }
+    await Share.share({
+      title: `${encounter.title} recording`,
+      message: encounter.sharedSummary || encounter.title,
+      url: recordingUri,
     });
   }
 
@@ -185,6 +287,11 @@ export default function CaptureDetailScreen() {
     );
   }
 
+  const showEmailRecording = Boolean(
+    recordingUri
+    && (cloudExpired || uploadStatus === 'failed' || !encounter.recording?.sharedAudioUrl),
+  );
+
   return (
     <Screen edges={['top', 'bottom']} reserveTabBar={false}>
       <PageHeader
@@ -192,34 +299,79 @@ export default function CaptureDetailScreen() {
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Review the share summary and follow-up plan, then save or share when you are ready.</Body>
+      <Body>Review the share summary, approve what guests can see, then share the link when you are ready.</Body>
+
+      <Panel style={styles.section}>
+        <Text style={styles.sectionTitle}>Guest sharing</Text>
+        <View style={styles.statusRow}>
+          {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
+          <Text style={styles.summaryCopy}>
+            {isShared
+              ? 'Approved. Guests can open the shared summary and recording link.'
+              : 'Draft only. Approve before sending the guest link.'}
+          </Text>
+        </View>
+        {cloudUploaded && cloudAvailableUntil && !cloudExpired ? (
+          <Text style={styles.helperCopy}>
+            Cloud copy available to guests until {cloudAvailableUntil} ({CLOUD_RECORDING_RETENTION_DAYS} days). You keep the local recording and full transcript.
+          </Text>
+        ) : null}
+        {cloudExpired ? (
+          <Text style={styles.helperCopy}>
+            The cloud copy expired. Guests still see the shared summary. You can play the recording locally on this phone.
+          </Text>
+        ) : null}
+        {uploadStatus === 'uploading' ? (
+          <View style={styles.statusRow}>
+            <ActivityIndicator color={colors.ink} size="small" />
+            <Text style={styles.helperCopy}>Uploading recording for guest sharing…</Text>
+          </View>
+        ) : null}
+        {uploadStatus === 'failed' ? (
+          <View style={styles.uploadFailed}>
+            <Text style={styles.uploadFailedText}>{uploadError || 'Upload failed.'}</Text>
+            {recordingUri ? (
+              <Button variant="secondary" onPress={() => void syncUpload(recordingUri, encounter.recording?.mimeType)}>
+                <CloudArrowUp size={18} color={colors.ink} />
+                Retry upload
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
+        {!isShared ? (
+          <Button loading={saving} onPress={() => void approveAndShare()}>
+            Approve guest view
+          </Button>
+        ) : null}
+        {showEmailRecording ? (
+          <>
+            <Button variant="secondary" onPress={() => void emailRecordingWithDetails()}>
+              <EnvelopeSimple size={18} color={colors.ink} />
+              Email recording + details
+            </Button>
+            <Button variant="secondary" onPress={() => void shareRecordingFile()}>
+              <ShareNetwork size={18} color={colors.ink} />
+              Send recording file
+            </Button>
+            <Text style={styles.helperCopy}>
+              Use email for a pre-filled message with meeting details, or send the audio file directly through your share sheet.
+            </Text>
+          </>
+        ) : null}
+      </Panel>
 
       {hasRecording ? (
         <View style={styles.recorderCard}>
-          <View style={styles.recorderHero}>
-            {recordingUri ? (
-              <RecordingPlayOrb uri={recordingUri} durationSeconds={recordingDuration} size={56} />
-            ) : (
-              <View style={styles.micOrb}>
-                <Microphone size={28} color={colors.ink} weight="fill" />
-              </View>
-            )}
-            <View style={styles.recorderMeta}>
-              <Text style={styles.recorderTitle}>Recording</Text>
-              <Text style={styles.recorderHint}>
-                {recordingUri ? 'Saved on this device or synced to AfterMeet' : 'Recording metadata only'}
-              </Text>
-            </View>
-            <Text style={styles.recorderTime}>{formatDuration(recordingDuration)}</Text>
-          </View>
-
           {recordingLoading ? (
-            <ActivityIndicator color={colors.ink} />
+            <View style={styles.recordingLoading}>
+              <ActivityIndicator color={colors.ink} />
+              <Text style={styles.recordingMissing}>Loading recording…</Text>
+            </View>
           ) : recordingUri ? (
-            <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} />
+            <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
           ) : (
             <Text style={styles.recordingMissing}>
-              Recording file is not available on this device. It may still be syncing from another session.
+              This recording was saved, but the audio file is missing from this device. Re-open the capture from the same phone if you just recorded it.
             </Text>
           )}
 
@@ -313,35 +465,19 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.surface,
   },
-  recorderHero: {
+  recordingLoading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.x4,
+    gap: spacing.x3,
   },
-  micOrb: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.canvas,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  recorderMeta: { flex: 1, gap: 4 },
-  recorderTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  recorderHint: { color: colors.muted, fontSize: 13 },
-  recorderTime: {
-    color: colors.ink,
-    fontSize: 22,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  recordingMissing: { color: colors.muted, fontSize: 13, lineHeight: 20 },
+  recordingMissing: { color: colors.muted, fontSize: 13, lineHeight: 20, flex: 1 },
   section: { gap: spacing.x3 },
   sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
-  bodyCopy: { color: colors.ink, fontSize: 15, lineHeight: 22 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
+  helperCopy: { color: colors.muted, fontSize: 13, lineHeight: 20 },
+  uploadFailed: { gap: spacing.x2 },
+  uploadFailedText: { color: colors.danger, fontSize: 13, lineHeight: 20 },
   input: {
     minHeight: 48,
     paddingHorizontal: spacing.x4,
@@ -353,8 +489,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   notesField: { height: 140, maxHeight: 140, paddingTop: spacing.x3, textAlignVertical: 'top' },
-  summaryCopy: { color: colors.ink, fontSize: 15, lineHeight: 22 },
+  summaryCopy: { color: colors.ink, fontSize: 15, lineHeight: 22, flex: 1 },
   actions: { gap: spacing.x2 },
-  success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
-  error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
 });

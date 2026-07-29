@@ -48,7 +48,9 @@ import {
 import {
   deleteLocalRecording,
   removeExpiredLocalRecordings,
+  readLocalRecordingMetadata,
   saveLocalRecording,
+  updateLocalRecordingSharedUrl,
 } from '@/features/encounters/local-recordings';
 import {
   buildEncounterPayload,
@@ -582,14 +584,41 @@ export default function CaptureWizardScreen() {
     setSaving(true);
     setMessage('');
     try {
-      let recording;
+      let recording = await readLocalRecordingMetadata(draft.encounterId);
       const recordingUri = draft.recordingUri || recorder.recordingUri;
       if (recordingUri) {
-        recording = await saveLocalRecording(draft.encounterId, recordingUri, {
-          durationSeconds: draft.durationSeconds || recorder.seconds,
-          source: draft.recordingSource || recorder.recordingSource || 'recorded',
-          retention: draft.retention,
-        });
+        try {
+          recording = await saveLocalRecording(draft.encounterId, recordingUri, {
+            durationSeconds: draft.durationSeconds || recorder.seconds,
+            source: draft.recordingSource || recorder.recordingSource || 'recorded',
+            retention: draft.retention,
+          });
+        } catch (caught) {
+          if (!recording) throw caught;
+        }
+      }
+
+      if (recording?.localUri) {
+        try {
+          const uploaded = await uploadEncounterRecording(
+            token,
+            draft.encounterId,
+            recording.localUri,
+            recording.mimeType,
+          );
+          recording = {
+            ...recording,
+            ...uploaded,
+            localUri: recording.localUri,
+            audioLocation: 'server',
+          };
+          await updateLocalRecordingSharedUrl(draft.encounterId, uploaded.sharedAudioUrl ?? '');
+          if (draft.retention === 'after_transcription') {
+            await deleteLocalRecording(draft.encounterId);
+          }
+        } catch {
+          // host keeps local playback; guest sharing retried from review screen
+        }
       }
 
       const payload = buildEncounterPayload({
@@ -608,19 +637,9 @@ export default function CaptureWizardScreen() {
         consentMethod: draft.consentMethod,
         status: 'draft',
         durationSeconds: draft.durationSeconds || recorder.seconds,
-        recording,
+        recording: recording ?? undefined,
       });
       await saveEncounter(token, payload);
-      if (recording?.localUri) {
-        try {
-          await uploadEncounterRecording(token, payload.id, recording.localUri, recording.mimeType);
-          if (draft.retention === 'after_transcription') {
-            await deleteLocalRecording(draft.encounterId);
-          }
-        } catch {
-          // sharing still works without uploaded audio
-        }
-      }
       await deleteCaptureDraft(draft.encounterId);
       router.replace(`/capture/${payload.id}`);
     } catch (caught) {

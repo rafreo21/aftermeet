@@ -24,8 +24,19 @@ import { buildActionLinkContext, channelLabel } from "../../../../lib/action-lin
 import { findContactById } from "../../../../lib/contacts";
 import { encounterFromApi, encounterToApiBody, formatDuration, readEncounters, updateEncounter, writeEncounter, type Encounter, type EncounterAction } from "../../../../lib/encounters";
 import { supportsOutboundDraft } from "../../../../lib/outbound-habit";
+import { readLocalRecording } from "../../../../lib/local-recordings";
+import { uploadEncounterRecording } from "../../../../lib/recording-upload";
+import {
+  CLOUD_RECORDING_RETENTION_DAYS,
+  formatRecordingAvailableUntil,
+  hasActiveCloudRecording,
+  isCloudRecordingExpired,
+} from "../../../../lib/recording-metadata";
+import { formatMeetingEmailDate, recordingShareMailtoHref } from "../../../../lib/recording-email";
 import "../../product.css";
 import "../../flow.css";
+
+type UploadStatus = "idle" | "uploading" | "uploaded" | "failed";
 
 export default function EncounterReviewPage() {
   const [encounter, setEncounter] = useState<Encounter | null>(null);
@@ -33,6 +44,10 @@ export default function EncounterReviewPage() {
   const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", dueAt: "", channel: "email" as EncounterAction["channel"] });
   const [message, setMessage] = useState("");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+  const [uploadError, setUploadError] = useState("");
+  const [localAudioUrl, setLocalAudioUrl] = useState<string | null>(null);
+  const [localRecordingMimeType, setLocalRecordingMimeType] = useState("audio/mp4");
 
   const actionContext = encounter
     ? buildActionLinkContext(
@@ -80,6 +95,84 @@ export default function EncounterReviewPage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!encounterId) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void readLocalRecording(encounterId).then((local) => {
+      if (cancelled || !local) return;
+      objectUrl = URL.createObjectURL(local.blob);
+      setLocalAudioUrl(objectUrl);
+      setLocalRecordingMimeType(local.metadata.mimeType || local.blob.type || "audio/mp4");
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [encounterId]);
+
+  useEffect(() => {
+    if (!encounter || !localAudioUrl) return;
+    if (hasActiveCloudRecording(encounter.recording)) {
+      setUploadStatus("uploaded");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setUploadStatus("uploading");
+      setUploadError("");
+      try {
+        const local = await readLocalRecording(encounter.id);
+        if (cancelled || !local) {
+          setUploadStatus("idle");
+          return;
+        }
+        const uploaded = await uploadEncounterRecording(encounter.id, local.blob, local.metadata.mimeType);
+        if (cancelled) return;
+        const next = { ...encounter, recording: uploaded };
+        writeEncounter(next);
+        setEncounter(next);
+        setUploadStatus("uploaded");
+        await fetch("/api/encounters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(encounterToApiBody(next)),
+        });
+      } catch (caught) {
+        if (cancelled) return;
+        setUploadStatus("failed");
+        setUploadError(caught instanceof Error ? caught.message : "Could not upload recording for guests.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [encounter?.id, localAudioUrl]);
+
+  async function retryUpload() {
+    if (!encounter) return;
+    const local = await readLocalRecording(encounter.id);
+    if (!local) {
+      setUploadError("No local recording found in this browser.");
+      setUploadStatus("failed");
+      return;
+    }
+    setUploadStatus("uploading");
+    setUploadError("");
+    try {
+      const uploaded = await uploadEncounterRecording(encounter.id, local.blob, local.metadata.mimeType);
+      const next = { ...encounter, recording: uploaded };
+      writeEncounter(next);
+      setEncounter(next);
+      setUploadStatus("uploaded");
+      await syncEncounter(next);
+      setMessage("Recording uploaded for guest sharing.");
+    } catch (caught) {
+      setUploadStatus("failed");
+      setUploadError(caught instanceof Error ? caught.message : "Could not upload recording for guests.");
+    }
+  }
+
   async function syncEncounter(next: Encounter) {
     writeEncounter(next);
     try {
@@ -108,12 +201,26 @@ export default function EncounterReviewPage() {
 
   async function copyGuestLink() {
     if (!encounter) return;
+    if (encounter.status !== "shared") {
+      setMessage("Approve the shared record before copying the guest link.");
+      return;
+    }
     const url = `${window.location.origin}/e/${encounter.shareToken}`;
     await navigator.clipboard.writeText(url);
     setMessage("Guest link copied.");
   }
 
   function approveAndShare() {
+    if (!encounter) return;
+    if (!encounter.sharedSummary.trim()) {
+      setMessage("Add a shared summary before approving the guest view.");
+      return;
+    }
+    const needsCloud = Boolean(localAudioUrl || encounter.recording || encounter.durationSeconds > 0);
+    if (needsCloud && !hasActiveCloudRecording(encounter.recording) && uploadStatus !== "uploaded") {
+      setMessage("Upload the recording for guests first, or retry the upload below.");
+      return;
+    }
     patch((current) => ({ ...current, status: "shared" }));
     setMessage("Shared view is ready. Nothing has been sent automatically.");
   }
@@ -121,6 +228,20 @@ export default function EncounterReviewPage() {
   if (!encounter) {
     return <AppShell active="home" title="Encounter"><div className="empty-state"><div><h2>Encounter not found</h2><p>This local encounter may have been removed or created in another browser.</p><LinkButton href="/app">Back home</LinkButton></div></div></AppShell>;
   }
+
+  const guestUrl = `${window.location.origin}/e/${encounter.shareToken}`;
+  const cloudExpired = isCloudRecordingExpired(encounter.recording);
+  const cloudAvailableUntil = formatRecordingAvailableUntil(encounter.recording?.cloudExpiresAt);
+  const recordingEmailHref = recordingShareMailtoHref({
+    title: encounter.title,
+    personName: encounter.personName,
+    personEmail: encounter.personEmail,
+    guestUrl,
+    sharedSummary: encounter.sharedSummary,
+    meetingDate: formatMeetingEmailDate(encounter.startedAt),
+    cloudExpired,
+  });
+  const showEmailRecording = Boolean(localAudioUrl && (cloudExpired || uploadStatus === "failed" || !hasActiveCloudRecording(encounter.recording)));
 
   return (
     <AppShell
@@ -226,11 +347,44 @@ export default function EncounterReviewPage() {
         <aside className="share-rail">
           <span>Participant access</span>
           <h2>Keep both people aligned.</h2>
-          <p>Approve the shared record, then send the secure link yourself. After signup, the participant can see their summary and assigned actions.</p>
+          <p>Upload the recording, approve the shared record, then send the secure link yourself. Cloud copies stay online for {CLOUD_RECORDING_RETENTION_DAYS} days.</p>
           <div className="guest-card"><strong>{encounter.personName || "Guest participant"}</strong><small>{encounter.personEmail || "No email added"}</small></div>
-          <Button fullWidth onClick={approveAndShare}><CheckCircleIcon size={18} weight="bold" />Approve shared record</Button>
-          <Button fullWidth variant="secondary" onClick={copyGuestLink}><CopyIcon size={18} weight="bold" />Copy guest link</Button>
-          {encounter.personEmail && <a className="email-invite" href={`mailto:${encodeURIComponent(encounter.personEmail)}?subject=${encodeURIComponent(`Your AfterMeet notes: ${encounter.title}`)}&body=${encodeURIComponent(`Here is the meeting record we agreed to share: ${typeof window !== "undefined" ? `${window.location.origin}/e/${encounter.shareToken}` : ""}`)}`}><EnvelopeSimpleIcon size={18} weight="bold" />Open email invite</a>}
+          {localAudioUrl ? (
+            <article className="guest-summary">
+              <span>Your recording</span>
+              <audio controls preload="metadata" src={localAudioUrl} style={{ width: "100%", marginTop: 12 }} />
+            </article>
+          ) : null}
+          {uploadStatus === "uploading" ? <p className="muted-copy" role="status">Uploading recording for guest sharing…</p> : null}
+          {uploadStatus === "uploaded" && cloudAvailableUntil && !cloudExpired ? (
+            <p className="muted-copy">Guests can play or download until {cloudAvailableUntil}.</p>
+          ) : null}
+          {uploadStatus === "failed" ? (
+            <>
+              <p className="share-message" role="status">{uploadError || "Upload failed."}</p>
+              <Button fullWidth variant="secondary" onClick={() => void retryUpload()}>Retry upload</Button>
+            </>
+          ) : null}
+          <Button fullWidth onClick={approveAndShare} disabled={encounter.status === "shared"}><CheckCircleIcon size={18} weight="bold" />{encounter.status === "shared" ? "Guest view approved" : "Approve shared record"}</Button>
+          <Button fullWidth variant="secondary" onClick={() => void copyGuestLink()}><CopyIcon size={18} weight="bold" />Copy guest link</Button>
+          {encounter.personEmail ? (
+            <a className="email-invite" href={recordingShareMailtoHref({
+              title: encounter.title,
+              personName: encounter.personName,
+              personEmail: encounter.personEmail,
+              guestUrl,
+              sharedSummary: encounter.sharedSummary,
+              meetingDate: formatMeetingEmailDate(encounter.startedAt),
+              cloudExpired,
+            })}><EnvelopeSimpleIcon size={18} weight="bold" />Email guest link</a>
+          ) : null}
+          {showEmailRecording ? (
+            <>
+              <a className="email-invite" href={recordingEmailHref}><EnvelopeSimpleIcon size={18} weight="bold" />Email recording + details</a>
+              <a className="email-invite" href={localAudioUrl ?? "#"} download={`${encounter.title.replace(/[^\w\- ]+/g, "").trim() || "aftermeet"}-recording.${localRecordingMimeType.includes("wav") ? "wav" : "m4a"}`}>Download recording for attachment</a>
+              <small>Email apps cannot attach files automatically. Download the recording, then attach it in your email draft.</small>
+            </>
+          ) : null}
           <small>AfterMeet never sends or approves a follow-up without you.</small>
           {message && <p className="share-message" role="status">{message}</p>}
         </aside>
