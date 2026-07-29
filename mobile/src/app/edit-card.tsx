@@ -9,7 +9,11 @@ import { CardPublishSheet } from '@/components/card-publish-sheet';
 import { MethodListEditor } from '@/components/method-list-editor';
 import { MobileCardPreview } from '@/components/mobile-card';
 import { Body, Button, PageHeader } from '@/components/ui';
-import { cardDraftSignature } from '@/lib/card-draft';
+import { cardDraftSignature, cardNeedsPublish } from '@/lib/card-draft';
+import {
+  readPublishedBaseline,
+  writePublishedBaseline,
+} from '@/lib/published-baseline';
 import { useAppInsets } from '@/lib/safe-area';
 import { useCard } from '@/features/card/card-context';
 import { describePublishError } from '@/features/card/publish-card';
@@ -104,7 +108,8 @@ export default function EditCardScreen() {
     [card, getCardById, id],
   );
   const [draft, setDraft] = useState<MobileCard>(source);
-  const [baseline, setBaseline] = useState(() => cardDraftSignature(source));
+  const [publishedBaseline, setPublishedBaseline] = useState<string | null>(null);
+  const [baselineReady, setBaselineReady] = useState(false);
   const [step, setStep] = useState(0);
   const [sheet, setSheet] = useState<'none' | 'success' | 'error'>('none');
   const [sheetTitle, setSheetTitle] = useState('');
@@ -113,34 +118,46 @@ export default function EditCardScreen() {
   const [localPublishing, setLocalPublishing] = useState(false);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingDraft = useRef<MobileCard | null>(null);
+  const initializedCardId = useRef<string | null>(null);
   const insets = useAppInsets();
 
   useEffect(() => {
     if (!id) return;
     const next = getCardById(id);
-    if (next) {
+    if (!next) return;
+
+    if (initializedCardId.current !== id) {
+      initializedCardId.current = id;
       setDraft(next);
-      setBaseline(cardDraftSignature(next));
+      setBaselineReady(false);
+      void readPublishedBaseline(next.id || id).then((baseline) => {
+        setPublishedBaseline(baseline);
+        setBaselineReady(true);
+      });
     }
   }, [getCardById, id]);
 
-  const isDirty = cardDraftSignature(draft) !== baseline;
-  const canPublish = draft.status !== 'published' || isDirty;
+  const isDirty = baselineReady && cardNeedsPublish(draft, publishedBaseline);
+  const canPublish = baselineReady && (draft.status !== 'published' || isDirty);
   const isPublishing = publishing || localPublishing;
 
-  const persistLocal = useCallback((next: MobileCard) => {
-    const normalized = { ...next, theme: normalizeThemeColor(next.theme) };
-    setDraft(normalized);
-    pendingDraft.current = normalized;
+  const persistLocal = useCallback((updater: MobileCard | ((current: MobileCard) => MobileCard)) => {
+    setDraft((current) => {
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      const normalized = { ...next, theme: normalizeThemeColor(next.theme) };
+      pendingDraft.current = normalized;
 
-    if (persistTimer.current) clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(() => {
-      persistTimer.current = null;
-      const pending = pendingDraft.current;
-      if (!pending?.id) return;
-      void updateCardById(pending.id, pending);
-      pendingDraft.current = null;
-    }, 700);
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      persistTimer.current = setTimeout(() => {
+        persistTimer.current = null;
+        const pending = pendingDraft.current;
+        if (!pending?.id) return;
+        void updateCardById(pending.id, pending);
+        pendingDraft.current = null;
+      }, 700);
+
+      return normalized;
+    });
   }, [updateCardById]);
 
   const flushPersist = useCallback(async () => {
@@ -193,7 +210,9 @@ export default function EditCardScreen() {
       await flushPersist();
       const result = await publishCard(draft.id, draft);
       if (result.ok) {
-        setBaseline(cardDraftSignature({ ...draft, status: 'published' }));
+        const publishedSnapshot = cardDraftSignature({ ...draft, status: 'published' });
+        await writePublishedBaseline({ ...draft, status: 'published' });
+        setPublishedBaseline(publishedSnapshot);
         setSheetTitle('Card published');
         setSheetMessage('Your card is live. Share the link, QR code, or open Card Tools for wallet and widgets.');
         setSheetDetail(result.publicUrl);
@@ -392,7 +411,7 @@ export default function EditCardScreen() {
                 icon={<ListChecks size={18} color={colors.ink} weight="bold" />}>
                 <MethodListEditor
                   methods={draft.methods}
-                  onChange={(methods) => persistLocal({ ...draft, methods })}
+                  onChange={(methods) => persistLocal((current) => ({ ...current, methods }))}
                 />
               </SectionCard>
             </View>

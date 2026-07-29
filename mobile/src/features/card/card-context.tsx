@@ -20,6 +20,7 @@ import { uploadCardImagesForPublish } from '@/features/card/card-image-upload';
 import { describePublishError, formatPublishError, type PublishCardResult, validateCardForPublish } from '@/features/card/publish-card';
 import { readEnv } from '@/lib/env';
 import { mobileFetch } from '@/lib/mobile-api';
+import { clearPublishedBaseline, writePublishedBaseline } from '@/lib/published-baseline';
 import { getSupabase } from '@/lib/supabase';
 
 type CardValue = {
@@ -351,6 +352,8 @@ export function CardProvider({ children }: PropsWithChildren) {
           publishedCard,
         );
 
+        void writePublishedBaseline(publishedCard);
+
         const publicUrl = cardPublicUrl(publishedCard);
         return { ok: true, publicUrl };
     } catch (error) {
@@ -381,6 +384,7 @@ export function CardProvider({ children }: PropsWithChildren) {
       activeCardIdRef.current === id ? nextCards[0]?.id || '' : activeCardIdRef.current,
     );
     await persistCards(nextCards, nextActiveId);
+    void clearPublishedBaseline(id);
     return true;
   }, [persistCards, session]);
 
