@@ -19,28 +19,6 @@ type CardMethod = {
 
 type Step = "save" | "share";
 
-function PublicCardStepper({ step }: { step: Step }) {
-  return (
-    <div className="public-card-step-top">
-      <div className="public-stepper" aria-label="Exchange progress">
-        <div className="public-stepper-track">
-          <div className="public-stepper-segment">
-            <span className={`public-stepper-dot ${step === "save" ? "is-active" : "is-done"}`}>1</span>
-            <span className={`public-stepper-line ${step === "share" ? "is-active" : "is-hidden"}`} />
-          </div>
-          <div className="public-stepper-segment">
-            <span className={`public-stepper-dot ${step === "share" ? "is-active" : ""}`}>2</span>
-          </div>
-        </div>
-        <div className="public-stepper-labels">
-          <span className={step === "save" ? "is-active" : ""}>Save contact</span>
-          <span className={step === "share" ? "is-active" : ""}>Share back</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function publicRoleLine(jobTitle: string | null, company: string | null, showCompanyDetails: boolean) {
   return [jobTitle, showCompanyDetails ? company : null].filter(Boolean).join(" · ");
 }
@@ -120,10 +98,7 @@ function PublicCardView({
         <h1>{ownerName}</h1>
         {roleLine ? <p className="public-card-role">{roleLine}</p> : null}
 
-        <PublicCardStepper step="save" />
-
         <div className="public-card-step">
-          <p className="public-card-step-kicker">Step 1 of 2 · Save their contact</p>
           {bio ? <p className="public-card-bio">{bio}</p> : null}
           <div className="public-card-methods">
             {methods.map((method) => {
@@ -168,7 +143,7 @@ function PublicCardView({
             Share my details back
           </button>
           <p className="public-card-private">
-            One tap saves {ownerName} to your phone. Step 2 lets you send your details back.
+            One tap saves {ownerName} to your phone. You can send your details back anytime.
           </p>
         </div>
       </div>
@@ -276,7 +251,6 @@ export function PublicCardClient({
     return (
       <main className="public-card-page" style={themeStyle}>
         <section className="public-card-shell public-card-shell-share">
-          <PublicCardStepper step="share" />
           <div className="public-card-share-page">
             <div className="public-card-share-top">
               <button type="button" className="ghost-link public-card-share-skip" onClick={returnToCard}>
@@ -284,7 +258,6 @@ export function PublicCardClient({
               </button>
             </div>
             <div className="public-card-share-heading">
-              <p className="public-card-step-kicker">Step 2 of 2 · Share back</p>
               <h1>Share your contact</h1>
               <p>Send your details to {ownerName} so they remember who you are.</p>
             </div>
