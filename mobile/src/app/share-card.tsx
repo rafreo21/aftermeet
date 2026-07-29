@@ -2,10 +2,10 @@ import * as Brightness from 'expo-brightness';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ContactlessPayment, Scan, ShareNetwork, Wallet } from 'phosphor-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Share, ScrollView, StyleSheet, Text, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import { Platform, Pressable, Share, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Body, Button, PageHeader, ScreenFrame } from '@/components/ui';
+import { BrandedQrCode } from '@/components/branded-qr-code';
+import { BackButton, Body, Button, Eyebrow, ScreenFrame } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { showsCompanyDetails } from '@/features/card/company-display';
@@ -23,7 +23,6 @@ import {
   addGoogleWalletPass,
   fetchWalletAvailability,
 } from '@/features/card/wallet-actions';
-import { QR_LOGO } from '@/lib/widget-qr';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function ShareCardScreen() {
@@ -124,7 +123,23 @@ export default function ShareCardScreen() {
 
   return (
     <ScreenFrame style={styles.frame}>
-      <PageHeader eyebrow="Quick Share" title="Scan to connect" titleStyle={styles.title} />
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <BackButton onPress={() => router.back()} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Quick scan"
+            onPress={() => router.push('/scanner')}
+            style={({ pressed }) => [styles.scanTopButton, pressed && styles.scanTopButtonPressed]}>
+            <Scan size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.scanTopLabel}>Quick Scan</Text>
+          </Pressable>
+        </View>
+        <View style={styles.headerCopy}>
+          <Eyebrow>Quick Share</Eyebrow>
+          <Text style={styles.title}>Scan to connect</Text>
+        </View>
+      </View>
       <Body style={styles.cardLine}>
         {card.name}
         {card.role || (showCompany && card.company)
@@ -136,20 +151,13 @@ export default function ShareCardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}>
-        <View style={styles.qr}>
-          <QRCode
-            value={publicUrl}
-            size={220}
-            color={colors.ink}
-            backgroundColor={colors.white}
-            logo={QR_LOGO}
-            logoSize={48}
-            logoBackgroundColor={colors.white}
-            logoMargin={4}
-            logoBorderRadius={12}
-            ecl="H"
-          />
-        </View>
+        {publicUrl ? (
+          <View style={styles.qr}>
+            <BrandedQrCode value={publicUrl} size={220} />
+          </View>
+        ) : (
+          <Text style={styles.helperInline}>Publish your card to generate a QR code.</Text>
+        )}
         {tapSupported ? (
           <View style={[styles.tapPanel, tapActive && styles.tapPanelActive]}>
             <Text style={styles.tapTitle}>{tapActive ? 'Tap to share is on' : 'Or tap phones together'}</Text>
@@ -194,12 +202,6 @@ export default function ShareCardScreen() {
         <Button style={styles.actionButton} onPress={shareCard}>
           <ShareNetwork size={18} color={colors.ink} /> Share
         </Button>
-        <Button
-          style={styles.actionButton}
-          variant="secondary"
-          onPress={() => router.push('/scanner')}>
-          <Scan size={18} color={colors.ink} weight="bold" /> Quick Scan
-        </Button>
       </View>
       <Text style={styles.helper}>Brightness is temporarily increased while this screen is open.</Text>
     </ScreenFrame>
@@ -208,7 +210,33 @@ export default function ShareCardScreen() {
 
 const styles = StyleSheet.create({
   frame: { flex: 1, gap: spacing.x3 },
-  title: { fontSize: 30, lineHeight: 32 },
+  header: { gap: spacing.x3 },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerCopy: { gap: spacing.x2 },
+  scanTopButton: {
+    minHeight: 44,
+    paddingHorizontal: spacing.x3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x2,
+    borderRadius: radius.round,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  scanTopButtonPressed: { opacity: 0.82 },
+  scanTopLabel: { color: colors.ink, fontSize: 13, fontWeight: '800' },
+  title: {
+    color: colors.ink,
+    fontSize: 30,
+    lineHeight: 32,
+    fontWeight: '700',
+    letterSpacing: -1.1,
+  },
   cardLine: { marginTop: -spacing.x1, color: colors.muted, textAlign: 'left' },
   scroll: { flex: 1 },
   scrollContent: {

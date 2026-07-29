@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { CaretRight } from 'phosphor-react-native';
+import { CaretRight, ListChecks } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
 import { SettingsSkeleton } from '@/components/skeleton';
@@ -24,6 +24,20 @@ export default function SettingsScreen() {
         <Title>Settings</Title>
         <Body>Manage your account, synchronization and mobile capabilities.</Body>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/settings/follow-ups')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <ListChecks size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Follow-ups</Text>
+          </View>
+          <Text style={styles.linkHint}>Current actions and completed follow-ups</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"
@@ -69,5 +83,6 @@ const styles = StyleSheet.create({
   },
   linkPanelPressed: { opacity: 0.82 },
   linkCopy: { flex: 1, gap: 6 },
+  linkTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   linkHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
 });

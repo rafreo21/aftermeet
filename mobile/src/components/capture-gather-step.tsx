@@ -2,8 +2,7 @@ import { router } from 'expo-router';
 import { CaretRight, CheckCircle, IdentificationCard, PencilSimple, QrCode, Trash } from 'phosphor-react-native';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-
+import { BrandedQrCode } from '@/components/branded-qr-code';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { PhoneInput } from '@/components/phone-input';
 import { Body, Button } from '@/components/ui';
@@ -17,7 +16,6 @@ import {
   updateGatherPerson,
   type GatherPerson,
 } from '@/features/encounters/gather-people';
-import { QR_LOGO } from '@/lib/widget-qr';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type CaptureGatherStepProps = {
@@ -329,18 +327,7 @@ export function CaptureGatherStep({
           Ask them to scan this code. Their details link here automatically. You can add up to {MAX_GATHER_PEOPLE} people.
         </Body>
         <View style={styles.qrWrap}>
-          <QRCode
-            value={publicUrl}
-            size={220}
-            color={colors.ink}
-            backgroundColor={colors.white}
-            logo={QR_LOGO}
-            logoSize={48}
-            logoBackgroundColor={colors.white}
-            logoMargin={4}
-            logoBorderRadius={12}
-            ecl="H"
-          />
+          <BrandedQrCode value={publicUrl} size={220} />
           <Text style={styles.qrHint}>{card.name}</Text>
           {card.role ? (
             <Text style={styles.qrSubhint}>

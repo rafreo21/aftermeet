@@ -1,23 +1,14 @@
 import { router, useFocusEffect } from 'expo-router';
-import { CaretRight, ListChecks, QrCode, Scan } from 'phosphor-react-native';
+import { CaretRight, QrCode, Scan } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandMark } from '@/components/brand-mark';
-import { BottomSheet } from '@/components/bottom-sheet';
-import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
-import { FollowUpAudienceSheet } from '@/components/follow-up-audience-sheet';
-import { FollowUpsSheet } from '@/components/follow-ups-sheet';
-import { GroupedFollowUpActions, GroupedFollowUpCell } from '@/components/grouped-follow-up-cell';
-import { MiniPromptCard } from '@/components/mini-prompt-card';
-import { CaptureListSkeleton } from '@/components/skeleton';
 import { Body, Button, Eyebrow, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
-import { groupFollowUpItems, type FollowUpGroup } from '@/features/follow-ups/follow-up-groups';
 import { summarizeFollowUpNudges } from '@/features/follow-ups/follow-up-nudges';
-import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -41,44 +32,16 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const { card } = useCard();
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
-  const [loadingFollowUps, setLoadingFollowUps] = useState(false);
-  const [followUpError, setFollowUpError] = useState('');
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [activeGroup, setActiveGroup] = useState<FollowUpGroup | null>(null);
-  const {
-    runFollowUp,
-    markComplete,
-    completingId,
-    missingOpen,
-    missingExecution,
-    missingLoading,
-    closeMissing,
-    requestMissingField,
-    draftRequestEmail,
-    audienceOpen,
-    audienceItem,
-    audienceParticipants,
-    confirmAudience,
-    closeAudience,
-  } = useFollowUpActions(session?.access_token, {
-    allFollowUps: followUps,
-  });
 
   const loadFollowUps = useCallback(async () => {
     if (!session?.access_token) {
       setFollowUps([]);
-      setFollowUpError('');
       return;
     }
-    setLoadingFollowUps(true);
-    setFollowUpError('');
     try {
       setFollowUps(await fetchFollowUps(session.access_token));
-    } catch (caught) {
+    } catch {
       setFollowUps([]);
-      setFollowUpError(caught instanceof Error ? caught.message : 'Could not load follow-ups.');
-    } finally {
-      setLoadingFollowUps(false);
     }
   }, [session?.access_token]);
 
@@ -88,17 +51,7 @@ export default function HomeScreen() {
     }, [loadFollowUps]),
   );
 
-  const groups = useMemo(() => groupFollowUpItems(followUps), [followUps]);
-  const preview = useMemo(() => groups.slice(0, 2), [groups]);
   const nudge = useMemo(() => summarizeFollowUpNudges(followUps), [followUps]);
-
-  function runGroupFollowUp(group: FollowUpGroup) {
-    if (group.items.length === 1) {
-      runFollowUp(group.items[0]);
-      return;
-    }
-    setActiveGroup(group);
-  }
 
   return (
     <View style={styles.safe}>
@@ -142,22 +95,23 @@ export default function HomeScreen() {
           </Button>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Scan someone else's card"
             onPress={() => router.navigate('/scanner')}
-            style={({ pressed }) => [styles.heroSecondary, pressed && styles.heroSecondaryPressed]}>
-            <Scan size={16} color={colors.accent} weight="bold" />
-            <Text style={styles.heroSecondaryText}>Scan someone else&apos;s card</Text>
+            style={({ pressed }) => [styles.heroScanOverlay, pressed && styles.heroScanOverlayPressed]}>
+            <Scan size={18} color={colors.accent} weight="bold" />
+            <Text style={styles.heroScanOverlayText}>Scan someone else&apos;s card</Text>
           </Pressable>
         </View>
 
         {session && nudge ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => setSheetOpen(true)}
+            onPress={() => router.push('/settings/follow-ups')}
             style={({ pressed }) => [styles.nudgeCard, pressed && styles.nudgeCardPressed]}>
             <Text style={styles.nudgeTitle}>{nudge.headline}</Text>
             <Text style={styles.nudgeCopy}>{nudge.copy}</Text>
             <View style={styles.nudgeAction}>
-              <Text style={styles.nudgeActionText}>Review follow-ups</Text>
+              <Text style={styles.nudgeActionText}>Open follow-ups</Text>
               <CaretRight size={14} color={colors.ink} weight="bold" />
             </View>
           </Pressable>
@@ -165,116 +119,24 @@ export default function HomeScreen() {
 
         <View style={styles.steps}>
           {SECONDARY_STEPS.map((step) => (
-              <Pressable
-                key={step.num}
-                accessibilityRole="button"
-                onPress={() => router.navigate(step.route)}
-                style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
-                <View style={styles.stepBadge}>
-                  <Text style={styles.stepNum}>{step.num}</Text>
-                </View>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepCopy}>{step.copy}</Text>
-                <View style={styles.stepAction}>
-                  <Text style={styles.stepActionText}>Open</Text>
-                  <CaretRight size={14} color={colors.accent} weight="bold" />
-                </View>
-              </Pressable>
-            ))}
-        </View>
-
-        {session ? (
-          <View style={styles.followUpsSection}>
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>Follow-ups</Text>
-              {groups.length > 2 ? (
-                <Pressable accessibilityRole="button" onPress={() => setSheetOpen(true)}>
-                  <Text style={styles.viewAll}>View all</Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            {loadingFollowUps ? (
-              <CaptureListSkeleton count={2} />
-            ) : followUpError ? (
-              <MiniPromptCard
-                icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
-                title="Could not load follow-ups"
-                copy={followUpError}
-                onPress={() => void loadFollowUps()}
-              />
-            ) : preview.length ? (
-              <View style={styles.followUpList}>
-                {preview.map((group) => (
-                  <GroupedFollowUpCell
-                    key={group.id}
-                    group={group}
-                    onPress={() => runGroupFollowUp(group)}
-                    onComplete={() => {
-                      const item = group.items[0];
-                      if (item) void markComplete(item, loadFollowUps);
-                    }}
-                    completing={group.items.length === 1 && completingId === `${group.items[0]?.encounterId}-${group.items[0]?.actionId}`}
-                  />
-                ))}
+            <Pressable
+              key={step.num}
+              accessibilityRole="button"
+              onPress={() => router.navigate(step.route)}
+              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepNum}>{step.num}</Text>
               </View>
-            ) : (
-              <MiniPromptCard
-                icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
-                title="No follow-ups yet"
-                copy="Pick follow-up channels in capture and they will show up here."
-                onPress={() => router.navigate('/capture')}
-              />
-            )}
-          </View>
-        ) : null}
+              <Text style={styles.stepTitle}>{step.title}</Text>
+              <Text style={styles.stepCopy}>{step.copy}</Text>
+              <View style={styles.stepAction}>
+                <Text style={styles.stepActionText}>Open</Text>
+                <CaretRight size={14} color={colors.accent} weight="bold" />
+              </View>
+            </Pressable>
+          ))}
+        </View>
       </ScrollView>
-
-      <FollowUpsSheet
-        visible={sheetOpen}
-        items={followUps}
-        onClose={() => setSheetOpen(false)}
-        onPressItem={(item) => runFollowUp(item)}
-        onCompleteItem={(item) => void markComplete(item, loadFollowUps)}
-        completingId={completingId}
-      />
-
-      <BottomSheet
-        visible={Boolean(activeGroup)}
-        title={activeGroup?.personName.trim() || 'Follow-up actions'}
-        onClose={() => setActiveGroup(null)}>
-        {activeGroup ? (
-          <GroupedFollowUpActions
-            group={activeGroup}
-            completingId={completingId}
-            onPressItem={(actionId) => {
-              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
-              if (item) runFollowUp(item);
-            }}
-            onCompleteItem={(actionId) => {
-              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
-              if (item) void markComplete(item, loadFollowUps);
-            }}
-          />
-        ) : null}
-      </BottomSheet>
-
-      <FollowUpMissingSheet
-        visible={missingOpen}
-        execution={missingExecution}
-        loading={missingLoading}
-        onClose={closeMissing}
-        onRequest={() => void requestMissingField()}
-        onDraftEmail={() => void draftRequestEmail()}
-      />
-
-      <FollowUpAudienceSheet
-        visible={audienceOpen}
-        item={audienceItem}
-        participants={audienceParticipants}
-        onClose={closeAudience}
-        onConfirm={confirmAudience}
-      />
     </View>
   );
 }
@@ -316,16 +178,21 @@ const styles = StyleSheet.create({
   heroNum: { color: colors.ink, fontSize: 12, fontWeight: '900' },
   heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800' },
   heroCopy: { color: '#C5D3BF', fontSize: 14, lineHeight: 20 },
-  heroSecondary: {
-    marginTop: spacing.x1,
-    minHeight: 44,
+  heroScanOverlay: {
+    marginTop: spacing.x2,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.x2,
+    paddingHorizontal: spacing.x4,
+    borderRadius: radius.medium,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
   },
-  heroSecondaryPressed: { opacity: 0.86 },
-  heroSecondaryText: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  heroScanOverlayPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  heroScanOverlayText: { color: colors.white, fontSize: 14, fontWeight: '800' },
   nudgeCard: {
     padding: spacing.x4,
     borderRadius: radius.medium,
@@ -339,24 +206,7 @@ const styles = StyleSheet.create({
   nudgeCopy: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   nudgeAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   nudgeActionText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
-  followUpsSection: { gap: spacing.x3 },
-  sectionHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  viewAll: { color: colors.link, fontSize: 13, fontWeight: '800' },
-  followUpList: { gap: spacing.x3 },
   steps: { gap: spacing.x2 },
-  stepSkeleton: {
-    gap: spacing.x2,
-    padding: spacing.x5,
-    borderRadius: radius.medium,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
   stepCard: {
     padding: spacing.x5,
     borderRadius: radius.medium,
