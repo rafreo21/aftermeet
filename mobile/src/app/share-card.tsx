@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.x4,
-    gap: spacing.x3,
+    gap: spacing.x2,
   },
   qrSection: {
     width: '100%',
