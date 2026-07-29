@@ -48,6 +48,35 @@ test("buildCardVcard normalizes phone numbers for contact apps", () => {
   assert.match(body, /TEL;TYPE=CELL,VOICE:\+447473177720/);
 });
 
+test("buildCardVcard embeds profile and company logo photos", () => {
+  const { body } = buildCardVcard({
+    fullName: "Raphael Okojie",
+    cardUrl: "https://aftermeet.app/c/card",
+    methods: [],
+    profilePhoto: { base64: "aGVsbG8=", mimeType: "image/jpeg" },
+    companyLogoPhoto: { base64: "bG9nbw==", mimeType: "image/png" },
+    coverPhotoUrl: "https://aftermeet.app/cover.jpg",
+  });
+
+  assert.match(body, /PHOTO;ENCODING=b;TYPE=JPEG:aGVsbG8=/);
+  assert.match(body, /LOGO;ENCODING=b;TYPE=PNG:bG9nbw==/);
+  assert.match(body, /item2\.URL:https:\/\/aftermeet\.app\/cover\.jpg/);
+  assert.match(body, /item2\.X-ABLabel:Cover photo/);
+});
+
+test("buildCardVcard falls back to photo URIs when embeds are unavailable", () => {
+  const { body } = buildCardVcard({
+    fullName: "Alex Morgan",
+    cardUrl: "https://aftermeet.app/c/alex",
+    methods: [],
+    profilePhotoUrl: "https://cdn.example/alex.jpg",
+    companyLogoUrl: "https://cdn.example/logo.png",
+  });
+
+  assert.match(body, /PHOTO;VALUE=URI:https:\/\/cdn\.example\/alex\.jpg/);
+  assert.match(body, /LOGO;VALUE=URI:https:\/\/cdn\.example\/logo\.png/);
+});
+
 test("buildCardVcard slugifies the download filename", () => {
   const { filename } = buildCardVcard({
     fullName: "Raphael Okojie",

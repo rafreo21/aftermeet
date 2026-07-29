@@ -8,6 +8,11 @@ export type CardVcardMethod = {
   label?: string | null;
 };
 
+export type VcardEmbeddedImage = {
+  base64: string;
+  mimeType: string;
+};
+
 export type CardVcardInput = {
   fullName: string;
   jobTitle?: string | null;
@@ -17,7 +22,14 @@ export type CardVcardInput = {
   methods: CardVcardMethod[];
   showCompanyDetails?: boolean;
   scannedAt?: Date;
+  profilePhoto?: VcardEmbeddedImage | null;
+  companyLogoPhoto?: VcardEmbeddedImage | null;
+  profilePhotoUrl?: string | null;
+  companyLogoUrl?: string | null;
+  coverPhotoUrl?: string | null;
 };
+
+const MAX_VCARD_IMAGE_BYTES = 280_000;
 
 const METHOD_LABELS: Record<string, string> = {
   website: "Website",
@@ -79,6 +91,77 @@ function appendLabeledUrl(lines: string[], itemIndex: number, label: string, hre
   lines.push(`item${itemIndex}.X-ABLabel:${escapeVcard(label)}`);
 }
 
+function vcardImageType(mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+  if (normalized.includes("png")) return "PNG";
+  if (normalized.includes("gif")) return "GIF";
+  if (normalized.includes("webp")) return "WEBP";
+  return "JPEG";
+}
+
+export function foldVcardLine(line: string) {
+  const maxLength = 75;
+  if (line.length <= maxLength) return line;
+  const chunks = [line.slice(0, maxLength)];
+  let index = maxLength;
+  while (index < line.length) {
+    chunks.push(` ${line.slice(index, index + maxLength - 1)}`);
+    index += maxLength - 1;
+  }
+  return chunks.join("\r\n");
+}
+
+function appendEmbeddedImage(lines: string[], property: string, image: VcardEmbeddedImage) {
+  const type = vcardImageType(image.mimeType);
+  lines.push(foldVcardLine(`${property};ENCODING=b;TYPE=${type}:${image.base64}`));
+}
+
+function appendImageUri(lines: string[], property: string, url: string) {
+  lines.push(foldVcardLine(`${property};VALUE=URI:${escapeVcard(url.trim())}`));
+}
+
+function appendVcardImages(lines: string[], input: CardVcardInput) {
+  if (input.profilePhoto) {
+    appendEmbeddedImage(lines, "PHOTO", input.profilePhoto);
+  } else if (input.profilePhotoUrl?.trim()) {
+    appendImageUri(lines, "PHOTO", input.profilePhotoUrl);
+  }
+
+  if (input.showCompanyDetails ?? true) {
+    if (input.companyLogoPhoto) {
+      appendEmbeddedImage(lines, "LOGO", input.companyLogoPhoto);
+    } else if (input.companyLogoUrl?.trim()) {
+      appendImageUri(lines, "LOGO", input.companyLogoUrl);
+    }
+  }
+}
+
+export async function fetchVcardImage(url: string): Promise<VcardEmbeddedImage | null> {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  try {
+    const response = await fetch(trimmed, {
+      signal: AbortSignal.timeout(10_000),
+      headers: { Accept: "image/*" },
+    });
+    if (!response.ok) return null;
+
+    const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
+    if (!mimeType.startsWith("image/")) return null;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length || buffer.length > MAX_VCARD_IMAGE_BYTES) return null;
+
+    return {
+      base64: buffer.toString("base64"),
+      mimeType,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function buildCardVcard(input: CardVcardInput) {
   const whenWeMetNote = buildWhenWeMetNote(input.cardUrl, input.scannedAt);
   const showCompany = input.showCompanyDetails ?? true;
@@ -92,6 +175,8 @@ export function buildCardVcard(input: CardVcardInput) {
     `N:${buildStructuredName(input.fullName)}`,
     `FN:${escapeVcard(input.fullName.trim())}`,
   ];
+
+  appendVcardImages(lines, input);
 
   if (input.jobTitle?.trim()) lines.push(`TITLE:${escapeVcard(input.jobTitle.trim())}`);
   if (showCompany && input.company?.trim()) lines.push(`ORG:${escapeVcard(input.company.trim())}`);
@@ -156,7 +241,13 @@ export function buildCardVcard(input: CardVcardInput) {
       primaryWebsite === cardPage || labeledUrls.some((entry) => entry.href === cardPage);
     if (!cardLinked) {
       appendLabeledUrl(lines, itemIndex, "AfterMeet card", cardPage);
+      itemIndex += 1;
     }
+  }
+
+  if (input.coverPhotoUrl?.trim()) {
+    appendLabeledUrl(lines, itemIndex, "Cover photo", input.coverPhotoUrl.trim());
+    itemIndex += 1;
   }
 
   const noteParts = [input.bio?.trim(), whenWeMetNote].filter(Boolean);

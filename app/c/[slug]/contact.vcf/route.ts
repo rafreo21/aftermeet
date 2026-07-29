@@ -1,9 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { buildCardVcard } from "@/lib/vcard-export";
+import { buildCardVcard, fetchVcardImage } from "@/lib/vcard-export";
+import { publicCardImageUrl } from "@/lib/card-assets";
 import {
   filterMethodsForCompanyVisibility,
   publicCompanyField,
+  publicCompanyLogoUrl,
 } from "@/lib/card-company-display";
 
 type Params = Promise<{ slug: string }>;
@@ -35,6 +37,13 @@ export async function GET(request: Request, { params }: { params: Params }) {
     [...(card.card_methods || [])].sort((a, b) => a.sort_order - b.sort_order),
     showCompanyDetails,
   );
+  const profilePhotoUrl = publicCardImageUrl(card.profile_image_url);
+  const companyLogoUrl = publicCardImageUrl(publicCompanyLogoUrl(card.company_logo_url, showCompanyDetails));
+  const coverPhotoUrl = publicCardImageUrl(card.cover_image_url);
+  const [profilePhoto, companyLogoPhoto] = await Promise.all([
+    profilePhotoUrl ? fetchVcardImage(profilePhotoUrl) : null,
+    showCompanyDetails && companyLogoUrl ? fetchVcardImage(companyLogoUrl) : null,
+  ]);
   const { body, filename } = buildCardVcard({
     fullName: card.full_name,
     jobTitle: card.job_title,
@@ -42,6 +51,11 @@ export async function GET(request: Request, { params }: { params: Params }) {
     bio: card.bio,
     cardUrl,
     showCompanyDetails,
+    profilePhoto,
+    companyLogoPhoto,
+    profilePhotoUrl,
+    companyLogoUrl,
+    coverPhotoUrl,
     methods: methods.map((method) => ({
       method_type: method.method_type,
       value: method.value,
