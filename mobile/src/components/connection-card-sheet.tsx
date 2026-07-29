@@ -30,7 +30,7 @@ export function ConnectionCardSheet({
           <MobileCardPreview card={card} />
           <Body>
             {connection?.cardSlug || connection?.source !== 'inbound'
-              ? 'Live card — updates when they change it.'
+              ? 'Live card. Updates when they change it.'
               : 'Card from their shared details.'}
           </Body>
         </>

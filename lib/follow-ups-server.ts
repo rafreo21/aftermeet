@@ -3,6 +3,7 @@ import type { Encounter, EncounterAction } from "./encounters";
 export type FollowUpItem = {
   encounterId: string;
   actionId: string;
+  groupId?: string;
   title: string;
   channel: EncounterAction["channel"];
   dueAt: string;
@@ -19,12 +20,13 @@ export function flattenOpenFollowUps(encounters: Encounter[]): FollowUpItem[] {
   const items: FollowUpItem[] = [];
   for (const encounter of encounters) {
     for (const action of encounter.actions) {
-      if (action.owner !== "me") continue;
+      if ((action.owner ?? "me") !== "me") continue;
       if (action.status === "completed") continue;
       if (!action.title.trim()) continue;
       items.push({
         encounterId: encounter.id,
         actionId: action.id,
+        groupId: action.groupId,
         title: action.title.trim(),
         channel: action.channel,
         dueAt: action.dueAt || "",

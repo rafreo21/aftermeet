@@ -8,7 +8,7 @@ import { Button } from "../../components/Button";
 import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { TextField } from "../../components/FormField";
 import { PhoneField } from "../../components/PhoneField";
-import { themeForegroundColor } from "@/lib/theme-contrast";
+import { themeForegroundColor, themeGradientCss } from "@/lib/theme-contrast";
 
 type OptionalField = "x" | "instagram" | "tiktok" | "linkedin" | "role" | "company";
 
@@ -187,7 +187,7 @@ export function PublicExchangeForm({
         fullWidth
         type="submit"
         loading={loading}
-        style={{ background: themeColor, color: themeForegroundColor(themeColor) }}>
+        style={{ background: themeGradientCss(themeColor), color: themeForegroundColor(themeColor) }}>
         {loading ? "Sending…" : "Send my details"} {!loading && <ArrowRightIcon size={18} weight="bold" />}
       </Button>
       <small className="public-exchange-privacy">We don&apos;t sell your contact details.</small>

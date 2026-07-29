@@ -8,6 +8,7 @@ import { PhoneField } from "../components/PhoneField";
 import { createLibraryCard } from "../../lib/card-library";
 import { upsertLibraryCard } from "../../lib/card-library";
 import { queueCardSync } from "../../lib/card-library-sync";
+import { themeGradientCss } from "../../lib/theme-contrast";
 import { CardPreview } from "./CardPreview";
 
 const themes = ["#9fe870", "#ff6b5e", "#ff9f43", "#2495e8", "#5146e5", "#163300"];
@@ -106,7 +107,7 @@ export function FirstCardForm({ initialName, initialEmail }: { initialName: stri
                 aria-label={`Use ${color}`}
                 aria-pressed={theme === color}
                 className={theme === color ? "selected" : ""}
-                style={{ background: color }}
+                style={{ background: themeGradientCss(color) }}
                 onClick={() => setTheme(color)}
               />
             ))}

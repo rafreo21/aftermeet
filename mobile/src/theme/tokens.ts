@@ -10,6 +10,7 @@ export const colors = {
   muted: '#667363',
   danger: '#B42318',
   warning: '#8A4B08',
+  link: '#2F5711',
   white: '#FFFFFF',
 };
 

@@ -3,20 +3,21 @@ import { IdentificationCard, Plus, Scan } from 'phosphor-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 
+import { CardLibraryTile } from '@/components/card-library-tile';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { GreenHeroCard } from '@/components/green-hero-card';
+import { CardGridSkeleton } from '@/components/skeleton';
 
 import { Body, Button, Eyebrow, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { MAX_CARDS } from '@/features/card/card-library';
 import { useCard } from '@/features/card/card-context';
-import { themeForegroundColor } from '@/features/card/theme-colors';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function CardLibraryScreen() {
   const { session } = useAuth();
-  const { cards, activeCardId, syncing, canCreateCard, createCard, setPrimaryCard } = useCard();
+  const { cards, activeCardId, syncing, canCreateCard, createCard } = useCard();
   const insets = useAppInsets();
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -86,36 +87,18 @@ export default function CardLibraryScreen() {
             <Text style={styles.localNote}>Saved on this device only · Sign in to publish and sync</Text>
           ) : null}
 
+          {syncing && !hasCards ? <CardGridSkeleton count={2} /> : null}
+
           {hasCards ? (
             <View style={styles.grid}>
-              {cards.map((item, index) => {
-                const isPrimary = item.id === activeCardId;
-                return (
-                  <Pressable
-                    key={item.id}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      void setPrimaryCard(item.id!);
-                      router.push(`/card/${item.id}`);
-                    }}
-                    style={({ pressed }) => [styles.cardTile, pressed && styles.pressed]}>
-                    <View style={[styles.cover, { backgroundColor: item.theme }]}>
-                      <Text style={[styles.coverLetter, { color: themeForegroundColor(item.theme) }]}>
-                        {item.company[0] || item.name[0] || 'A'}
-                      </Text>
-                    </View>
-                    <View style={styles.tileBody}>
-                      <Text style={styles.cardNumber}>Card {index + 1}</Text>
-                      <Text style={styles.cardLabel}>{item.label || `Card ${index + 1}`}</Text>
-                      <Text style={styles.cardName}>{item.name || 'Finish setting up this card'}</Text>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.cardStatus}>{item.status === 'published' ? 'Published' : 'Draft'}</Text>
-                        {isPrimary ? <Text style={styles.primaryBadge}>Primary</Text> : null}
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
+              {cards.map((item) => (
+                <CardLibraryTile
+                  key={item.id}
+                  card={item}
+                  isPrimary={item.id === activeCardId}
+                  onPress={() => router.push(`/card/${item.id}`)}
+                />
+              ))}
 
               {canCreateCard ? (
                 <Pressable
@@ -125,7 +108,7 @@ export default function CardLibraryScreen() {
                   <View style={styles.addIcon}>
                     <Plus size={24} color={colors.ink} weight="bold" />
                   </View>
-                  <Text style={styles.addTitle}>{session ? 'Create another card' : 'Create another card'}</Text>
+                  <Text style={styles.addTitle}>Create another card</Text>
                   <Text style={styles.addCopy}>{MAX_CARDS - cards.length} remaining</Text>
                 </Pressable>
               ) : null}
@@ -196,38 +179,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   grid: { gap: spacing.x3 },
-  cardTile: {
-    overflow: 'hidden',
-    borderRadius: radius.medium,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-  },
   pressed: { opacity: 0.92 },
-  cover: {
-    minHeight: 92,
-    padding: spacing.x4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  coverLetter: { fontSize: 28, fontWeight: '900' },
-  tileBody: { padding: spacing.x4, gap: 4 },
-  cardNumber: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
-  cardLabel: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  cardName: { color: colors.muted, fontSize: 13 },
-  metaRow: { marginTop: spacing.x2, flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
-  cardStatus: { color: colors.inkSoft, fontSize: 11, fontWeight: '700' },
-  primaryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.round,
-    backgroundColor: colors.accent,
-    color: colors.ink,
-    fontSize: 10,
-    fontWeight: '900',
-    overflow: 'hidden',
-  },
   addTile: {
     padding: spacing.x5,
     alignItems: 'center',

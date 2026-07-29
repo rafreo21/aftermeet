@@ -8,6 +8,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { ConnectionDeleteSheet } from '@/components/connection-delete-sheet';
 import { FollowUpCell } from '@/components/follow-up-cell';
 import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
+import { FollowUpAudienceSheet } from '@/components/follow-up-audience-sheet';
 import { FollowUpsSheet } from '@/components/follow-ups-sheet';
 import { MeetingDetailSheet } from '@/components/meeting-detail-sheet';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
@@ -37,7 +38,7 @@ import {
 } from '@/features/connections/save-connection-contact';
 import type { MobileCard } from '@/features/card/types';
 import type { EncounterPayload } from '@/features/encounters/encounter-api';
-import { findLocalRecordingUri } from '@/features/encounters/local-recordings';
+import { resolveEncounterRecordingUri } from '@/features/encounters/local-recordings';
 import {
   fetchEncountersForConnection,
   fetchFollowUps,
@@ -57,6 +58,7 @@ export default function ConnectionDetailScreen() {
   const [card, setCard] = useState<MobileCard | null>(null);
   const [meetings, setMeetings] = useState<EncounterPayload[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [allFollowUps, setAllFollowUps] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [cardLoading, setCardLoading] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -81,12 +83,17 @@ export default function ConnectionDetailScreen() {
     missingOpen,
     missingExecution,
     missingLoading,
-    googleConnected,
     closeMissing,
     requestMissingField,
-    draftTailoredEmail,
-    draftPreferredEmail,
-  } = useFollowUpActions(session?.access_token);
+    draftRequestEmail,
+    audienceOpen,
+    audienceItem,
+    audienceParticipants,
+    confirmAudience,
+    closeAudience,
+  } = useFollowUpActions(session?.access_token, {
+    allFollowUps,
+  });
 
   const showError = useCallback((message: string) => {
     setErrorMessage(message);
@@ -131,9 +138,11 @@ export default function ConnectionDetailScreen() {
         fetchFollowUps(session.access_token),
       ]);
       setMeetings(nextMeetings);
+      setAllFollowUps(allFollowUps);
       setFollowUps(followUpsForPerson(allFollowUps, current.name, current.email));
     } catch {
       setMeetings([]);
+      setAllFollowUps([]);
       setFollowUps([]);
     }
   }, [session?.access_token]);
@@ -252,8 +261,8 @@ export default function ConnectionDetailScreen() {
 
   async function openMeeting(meeting: EncounterPayload) {
     setActiveMeeting(meeting);
-    const localUri = await findLocalRecordingUri(meeting.id);
-    setMeetingRecordingUri(localUri);
+    const uri = await resolveEncounterRecordingUri(meeting.id, meeting.recording);
+    setMeetingRecordingUri(uri);
   }
 
   function runConnectionFollowUp(item: FollowUpItem) {
@@ -442,11 +451,17 @@ export default function ConnectionDetailScreen() {
         visible={missingOpen}
         execution={missingExecution}
         loading={missingLoading}
-        googleConnected={googleConnected}
         onClose={closeMissing}
         onRequest={() => void requestMissingField()}
-        onDraftTailoredEmail={(preferGmail) => void draftTailoredEmail(preferGmail)}
-        onDraftPreferredEmail={(preferGmail) => void draftPreferredEmail(preferGmail)}
+        onDraftEmail={() => void draftRequestEmail()}
+      />
+
+      <FollowUpAudienceSheet
+        visible={audienceOpen}
+        item={audienceItem}
+        participants={audienceParticipants}
+        onClose={closeAudience}
+        onConfirm={confirmAudience}
       />
 
       <ConnectionDeleteSheet
@@ -510,7 +525,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  viewAll: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  viewAll: { color: colors.link, fontSize: 13, fontWeight: '800' },
   list: { gap: spacing.x3 },
   meetingCell: {
     flexDirection: 'row',

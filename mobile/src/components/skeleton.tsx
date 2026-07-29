@@ -99,6 +99,40 @@ export function CaptureListSkeleton({ count = 3 }: { count?: number }) {
   );
 }
 
+export function SettingsSkeleton() {
+  return (
+    <View style={styles.settingsWrap}>
+      <SkeletonLine width={120} height={10} />
+      <SkeletonLine width="48%" height={28} />
+      <SkeletonLine width="100%" height={12} />
+      <Skeleton style={styles.settingsPanel} />
+      <Skeleton style={styles.settingsPanel} />
+      <Skeleton style={styles.settingsButton} />
+    </View>
+  );
+}
+
+export function CardGridSkeleton({ count = 2 }: { count?: number }) {
+  return (
+    <View style={styles.cardGrid}>
+      {Array.from({ length: count }, (_, index) => (
+        <Skeleton key={index} style={styles.cardTileSkeleton} />
+      ))}
+    </View>
+  );
+}
+
+export function ScanShareSkeleton() {
+  return (
+    <View style={styles.scanWrap}>
+      <SkeletonLine width={100} height={10} />
+      <SkeletonLine width="70%" height={24} />
+      <Skeleton style={styles.scanHero} />
+      <Skeleton style={styles.scanPanel} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   bone: {
     backgroundColor: colors.surfaceMuted,
@@ -140,5 +174,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  settingsWrap: { gap: 12, paddingTop: 20 },
+  settingsPanel: {
+    width: '100%',
+    height: 88,
+    borderRadius: radius.large,
+  },
+  settingsButton: {
+    width: '100%',
+    height: 48,
+    borderRadius: radius.medium,
+  },
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  cardTileSkeleton: {
+    width: '48%',
+    height: 180,
+    borderRadius: radius.large,
+  },
+  scanWrap: { gap: 12 },
+  scanHero: {
+    width: '100%',
+    height: 160,
+    borderRadius: radius.large,
+  },
+  scanPanel: {
+    width: '100%',
+    height: 280,
+    borderRadius: radius.large,
   },
 });

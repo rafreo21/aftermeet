@@ -71,6 +71,10 @@ export function CaptureContextStep({
             <Text style={styles.uncertain}>Double-check: {uncertainFields.join(', ')}</Text>
           ) : null}
 
+          {generationError ? (
+            <Text style={styles.uncertain}>{generationError}</Text>
+          ) : null}
+
           {people.length ? (
             <View style={styles.peopleWrap}>
               <Text style={styles.label}>In this meeting</Text>
@@ -94,7 +98,7 @@ export function CaptureContextStep({
           />
           <Text style={styles.label}>Share summary</Text>
           <Text style={styles.fieldHint}>
-            A clear recap of what was discussed — safe to send to everyone in the room.
+            A clear recap of what was discussed, safe to send to everyone in the room.
           </Text>
           <TextInput
             value={draft.sharedSummary}

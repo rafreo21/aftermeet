@@ -28,7 +28,7 @@ export function ConnectionDeleteSheet({
         </>
       }>
       <Body>
-        Remove {name || 'this connection'} from your list? Their card stays online — this only removes them from your connections and shared directory link here.
+        Remove {name || 'this connection'} from your list? Their card stays online. This only removes them from your connections and shared directory link here.
       </Body>
     </BottomSheet>
   );

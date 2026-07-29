@@ -61,21 +61,16 @@ import {
   type InboundExchange,
 } from '@/features/encounters/encounter-api';
 import { fetchEncounterRecords } from '@/features/follow-ups/follow-up-api';
+import {
+  FOLLOW_UP_CHANNELS,
+  MAX_FOLLOW_UP_CHANNELS,
+  toggleFollowUpChannel,
+} from '@/features/follow-ups/follow-up-channels';
 import { useCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/use-capture-recorder';
 import { normalizeTranscriptForExtraction } from '@/lib/transcript-cleanup';
 import { useAppInsets } from '@/lib/safe-area';
 import { readEnv } from '@/lib/env';
 import { colors, radius, spacing } from '@/theme/tokens';
-
-const CHANNELS = [
-  { id: 'email', label: 'Email' },
-  { id: 'linkedin', label: 'LinkedIn' },
-  { id: 'call', label: 'Call' },
-  { id: 'whatsapp', label: 'WhatsApp' },
-  { id: 'meeting', label: 'Meeting' },
-  { id: 'send', label: 'Send' },
-  { id: 'other', label: 'Other' },
-] as const;
 
 type GenerationStatus = 'idle' | 'generating' | 'error';
 
@@ -97,6 +92,8 @@ export default function CaptureWizardScreen() {
   const [message, setMessage] = useState('');
   const requestRef = useRef(0);
   const generationKickoffRef = useRef('');
+  const generationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftWriteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissedErrorRef = useRef('');
   const hydratedRef = useRef(false);
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
@@ -225,7 +222,6 @@ export default function CaptureWizardScreen() {
         return {
           ...current,
           ...extracted,
-          privateNotes: '',
         };
       });
       setUncertainFields(result.uncertainFields ?? []);
@@ -242,14 +238,13 @@ export default function CaptureWizardScreen() {
   }, [session?.access_token, showCaptureError]);
 
   const handleTranscriptFinalized = useCallback((transcriptValue: string) => {
-    generationKickoffRef.current = '';
-    setGenerationStatus('idle');
     const clean = normalizeTranscriptForExtraction(transcriptValue.trim());
     if (clean.length < 20) return;
-    if (draftRef.current.step >= 1) {
+    if (draftRef.current.step >= 1 && generationStatus !== 'generating') {
+      generationKickoffRef.current = '';
       void generateMeetingContext(clean);
     }
-  }, [generateMeetingContext]);
+  }, [generateMeetingContext, generationStatus]);
 
   const transcribeFromServer = useCallback(async (uri: string, meta?: ImportRecordingMeta) => {
     if (!session?.access_token) {
@@ -354,13 +349,25 @@ export default function CaptureWizardScreen() {
     if (clean.length < 20) return;
     if (generationStatus === 'generating') return;
 
-    const kickoffKey = `${draft.encounterId}:${clean.length}`;
+    const kickoffKey = `${draft.encounterId}:${clean.length}:${clean.slice(-80)}`;
     if (generationKickoffRef.current === kickoffKey) return;
-    generationKickoffRef.current = kickoffKey;
 
-    const requestId = requestRef.current + 1;
-    requestRef.current = requestId;
-    void generateMeetingContext(clean, requestId);
+    if (generationDebounceRef.current) {
+      clearTimeout(generationDebounceRef.current);
+    }
+
+    generationDebounceRef.current = setTimeout(() => {
+      generationKickoffRef.current = kickoffKey;
+      const requestId = requestRef.current + 1;
+      requestRef.current = requestId;
+      void generateMeetingContext(clean, requestId);
+    }, 900);
+
+    return () => {
+      if (generationDebounceRef.current) {
+        clearTimeout(generationDebounceRef.current);
+      }
+    };
   }, [draft.encounterId, draft.step, draft.transcript, draftReady, generateMeetingContext, generationStatus]);
 
   useEffect(() => {
@@ -394,7 +401,17 @@ export default function CaptureWizardScreen() {
 
   useEffect(() => {
     if (!draftReady) return;
-    void writeCaptureDraft(draft);
+    if (draftWriteDebounceRef.current) {
+      clearTimeout(draftWriteDebounceRef.current);
+    }
+    draftWriteDebounceRef.current = setTimeout(() => {
+      void writeCaptureDraft(draft);
+    }, 450);
+    return () => {
+      if (draftWriteDebounceRef.current) {
+        clearTimeout(draftWriteDebounceRef.current);
+      }
+    };
   }, [draft, draftReady]);
 
   useEffect(() => {
@@ -536,11 +553,19 @@ export default function CaptureWizardScreen() {
 
   function continueFromContext() {
     if (!draft.title.trim() && !draft.sharedSummary.trim()) {
+      dismissedErrorRef.current = '';
       showCaptureError('Add a meeting title or share summary.');
       return;
     }
     updateDraft({ step: 2 });
   }
+
+  const contextNextDisabled =
+    isTranscribing
+    || (generationStatus === 'generating' && !draft.title.trim() && !draft.sharedSummary.trim());
+
+  const contextNextLoading =
+    generationStatus === 'generating' && !draft.title.trim() && !draft.sharedSummary.trim();
 
   async function ensureAuth(): Promise<string | null> {
     if (session?.access_token) return session.access_token;
@@ -550,7 +575,7 @@ export default function CaptureWizardScreen() {
     return null;
   }
 
-  async function saveAndReview(skipFollowUp = false) {
+  async function saveAndReview() {
     const token = await ensureAuth();
     if (!token) return;
 
@@ -577,9 +602,8 @@ export default function CaptureWizardScreen() {
         contactId: resolveContactIdForDraft(draft) || undefined,
         exchangeId: draft.exchangeId || undefined,
         sharedSummary: draft.sharedSummary,
-        privateNotes: '',
-        followUp: skipFollowUp ? '' : draft.followUp,
-        followUpType: draft.followUpType,
+        privateNotes: draft.privateNotes,
+        followUpChannels: draft.followUpChannels,
         dueAt: draft.dueAt,
         consentMethod: draft.consentMethod,
         status: 'draft',
@@ -670,12 +694,12 @@ export default function CaptureWizardScreen() {
                 <PaperPlaneTilt size={18} color={colors.ink} weight="bold" />
                 <Text style={styles.blockTitle}>What happens next?</Text>
               </View>
-              <Body>Add an optional follow-up, then save and review before anything is shared.</Body>
+              <Body>Pick how you want to follow up, add any private notes, then save and review.</Body>
               {(draft.people ?? []).length > 1 ? (
                 <View style={styles.followUpPeopleWrap}>
                   <Text style={styles.label}>Applies to everyone</Text>
                   <Text style={styles.fieldHint}>
-                    One reminder per person — same action, tracked separately for each attendee.
+                    One reminder per person, tracked separately for each attendee.
                   </Text>
                   <View style={styles.followUpPeopleRow}>
                     {(draft.people ?? []).map((person) => (
@@ -688,30 +712,44 @@ export default function CaptureWizardScreen() {
                   </View>
                 </View>
               ) : null}
-              <Text style={styles.label}>Follow-up action</Text>
+              <Text style={styles.label}>Private notes</Text>
               <TextInput
-                value={draft.followUp}
-                onChangeText={(value) => updateDraft({ followUp: value })}
-                placeholder="Send the deck by Friday"
-                placeholderTextColor={colors.muted}
+                value={draft.privateNotes}
+                onChangeText={(value) => updateDraft({ privateNotes: value })}
                 multiline
                 scrollEnabled
-                style={[styles.input, styles.notesField]}
+                placeholder="Anything you want to remember for yourself…"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, styles.textarea]}
               />
-              <Text style={styles.label}>Channel</Text>
+              <Text style={styles.label}>Follow-up channels</Text>
+              <Text style={styles.fieldHint}>Pick one or two. Each channel becomes its own action.</Text>
               <View style={styles.channelRow}>
-                {CHANNELS.map((channel) => (
-                  <Pressable
-                    key={channel.id}
-                    accessibilityRole="button"
-                    onPress={() => updateDraft({ followUpType: channel.id })}
-                    style={[styles.channelChip, draft.followUpType === channel.id && styles.channelChipActive]}>
-                    <Text style={[styles.channelText, draft.followUpType === channel.id && styles.channelTextActive]}>
-                      {channel.label}
-                    </Text>
-                  </Pressable>
-                ))}
+                {FOLLOW_UP_CHANNELS.map((channel) => {
+                  const selected = draft.followUpChannels.includes(channel.id);
+                  return (
+                    <Pressable
+                      key={channel.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => {
+                        const next = toggleFollowUpChannel(draft.followUpChannels, channel.id);
+                        updateDraft({
+                          followUpChannels: next,
+                          followUpType: next[0] || 'email',
+                        });
+                      }}
+                      style={[styles.channelChip, selected && styles.channelChipActive]}>
+                      <Text style={[styles.channelText, selected && styles.channelTextActive]}>
+                        {channel.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+              {draft.followUpChannels.length >= MAX_FOLLOW_UP_CHANNELS ? (
+                <Text style={styles.fieldHint}>Two channels selected. Tap one to swap it.</Text>
+              ) : null}
               <FollowUpDuePicker
                 dueAt={draft.dueAt}
                 onChange={(dueAt) => updateDraft({ dueAt })}
@@ -744,19 +782,18 @@ export default function CaptureWizardScreen() {
             </>
           ) : null}
           {draft.step === 1 ? (
-            <Button style={{ flex: 1 }} onPress={continueFromContext}>
+            <Button
+              style={{ flex: 1 }}
+              onPress={continueFromContext}
+              disabled={contextNextDisabled}
+              loading={contextNextLoading}>
               Next
             </Button>
           ) : null}
           {draft.step === 2 ? (
-            <>
-              <Button variant="secondary" style={{ flex: 1 }} loading={saving} onPress={() => void saveAndReview(true)}>
-                Save
-              </Button>
-              <Button style={{ flex: 1 }} loading={saving} onPress={() => void saveAndReview(false)}>
-                Save & follow-up
-              </Button>
-            </>
+            <Button style={{ flex: 1 }} loading={saving} onPress={() => void saveAndReview()}>
+              Save & review
+            </Button>
           ) : null}
         </View>
       </View>

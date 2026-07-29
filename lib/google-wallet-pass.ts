@@ -2,6 +2,24 @@ import { createSign } from "node:crypto";
 
 import type { GoogleWalletConfig, WalletCardPayload } from "./wallet-config";
 
+/** Hostnames allowed to initiate save links (Google expects domain names, not full origins). */
+export function walletJwtOrigins(cardUrl: string) {
+  const origins = new Set<string>();
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+
+  for (const raw of [configured, cardUrl]) {
+    if (!raw?.trim()) continue;
+    try {
+      const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+      origins.add(url.hostname);
+    } catch {
+      // Ignore invalid URLs.
+    }
+  }
+
+  return [...origins];
+}
+
 function base64Url(value: string | Buffer) {
   return Buffer.from(value).toString("base64url");
 }
@@ -67,7 +85,7 @@ export function buildGoogleWalletSaveUrl(card: WalletCardPayload, config: Google
     aud: "google",
     typ: "savetowallet",
     iat: Math.floor(Date.now() / 1000),
-    origins: [new URL(card.cardUrl).origin],
+    origins: walletJwtOrigins(card.cardUrl),
     payload: {
       genericClasses: [
         {

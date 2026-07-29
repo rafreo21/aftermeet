@@ -14,6 +14,7 @@ import {
   createGatherPerson,
   MAX_GATHER_PEOPLE,
   syncLegacyPersonFields,
+  updateGatherPerson,
   type GatherPerson,
 } from '@/features/encounters/gather-people';
 import { QR_LOGO } from '@/lib/widget-qr';
@@ -307,7 +308,7 @@ export function CaptureGatherStep({
         <Body>Add contact details for someone in this meeting.</Body>
         <PersonFields
           person={formPerson}
-          onChange={(changes) => setFormPerson((current) => createGatherPerson({ ...current, ...changes }))}
+          onChange={(changes) => setFormPerson((current) => updateGatherPerson(current, changes))}
           personError={personError}
         />
       </BottomSheet>
@@ -325,7 +326,7 @@ export function CaptureGatherStep({
           </Button>
         }>
         <Body style={styles.qrSheetCopy}>
-          Ask them to scan this code — their details link here automatically. You can add up to {MAX_GATHER_PEOPLE} people.
+          Ask them to scan this code. Their details link here automatically. You can add up to {MAX_GATHER_PEOPLE} people.
         </Body>
         <View style={styles.qrWrap}>
           <QRCode

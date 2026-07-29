@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { CalendarBlank, EnvelopeSimple, GoogleLogo, LinkedinLogo } from 'phosphor-react-native';
 
 import { Body, Button, PageHeader, Panel, Screen } from '@/components/ui';
+import { SettingsSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import {
   disconnectIntegration,
@@ -43,14 +44,14 @@ const PROVIDERS: ProviderRow[] = [
   {
     id: 'linkedin',
     name: 'LinkedIn',
-    description: 'Coming soon — connect your LinkedIn profile for richer follow-ups.',
+    description: 'Coming soon. Connect your LinkedIn profile for richer follow-ups.',
     icon: <LinkedinLogo size={20} color={colors.ink} weight="bold" />,
     connectable: false,
   },
   {
     id: 'apple',
     name: 'Apple',
-    description: 'Coming soon — connect Apple services for contacts and calendar.',
+    description: 'Coming soon. Connect Apple services for contacts and calendar.',
     icon: <CalendarBlank size={20} color={colors.ink} weight="bold" />,
     connectable: false,
   },
@@ -60,14 +61,19 @@ export default function ConnectedAccountsScreen() {
   const { session } = useAuth();
   const params = useLocalSearchParams<{ integration?: string | string[] }>();
   const [status, setStatus] = useState<ConnectedAccountStatus | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!session?.access_token) return;
+    if (!session?.access_token) {
+      setInitialLoading(false);
+      return;
+    }
     const next = await fetchConnectedAccounts(session.access_token);
     setStatus(next);
+    setInitialLoading(false);
   }, [session?.access_token]);
 
   useEffect(() => {
@@ -170,6 +176,8 @@ export default function ConnectedAccountsScreen() {
         Connect the accounts AfterMeet can use for approved outbound drafts, calendar scheduling, and future integrations.
       </Body>
 
+      {session && initialLoading ? <SettingsSkeleton /> : null}
+
       {!session ? (
         <Panel>
           <Text style={styles.panelTitle}>Sign in required</Text>
@@ -181,6 +189,7 @@ export default function ConnectedAccountsScreen() {
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
+      {session && !initialLoading ? (
       <View style={styles.list}>
         {PROVIDERS.map((provider) => {
           const account = providerStatus(provider.id);
@@ -215,6 +224,7 @@ export default function ConnectedAccountsScreen() {
           );
         })}
       </View>
+      ) : null}
     </Screen>
   );
 }

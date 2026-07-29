@@ -18,9 +18,13 @@ export function digitsOnly(value: string) {
 
 export function formatPhoneE164(parts: PhoneParts) {
   const country = countryByIso(parts.countryIso);
-  const national = digitsOnly(parts.nationalNumber).replace(/^0+/, "");
+  let national = digitsOnly(parts.nationalNumber).replace(/^0+/, "");
+  const dial = country.dialCode;
+  if (national.startsWith(dial)) {
+    national = national.slice(dial.length);
+  }
   if (!national) return "";
-  return `+${country.dialCode}${national}`;
+  return `+${dial}${national}`;
 }
 
 export function parseStoredPhone(value: string, defaultIso = detectDefaultCountryIso()): PhoneParts {

@@ -34,10 +34,10 @@ export function applyExtractionDraft(
 }
 
 export const EXTRACTION_DRAFT_NOTE = {
-  ai: 'AI draft from your transcript — check the title and share summary before saving.',
-  heuristic: 'Suggested draft from your transcript — check the title and share summary before saving.',
+  ai: 'AI draft from your transcript. Check the title and share summary before saving.',
+  heuristic: 'Suggested draft from your transcript. Check the title and share summary before saving.',
   aiNotConfigured:
-    'Draft generated from your transcript — check the title and share summary before saving.',
+    'Draft generated from your transcript. Check the title and share summary before saving.',
   aiFallback:
-    'AI summary unavailable — using a structured draft from your transcript. Check the title and share summary before saving.',
+    'AI summary unavailable. Using a structured draft from your transcript. Check the title and share summary before saving.',
 } as const;

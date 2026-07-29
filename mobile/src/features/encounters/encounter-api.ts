@@ -8,6 +8,13 @@ import {
 } from '@/features/encounters/audio-upload';
 import type { LocalRecordingMetadata } from '@/features/encounters/local-recordings';
 import { mobileFetch } from '@/lib/mobile-api';
+import {
+  defaultFollowUpTitle,
+  displayFollowUpTitle,
+  type FollowUpChannel,
+} from '@/features/follow-ups/follow-up-channels';
+
+export type FollowUpChannelId = FollowUpChannel | 'send' | 'other';
 
 export type EncounterDraft = {
   title: string;
@@ -15,18 +22,19 @@ export type EncounterDraft = {
   sharedSummary: string;
   privateNotes: string;
   followUp: string;
-  followUpType: 'email' | 'linkedin' | 'call' | 'meeting' | 'send' | 'whatsapp' | 'other';
+  followUpType: FollowUpChannelId;
 };
 
 export type EncounterAction = {
   id: string;
   title: string;
-  channel: EncounterDraft['followUpType'];
+  channel: FollowUpChannelId;
   owner: 'me' | 'guest';
   dueAt: string;
   status: 'open' | 'completed' | 'snoozed';
   assigneeName?: string;
   assigneeEmail?: string;
+  groupId?: string;
 };
 
 export type EncounterPayload = {
@@ -166,8 +174,9 @@ export function buildEncounterPayload(input: {
   exchangeId?: string;
   sharedSummary: string;
   privateNotes: string;
-  followUp: string;
-  followUpType: EncounterDraft['followUpType'];
+  followUp?: string;
+  followUpType?: FollowUpChannelId;
+  followUpChannels?: FollowUpChannel[];
   dueAt?: string;
   consentMethod?: 'verbal' | 'written';
   status?: EncounterPayload['status'];
@@ -179,7 +188,15 @@ export function buildEncounterPayload(input: {
   const now = new Date().toISOString();
   const durationSeconds = Math.max(0, Math.round(input.durationSeconds ?? 0));
   const startedAt = input.startedAt || new Date(Date.now() - durationSeconds * 1000).toISOString();
-  const followUpTitle = input.followUp.trim();
+  const followUpTitle = input.followUp?.trim() ?? '';
+  const sanitizedFollowUpTitle = followUpTitle && !/^[\d+\s()-]+$/.test(followUpTitle)
+    ? followUpTitle
+    : '';
+  const channels = (input.followUpChannels?.length
+    ? input.followUpChannels
+    : sanitizedFollowUpTitle || input.followUpType
+      ? [input.followUpType ?? 'email'] as FollowUpChannel[]
+      : []) as FollowUpChannel[];
   const meetingPeople = (input.people ?? [])
     .map((person) => ({
       name: person.name.trim(),
@@ -187,27 +204,30 @@ export function buildEncounterPayload(input: {
     }))
     .filter((person) => person.name.length >= 2);
 
-  const actions: EncounterAction[] = followUpTitle
-    ? (meetingPeople.length > 1
-      ? meetingPeople.map((person) => ({
-        id: createId(),
-        title: followUpTitle,
-        channel: input.followUpType,
-        owner: 'me' as const,
-        dueAt: input.dueAt?.trim() || '',
-        status: 'open' as const,
-        assigneeName: person.name,
-        assigneeEmail: person.email,
-      }))
-      : [{
-        id: createId(),
-        title: followUpTitle,
-        channel: input.followUpType,
-        owner: 'me' as const,
-        dueAt: input.dueAt?.trim() || '',
-        status: 'open' as const,
-      }])
-    : [];
+  const actions: EncounterAction[] = [];
+  if (channels.length) {
+    const assignees = meetingPeople.length >= 1
+    ? meetingPeople
+    : [{ name: input.personName.trim(), email: input.personEmail?.trim() ?? '' }];
+
+    for (const assignee of assignees) {
+      if (!assignee.name.trim()) continue;
+      const groupId = createId();
+      for (const channel of channels.slice(0, 2)) {
+        actions.push({
+          id: createId(),
+          title: displayFollowUpTitle(sanitizedFollowUpTitle, channel),
+          channel,
+          owner: 'me',
+          dueAt: input.dueAt?.trim() || '',
+          status: 'open',
+          assigneeName: assignee.name,
+          assigneeEmail: assignee.email,
+          groupId: channels.length > 1 ? groupId : undefined,
+        });
+      }
+    }
+  }
 
   return {
     id: input.id || createId(),
@@ -235,6 +255,39 @@ export function buildEncounterPayload(input: {
   };
 }
 
+export function applyEncounterFollowUpSettings(
+  encounter: EncounterPayload,
+  input: {
+    followUpChannels: FollowUpChannel[];
+    dueAt: string;
+    privateNotes: string;
+  },
+): EncounterPayload {
+  const rebuilt = buildEncounterPayload({
+    id: encounter.id,
+    transcript: encounter.transcript,
+    title: encounter.title,
+    personName: encounter.personName,
+    personEmail: encounter.personEmail,
+    sharedSummary: encounter.sharedSummary,
+    privateNotes: input.privateNotes,
+    followUpChannels: input.followUpChannels,
+    dueAt: input.dueAt,
+    consentMethod: encounter.consent.method,
+    status: encounter.status,
+    durationSeconds: encounter.durationSeconds,
+    startedAt: encounter.startedAt,
+    recording: encounter.recording,
+    shareToken: encounter.shareToken,
+  });
+
+  return {
+    ...encounter,
+    privateNotes: rebuilt.privateNotes,
+    actions: rebuilt.actions,
+  };
+}
+
 type TranscribePayload = {
   transcript?: string;
   source?: 'ai' | 'unavailable';
@@ -253,7 +306,7 @@ function transcribeFailureMessage(status: number, payload: TranscribePayload, ra
   }
   if (status >= 500) return 'Transcription service is temporarily unavailable. Try again in a moment.';
   if (raw.trim().startsWith('<!DOCTYPE') || raw.trim().startsWith('<html')) {
-    return 'Transcription request failed. The recording may be too large — try a shorter clip.';
+    return 'Transcription request failed. The recording may be too large. Try a shorter clip.';
   }
   return `Transcription failed (${status}).`;
 }

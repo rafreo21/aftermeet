@@ -1,5 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { readEnv } from '@/lib/env';
+
 export type AudioRetention = 'after_transcription' | '24_hours' | '7_days' | 'never';
 
 export type LocalRecordingMetadata = {
@@ -179,4 +181,23 @@ export function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+}
+
+export function resolveSharedRecordingUrl(recording?: { sharedAudioUrl?: string | null }) {
+  if (!recording?.sharedAudioUrl) return null;
+  const base = readEnv()?.publicCardBaseUrl?.replace(/\/+$/, '');
+  if (!base) {
+    return recording.sharedAudioUrl.startsWith('http') ? recording.sharedAudioUrl : null;
+  }
+  if (recording.sharedAudioUrl.startsWith('http')) return recording.sharedAudioUrl;
+  return `${base}${recording.sharedAudioUrl.startsWith('/') ? '' : '/'}${recording.sharedAudioUrl}`;
+}
+
+export async function resolveEncounterRecordingUri(
+  encounterId: string,
+  recording?: { sharedAudioUrl?: string | null },
+) {
+  const localUri = await findLocalRecordingUri(encounterId);
+  if (localUri) return localUri;
+  return resolveSharedRecordingUrl(recording);
 }

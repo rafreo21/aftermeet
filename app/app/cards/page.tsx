@@ -354,7 +354,7 @@ export default function CardsPage() {
                 {cards.map((card, index) => (
                   <article key={card.id} className="card-overview-item">
                     <button onClick={() => openCard(card)} type="button">
-                      <div className="card-overview-cover" style={{ background: themeSurfaceStyle(card.theme).backgroundColor, color: themeSurfaceStyle(card.theme).color }}>
+                      <div className="card-overview-cover" style={{ background: themeSurfaceStyle(card.theme).backgroundGradient, color: themeSurfaceStyle(card.theme).color }}>
                         <span style={themeCoverBadgeStyle(card.theme)}>{card.company[0] || card.name[0] || "A"}</span>
                         <QrCodeIcon size={22} weight="bold" color={themeSurfaceStyle(card.theme).color} />
                       </div>
@@ -387,7 +387,7 @@ export default function CardsPage() {
             </div>
             <div className="card-share-layout" id="share">
           <article className="share-card-preview">
-            <div className="share-card-cover" style={{ background: cardTheme.backgroundColor, color: cardTheme.color }}>
+            <div className="share-card-cover" style={{ background: cardTheme.backgroundGradient, color: cardTheme.color }}>
               <span style={themeCoverBadgeStyle(profile.theme)}>{profile.company[0] || "A"}</span>
               <strong style={{ color: cardTheme.color }}>{profile.company || "Your company"}</strong>
             </div>
@@ -410,7 +410,7 @@ export default function CardsPage() {
             </div>
           </article>
           <section className="inline-qr-panel">
-            <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Let someone scan this card</h2><p>They only need their phone camera—no app or account required.</p></div></div>
+            <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Let someone scan this card</h2><p>They only need their phone camera. No app or account required.</p></div></div>
             <ol className="scan-steps">
               <li><span>1</span>Open the camera</li>
               <li><span>2</span>Point at the QR</li>
@@ -432,7 +432,7 @@ export default function CardsPage() {
             </div>
             <Button fullWidth size="small" variant="ghost" disabled={!qrSvg} onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : qrSvg ? "Copy QR as SVG" : "Generating QR…"}</Button>
             <section className="signature-panel">
-              <div className="inline-qr-head"><span><EnvelopeSimpleIcon size={22} weight="bold" /></span><div><h2>Email signature</h2><p>Square photo, name, title, and contact details — ready for Gmail or Outlook.</p></div></div>
+              <div className="inline-qr-head"><span><EnvelopeSimpleIcon size={22} weight="bold" /></span><div><h2>Email signature</h2><p>Square photo, name, title, and contact details. Ready for Gmail or Outlook.</p></div></div>
               <div className="signature-preview-card">
                 <div className="signature-preview-photo">{photo ? <img src={photo} alt="" /> : initials}</div>
                 <div className="signature-preview-copy">
@@ -456,7 +456,7 @@ export default function CardsPage() {
             </section>
             <section className="share-surface-panel">
               <div className="inline-qr-head"><span><MonitorIcon size={22} weight="bold" /></span><div><h2>Virtual background</h2><p>Meeting background with your name and a scannable QR in the corner.</p></div></div>
-              <div className="share-surface-preview virtual-background-preview" style={{ background: profile.theme }}>
+              <div className="share-surface-preview virtual-background-preview" style={{ background: cardTheme.backgroundGradient }}>
                 <div className="share-surface-overlay">
                   <strong>{profile.name}</strong>
                   <span>{profile.role}{profile.company ? ` · ${profile.company}` : ""}</span>

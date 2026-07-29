@@ -65,7 +65,7 @@ export function PublicAppDownloadPrompt({
                 Continue on the web
                 <ArrowRightIcon size={18} weight="bold" />
               </LinkButton>
-              <p className="public-app-download-note">The mobile app is coming soon. Use the web for now — same account, same people.</p>
+              <p className="public-app-download-note">The mobile app is coming soon. Use the web for now. Same account, same people.</p>
             </>
           )}
         </div>

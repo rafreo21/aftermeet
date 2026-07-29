@@ -14,6 +14,7 @@ import { Platform, Image, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
 
 import { BrandedQrPreview } from '@/components/branded-qr-preview';
+import { CardThemeGradient } from '@/components/card-theme-gradient';
 import { Body, Button } from '@/components/ui';
 import { showsCompanyDetails } from '@/features/card/company-display';
 import type { themeSurfaceStyle } from '@/features/card/theme-colors';
@@ -24,6 +25,14 @@ import {
   openNfcSettings,
   programNfcTag,
 } from '@/features/card/nfc-actions';
+import {
+  isTapToShareActive,
+  isTapToShareNativeReady,
+  isTapToShareSupported,
+  startTapToShare,
+  stopTapToShare,
+  TAP_TO_SHARE_REBUILD_MESSAGE,
+} from '@/features/card/nfc-hce-actions';
 import {
   downloadShareAsset,
   virtualBackgroundInstructions,
@@ -81,7 +90,7 @@ export function WalletToolSheetContent({
   return (
     <View style={styles.sheetBody}>
       <Body>Your card appears in Wallet with name, role, company, and a scannable QR code. Apple and Google render the pass scan code themselves; your AfterMeet mark appears on the pass header.</Body>
-      <View style={[styles.walletPreview, { backgroundColor: theme.backgroundColor }]}>
+      <CardThemeGradient theme={card.theme} style={styles.walletPreview}>
         <Text style={[styles.walletHeader, { color: theme.softColor }]}>AfterMeet Card</Text>
         <View style={styles.walletFields}>
           <View style={styles.walletField}>
@@ -104,7 +113,7 @@ export function WalletToolSheetContent({
         <View style={styles.walletQrPreview}>
           <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={112} />
         </View>
-      </View>
+      </CardThemeGradient>
       {Platform.OS === 'ios' ? (
         <>
           <Button
@@ -150,14 +159,41 @@ export function NfcToolSheetContent({
   accessToken,
 }: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'>) {
   const { busy, run } = actions;
+  const [tapActive, setTapActive] = useState(isTapToShareActive());
+  const tapNativeReady = isTapToShareNativeReady();
 
   return (
     <View style={styles.sheetBody}>
-      <Body>Program a physical NFC tag or copy the link for manufacturer tools.</Body>
+      <Body>Tap phones together on Android, program a sticker, or copy the link for manufacturer tools.</Body>
+      {!tapNativeReady ? (
+        <Text style={styles.note}>{TAP_TO_SHARE_REBUILD_MESSAGE}</Text>
+      ) : null}
       <View style={styles.nfcQrPreview}>
         <BrandedQrPreview cardUrl={publicUrl} slug={card.slug} accessToken={accessToken} size={132} />
         <Text style={styles.note}>This is the card link written to the tag.</Text>
       </View>
+      {isTapToShareSupported() ? (
+        <Button
+          variant={tapActive ? 'secondary' : 'primary'}
+          loading={busy === 'nfc-tap'}
+          disabled={!tapNativeReady && !tapActive}
+          onPress={() => void run('nfc-tap', async () => {
+            if (tapActive || isTapToShareActive()) {
+              await stopTapToShare();
+              setTapActive(false);
+              return;
+            }
+            await startTapToShare(publicUrl);
+            setTapActive(true);
+          }, {
+            successMessage: tapActive
+              ? 'Tap to share turned off.'
+              : 'Ready. Ask them to tap your phone.',
+          })}>
+          <ContactlessPayment size={18} color={colors.ink} weight="bold" />
+          {tapActive ? 'Stop tap to share' : 'Tap to share'}
+        </Button>
+      ) : null}
       {isNativeNfcSupported() ? (
         <>
           <Button
@@ -367,9 +403,17 @@ export function SignatureToolSheetContent({
     <View style={styles.sheetBody}>
       <Body>Paste the HTML version into Gmail, Outlook, or Apple Mail signature settings.</Body>
       <View style={styles.signaturePreview}>
-        <View style={styles.signaturePhoto}>
-          <Text style={styles.signaturePhotoText}>{initials}</Text>
-        </View>
+        {signatureProfile.photoUrl?.trim() ? (
+          <Image
+            source={{ uri: signatureProfile.photoUrl.trim() }}
+            style={styles.signaturePhotoImage}
+            accessibilityLabel={`${card.name || 'Your'} profile photo`}
+          />
+        ) : (
+          <View style={styles.signaturePhoto}>
+            <Text style={styles.signaturePhotoText}>{initials}</Text>
+          </View>
+        )}
         <View style={styles.signatureBody}>
           <Text style={styles.signatureName}>{card.name || 'Your name'}</Text>
           {card.role ? <Text style={styles.signatureLine}>{card.role}</Text> : null}
@@ -440,7 +484,7 @@ export function BackgroundToolSheetContent({
   return (
     <View style={styles.sheetBody}>
       <Body>{virtualBackgroundInstructions()}</Body>
-      <View style={[styles.backgroundPreview, { backgroundColor: theme.backgroundColor }]}>
+      <CardThemeGradient theme={card.theme} style={styles.backgroundPreview}>
         <VirtualBackgroundPanelPreview
           name={card.name}
           subtitle={subtitle}
@@ -448,7 +492,7 @@ export function BackgroundToolSheetContent({
           slug={card.slug}
           accessToken={accessToken}
         />
-      </View>
+      </CardThemeGradient>
       <Button
         loading={busy === 'background'}
         disabled={!accessToken || !published}
@@ -515,6 +559,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  signaturePhotoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
   },
   signaturePhotoText: { color: colors.white, fontSize: 20, fontWeight: '800' },
   signatureBody: { flex: 1, gap: 2 },

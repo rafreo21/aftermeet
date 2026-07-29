@@ -58,7 +58,7 @@ function PublicCardView({
     <>
       <div
         className="public-card-cover"
-        style={{ background: coverImageUrl ? undefined : theme.backgroundColor }}>
+        style={{ background: coverImageUrl ? undefined : theme.backgroundGradient }}>
         {coverImageUrl ? <img src={coverImageUrl} alt="" className="public-card-cover-photo" /> : null}
         {showCompanyDetails && (companyLogoUrl || company) ? (
           <div className="public-card-company-row">
@@ -113,7 +113,7 @@ function PublicCardView({
                 >
                   <span
                     className="public-card-method-icon"
-                    style={{ background: theme.backgroundColor, color: theme.color }}
+                    style={{ background: theme.backgroundGradient, color: theme.color }}
                   >
                     <ContactMethodIcon type={method.method_type} color={theme.color} />
                   </span>
@@ -129,7 +129,7 @@ function PublicCardView({
           <button
             type="button"
             className="public-card-return"
-            style={{ background: theme.backgroundColor, color: theme.color }}
+            style={{ background: theme.backgroundGradient, color: theme.color }}
             onClick={onSaveContact}
           >
             Save contact

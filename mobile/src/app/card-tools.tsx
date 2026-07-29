@@ -31,6 +31,7 @@ import {
 } from '@/features/card/card-tool-sheets';
 import { syncCardToolsForCard } from '@/features/card/card-tools-sync';
 import { useCard } from '@/features/card/card-context';
+import { CardThemeGradient } from '@/components/card-theme-gradient';
 import { themeSurfaceStyle } from '@/features/card/theme-colors';
 import { fetchWalletAvailability } from '@/features/card/wallet-actions';
 import { buildHtmlSignature, buildPlainSignature } from '@/lib/email-signature';
@@ -258,9 +259,9 @@ export default function CardToolsScreen() {
               Wallet, widgets, NFC, and sharing extras for this card.
             </Body>
             <View style={styles.cardMetaRow}>
-              <View style={[styles.themeChip, { backgroundColor: theme.backgroundColor }]}>
+              <CardThemeGradient theme={card.theme} style={styles.themeChip}>
                 <Text style={[styles.themeChipText, { color: theme.color }]}>{theme.backgroundColor}</Text>
-              </View>
+              </CardThemeGradient>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Edit this card"
@@ -302,7 +303,7 @@ export default function CardToolsScreen() {
             <ToolRow
               icon={<ContactlessPayment size={22} color={colors.ink} weight="bold" />}
               title="NFC"
-              subtitle="Program tags and copy programming links"
+              subtitle="Tap to share on Android, or program NFC tags"
               onPress={() => openSheet('nfc')}
             />
             <ToolRow

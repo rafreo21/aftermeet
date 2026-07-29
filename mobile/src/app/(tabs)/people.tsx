@@ -11,7 +11,7 @@ const people = [
 ];
 
 export default function PeopleScreen() {
-  return <Screen><View style={styles.header}><Eyebrow>Relationships</Eyebrow><Title>People</Title><Body>Everything you know, promised and discussed—organized around a person.</Body></View>
+  return <Screen><View style={styles.header}><Eyebrow>Relationships</Eyebrow><Title>People</Title><Body>Everything you know, promised and discussed, organized around a person.</Body></View>
     <View style={styles.search}><MagnifyingGlass size={19} color={colors.muted} /><TextInput placeholder="Search people" placeholderTextColor={colors.muted} style={styles.input} /></View>
     {people.map((person) => <Pressable key={person.name} style={styles.person}><View style={styles.avatar}><UserCircle size={26} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={styles.name}>{person.name}</Text><Text style={styles.role}>{person.role}</Text><Text style={styles.status}>{person.status}</Text></View><Text style={styles.when}>{person.when}</Text></Pressable>)}
     <Pressable style={styles.fab}><Plus size={24} color={colors.ink} weight="bold" /></Pressable>

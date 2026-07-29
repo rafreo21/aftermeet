@@ -1,16 +1,20 @@
 import { router, useFocusEffect } from 'expo-router';
 import { CaretRight, ListChecks } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandMark } from '@/components/brand-mark';
-import { FollowUpCell } from '@/components/follow-up-cell';
+import { BottomSheet } from '@/components/bottom-sheet';
 import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
+import { FollowUpAudienceSheet } from '@/components/follow-up-audience-sheet';
 import { FollowUpsSheet } from '@/components/follow-ups-sheet';
+import { GroupedFollowUpActions, GroupedFollowUpCell } from '@/components/grouped-follow-up-cell';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
+import { CaptureListSkeleton } from '@/components/skeleton';
 import { Body, Eyebrow, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import { groupFollowUpItems, type FollowUpGroup } from '@/features/follow-ups/follow-up-groups';
 import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -41,7 +45,9 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [loadingFollowUps, setLoadingFollowUps] = useState(false);
+  const [followUpError, setFollowUpError] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<FollowUpGroup | null>(null);
   const {
     runFollowUp,
     markComplete,
@@ -49,23 +55,31 @@ export default function HomeScreen() {
     missingOpen,
     missingExecution,
     missingLoading,
-    googleConnected,
     closeMissing,
     requestMissingField,
-    draftTailoredEmail,
-    draftPreferredEmail,
-  } = useFollowUpActions(session?.access_token);
+    draftRequestEmail,
+    audienceOpen,
+    audienceItem,
+    audienceParticipants,
+    confirmAudience,
+    closeAudience,
+  } = useFollowUpActions(session?.access_token, {
+    allFollowUps: followUps,
+  });
 
   const loadFollowUps = useCallback(async () => {
     if (!session?.access_token) {
       setFollowUps([]);
+      setFollowUpError('');
       return;
     }
     setLoadingFollowUps(true);
+    setFollowUpError('');
     try {
       setFollowUps(await fetchFollowUps(session.access_token));
-    } catch {
+    } catch (caught) {
       setFollowUps([]);
+      setFollowUpError(caught instanceof Error ? caught.message : 'Could not load follow-ups.');
     } finally {
       setLoadingFollowUps(false);
     }
@@ -77,7 +91,16 @@ export default function HomeScreen() {
     }, [loadFollowUps]),
   );
 
-  const preview = useMemo(() => followUps.slice(0, 3), [followUps]);
+  const groups = useMemo(() => groupFollowUpItems(followUps), [followUps]);
+  const preview = useMemo(() => groups.slice(0, 2), [groups]);
+
+  function runGroupFollowUp(group: FollowUpGroup) {
+    if (group.items.length === 1) {
+      runFollowUp(group.items[0]);
+      return;
+    }
+    setActiveGroup(group);
+  }
 
   return (
     <View style={styles.safe}>
@@ -100,29 +123,29 @@ export default function HomeScreen() {
 
         <View style={styles.steps}>
           {STEPS.map((step) => (
-            <Pressable
-              key={step.num}
-              accessibilityRole="button"
-              onPress={() => router.navigate(step.route)}
-              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepNum}>{step.num}</Text>
-              </View>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepCopy}>{step.copy}</Text>
-              <View style={styles.stepAction}>
-                <Text style={styles.stepActionText}>Open</Text>
-                <CaretRight size={14} color={colors.accent} weight="bold" />
-              </View>
-            </Pressable>
-          ))}
+              <Pressable
+                key={step.num}
+                accessibilityRole="button"
+                onPress={() => router.navigate(step.route)}
+                style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepNum}>{step.num}</Text>
+                </View>
+                <Text style={styles.stepTitle}>{step.title}</Text>
+                <Text style={styles.stepCopy}>{step.copy}</Text>
+                <View style={styles.stepAction}>
+                  <Text style={styles.stepActionText}>Open</Text>
+                  <CaretRight size={14} color={colors.accent} weight="bold" />
+                </View>
+              </Pressable>
+            ))}
         </View>
 
         {session ? (
           <View style={styles.followUpsSection}>
             <View style={styles.sectionHead}>
               <Text style={styles.sectionTitle}>Follow-ups</Text>
-              {followUps.length > 3 ? (
+              {groups.length > 2 ? (
                 <Pressable accessibilityRole="button" onPress={() => setSheetOpen(true)}>
                   <Text style={styles.viewAll}>View all</Text>
                 </Pressable>
@@ -130,16 +153,26 @@ export default function HomeScreen() {
             </View>
 
             {loadingFollowUps ? (
-              <ActivityIndicator color={colors.ink} />
+              <CaptureListSkeleton count={2} />
+            ) : followUpError ? (
+              <MiniPromptCard
+                icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
+                title="Could not load follow-ups"
+                copy={followUpError}
+                onPress={() => void loadFollowUps()}
+              />
             ) : preview.length ? (
               <View style={styles.followUpList}>
-                {preview.map((item) => (
-                  <FollowUpCell
-                    key={`${item.encounterId}-${item.actionId}`}
-                    item={item}
-                    onPress={() => runFollowUp(item)}
-                    onComplete={() => void markComplete(item, loadFollowUps)}
-                    completing={completingId === `${item.encounterId}-${item.actionId}`}
+                {preview.map((group) => (
+                  <GroupedFollowUpCell
+                    key={group.id}
+                    group={group}
+                    onPress={() => runGroupFollowUp(group)}
+                    onComplete={() => {
+                      const item = group.items[0];
+                      if (item) void markComplete(item, loadFollowUps);
+                    }}
+                    completing={group.items.length === 1 && completingId === `${group.items[0]?.encounterId}-${group.items[0]?.actionId}`}
                   />
                 ))}
               </View>
@@ -147,7 +180,7 @@ export default function HomeScreen() {
               <MiniPromptCard
                 icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
                 title="No follow-ups yet"
-                copy="Save a follow-up in capture and it will show up here."
+                copy="Pick follow-up channels in capture and they will show up here."
                 onPress={() => router.navigate('/capture')}
               />
             )}
@@ -164,15 +197,41 @@ export default function HomeScreen() {
         completingId={completingId}
       />
 
+      <BottomSheet
+        visible={Boolean(activeGroup)}
+        title={activeGroup?.personName.trim() || 'Follow-up actions'}
+        onClose={() => setActiveGroup(null)}>
+        {activeGroup ? (
+          <GroupedFollowUpActions
+            group={activeGroup}
+            completingId={completingId}
+            onPressItem={(actionId) => {
+              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              if (item) runFollowUp(item);
+            }}
+            onCompleteItem={(actionId) => {
+              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              if (item) void markComplete(item, loadFollowUps);
+            }}
+          />
+        ) : null}
+      </BottomSheet>
+
       <FollowUpMissingSheet
         visible={missingOpen}
         execution={missingExecution}
         loading={missingLoading}
-        googleConnected={googleConnected}
         onClose={closeMissing}
         onRequest={() => void requestMissingField()}
-        onDraftTailoredEmail={(preferGmail) => void draftTailoredEmail(preferGmail)}
-        onDraftPreferredEmail={(preferGmail) => void draftPreferredEmail(preferGmail)}
+        onDraftEmail={() => void draftRequestEmail()}
+      />
+
+      <FollowUpAudienceSheet
+        visible={audienceOpen}
+        item={audienceItem}
+        participants={audienceParticipants}
+        onClose={closeAudience}
+        onConfirm={confirmAudience}
       />
     </View>
   );
@@ -205,9 +264,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
-  viewAll: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  viewAll: { color: colors.link, fontSize: 13, fontWeight: '800' },
   followUpList: { gap: spacing.x3 },
   steps: { gap: spacing.x2 },
+  stepSkeleton: {
+    gap: spacing.x2,
+    padding: spacing.x5,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
   stepCard: {
     padding: spacing.x5,
     borderRadius: radius.medium,

@@ -26,6 +26,18 @@ test("wallet config flags are false without env vars", () => {
   assert.equal(isGoogleWalletConfigured(), false);
 });
 
+test("google wallet jwt origins use hostnames", async () => {
+  const previous = process.env.NEXT_PUBLIC_APP_URL;
+  process.env.NEXT_PUBLIC_APP_URL = "https://aftermeet-beta.vercel.app";
+  const { walletJwtOrigins } = await import("../lib/google-wallet-pass.ts");
+
+  assert.deepEqual(walletJwtOrigins("https://aftermeet-beta.vercel.app/c/demo"), [
+    "aftermeet-beta.vercel.app",
+  ]);
+
+  process.env.NEXT_PUBLIC_APP_URL = previous;
+});
+
 test("html email signature includes structured layout and card link", async () => {
   const { buildHtmlSignature } = await import("../lib/email-signature.ts");
   const html = buildHtmlSignature({

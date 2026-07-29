@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { ArrowUpRight } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CardThemeGradient, CardThemeGradientFill } from '@/components/card-theme-gradient';
 import { ContactMethodIcon } from '@/components/contact-method-icon';
 import { openContactMethod } from '@/features/card/contact-actions';
 import { cardWithCompanyVisibility, showsCompanyDetails } from '@/features/card/company-display';
@@ -17,7 +18,8 @@ export function MobileCardPreview({ card, compact = false }: { card: MobileCard;
   const initials = visible.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   return (
     <View style={styles.card}>
-      <View style={[styles.cover, { backgroundColor: visible.theme }]}>
+      <View style={styles.cover}>
+        {!visible.coverPhoto ? <CardThemeGradientFill theme={visible.theme} /> : null}
         {visible.coverPhoto ? <Image alt="" source={visible.coverPhoto} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
         {showCompany && (visible.companyLogo || visible.company) ? (
           <View style={styles.companyRow}>
@@ -40,9 +42,9 @@ export function MobileCardPreview({ card, compact = false }: { card: MobileCard;
         <View style={styles.methods}>
           {visible.methods.slice(0, compact ? 2 : undefined).map((method) => (
               <Pressable key={method.id} onPress={() => openContactMethod(method)} style={({ pressed }) => [styles.method, pressed && styles.pressed]}>
-                <View style={[styles.methodIcon, { backgroundColor: visible.theme }]}>
+                <CardThemeGradient theme={visible.theme} style={styles.methodIcon}>
                   <ContactMethodIcon type={method.type} size={18} color={onTheme} />
-                </View>
+                </CardThemeGradient>
                 <View style={styles.methodCopy}><Text style={styles.methodLabel}>{method.label}</Text><Text numberOfLines={1} style={styles.methodValue}>{method.value}</Text></View>
                 <ArrowUpRight size={17} color={colors.muted} />
               </Pressable>
@@ -55,7 +57,7 @@ export function MobileCardPreview({ card, compact = false }: { card: MobileCard;
 
 const styles = StyleSheet.create({
   card: { overflow: 'hidden', borderRadius: radius.large, backgroundColor: colors.surface, shadowColor: colors.ink, shadowOpacity: 0.12, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 5 },
-  cover: { height: 138, padding: spacing.x5, justifyContent: 'flex-start' },
+  cover: { height: 138, overflow: 'hidden', padding: spacing.x5, justifyContent: 'flex-start' },
   companyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   logo: { width: 34, height: 34, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: radius.round },
   logoText: { fontWeight: '900' },

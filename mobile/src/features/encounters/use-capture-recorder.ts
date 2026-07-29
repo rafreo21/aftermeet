@@ -553,7 +553,7 @@ export function useCaptureRecorder({
         return 'Transcribing recording…';
       case 'unavailable':
         return isExpoGo()
-          ? 'Recording — transcript appears when you tap Finish (requires sign-in)'
+          ? 'Recording. Transcript appears when you tap Finish (requires sign-in)'
           : usingSpeechCapture
             ? 'Check mic and speech permissions in Settings'
             : 'Type or paste what was said';

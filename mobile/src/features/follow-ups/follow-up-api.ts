@@ -5,6 +5,7 @@ import { sortFollowUps } from '@/lib/due-date';
 export type FollowUpItem = {
   encounterId: string;
   actionId: string;
+  groupId?: string;
   title: string;
   channel: EncounterAction['channel'];
   dueAt: string;
@@ -19,11 +20,25 @@ export type FollowUpItem = {
 
 export async function fetchFollowUps(accessToken: string) {
   const response = await mobileFetch('/api/follow-ups', accessToken);
-  const payload = await response.json() as { followUps?: FollowUpItem[]; error?: string };
+  const payload = await response.json() as { followUps?: Array<Record<string, unknown>>; error?: string };
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load follow-ups.');
   }
-  return sortFollowUps(payload.followUps ?? []);
+  return sortFollowUps((payload.followUps ?? []).map((row) => ({
+    encounterId: String(row.encounterId ?? ''),
+    actionId: String(row.actionId ?? ''),
+    groupId: typeof row.groupId === 'string' ? row.groupId : undefined,
+    title: String(row.title ?? ''),
+    channel: row.channel as FollowUpItem['channel'],
+    dueAt: String(row.dueAt ?? ''),
+    status: row.status as FollowUpItem['status'],
+    personName: String(row.personName ?? ''),
+    personEmail: String(row.personEmail ?? ''),
+    contactId: typeof row.contactId === 'string' ? row.contactId : undefined,
+    exchangeId: typeof row.exchangeId === 'string' ? row.exchangeId : undefined,
+    encounterTitle: String(row.encounterTitle ?? ''),
+    startedAt: String(row.startedAt ?? ''),
+  })));
 }
 
 export async function completeFollowUp(accessToken: string, encounterId: string, actionId: string) {

@@ -52,20 +52,22 @@ function buildExtractionSystemPrompt(context?: ExtractionOwnerContext) {
 
   return [
     "You are AfterMeet's meeting intelligence engine.",
-    "The transcript is from a live conversation recorded by the owner (me). There is no speaker diarization — infer who said what from introductions, names, and first-person cues.",
+    "The transcript is from a live conversation recorded by the owner (me). There is no speaker diarization. Infer who said what from introductions, names, and first-person cues.",
     `Treat I/me/my as ${ownerLabel} unless the transcript clearly indicates otherwise.`,
     "",
     "The owner already captured attendees separately. Focus on a strong meeting title and an intelligent share summary.",
     "",
     "MEETING TITLE:",
     "- Short, specific, and useful in a meeting list.",
-    "- For group meetings, name the meeting topic or group — not just one attendee.",
+    "- For group meetings, name the meeting topic or group, not just one attendee.",
     "",
     "SHARE SUMMARY (the main output):",
-    "- A clear, shareable recap of what was discussed, decided, blocked, and agreed.",
+    "- Write a clear, shareable recap: what was discussed, what was decided, what is blocked, and who owns what next.",
+    "- Lead with the most important outcome, not chronological play-by-play.",
     "- Attribute commitments clearly when multiple people are involved.",
     "- Use we for joint decisions. Name people when they took ownership.",
-    "- 3-6 sentences. Write like a sharp human assistant, not a transcript dump.",
+    "- 3-6 complete sentences. Write like a sharp human assistant, not a transcript dump.",
+    "- Do not repeat the meeting title verbatim in the first sentence.",
     "- Safe to send to everyone who was in the room.",
     "",
     "GROUP MEETINGS:",
@@ -110,7 +112,7 @@ function buildExtractionPrompt(
     : [];
 
   const hintLines = [
-    attendeeLines.length ? `Confirmed attendees:\n${attendeeLines.join("\n")}` : `Attendee hint: ${personName || "unknown — detect from transcript"}`,
+    attendeeLines.length ? `Confirmed attendees:\n${attendeeLines.join("\n")}` : `Attendee hint: ${personName || "unknown. Detect from transcript"}`,
     personHints?.personEmail ? `Primary email hint: ${personHints.personEmail}` : "",
     personHints?.personPhone ? `Primary phone hint: ${personHints.personPhone}` : "",
   ].filter(Boolean);

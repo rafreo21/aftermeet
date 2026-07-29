@@ -3,12 +3,13 @@ import type { LocalRecordingMetadata } from "./local-recordings";
 export type EncounterAction = {
   id: string;
   title: string;
-  channel: "email" | "linkedin" | "call" | "meeting" | "send" | "whatsapp" | "other";
+  channel: "email" | "linkedin" | "call" | "meeting" | "send" | "whatsapp" | "instagram" | "x" | "tiktok" | "other";
   owner: "me" | "guest";
   dueAt: string;
   status: "open" | "completed" | "snoozed";
   assigneeName?: string;
   assigneeEmail?: string;
+  groupId?: string;
   outboundDraft?: OutboundDraft;
 };
 

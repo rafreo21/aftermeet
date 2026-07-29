@@ -25,7 +25,7 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { PhoneInput } from '@/components/phone-input';
-import { RecordingPlayback } from '@/components/recording-playback';
+import { RecordingPlayOrb } from '@/components/recording-playback';
 import { Body, Button } from '@/components/ui';
 import { useCard } from '@/features/card/card-context';
 import type { CaptureWizardDraft } from '@/features/encounters/capture-draft';
@@ -35,6 +35,7 @@ import {
   formatPrimaryContactLine,
   MAX_GATHER_PEOPLE,
   syncLegacyPersonFields,
+  updateGatherPerson,
   type GatherPerson,
 } from '@/features/encounters/gather-people';
 import type { CaptureRecorder } from '@/features/encounters/use-capture-recorder';
@@ -257,7 +258,7 @@ export function CaptureInteractionStep({
       case 'failed':
         return recorder.serverTranscribeError || 'Transcription failed';
       case 'done':
-        return 'Transcript ready — edit if needed';
+        return 'Transcript ready. Edit if needed';
       default:
         if (recorder.transcriptStatus === 'transcribing') return 'Transcribing recording…';
         if (recorder.transcriptStatus === 'receiving') return 'Receiving speech live…';
@@ -341,13 +342,17 @@ export function CaptureInteractionStep({
       {consent ? (
         <View style={[styles.recorderCard, isRecording && styles.recorderCardActive]}>
           <View style={styles.recorderRow}>
-            <View style={[styles.micOrb, recorder.recordingState === 'recording' && styles.micOrbActive]}>
-              <Microphone
-                size={22}
-                color={recorder.recordingState === 'recording' ? colors.white : colors.ink}
-                weight="fill"
-              />
-            </View>
+            {recorder.recordingState === 'stopped' && recorder.recordingUri ? (
+              <RecordingPlayOrb uri={recorder.recordingUri} durationSeconds={recorder.seconds} size={44} />
+            ) : (
+              <View style={[styles.micOrb, recorder.recordingState === 'recording' && styles.micOrbActive]}>
+                <Microphone
+                  size={22}
+                  color={recorder.recordingState === 'recording' ? colors.white : colors.ink}
+                  weight="fill"
+                />
+              </View>
+            )}
             <View style={styles.recorderMeta}>
               <Text style={styles.recorderTitle}>{recorderTitle}</Text>
               <Text style={styles.recorderHint}>
@@ -446,9 +451,6 @@ export function CaptureInteractionStep({
             </View>
           ) : null}
 
-          {recorder.playbackReady && recorder.recordingUri ? (
-            <RecordingPlayback uri={recorder.recordingUri} durationSeconds={recorder.seconds} />
-          ) : null}
         </View>
       ) : null}
 
@@ -457,7 +459,7 @@ export function CaptureInteractionStep({
           <IdentificationCard size={18} color={colors.ink} weight="bold" />
           <View style={styles.sectionHeadCopy}>
             <Text style={styles.sectionTitle}>Who&apos;s in this meeting?</Text>
-            <Text style={styles.sectionHint}>Add people while you record — pausing won&apos;t stop this.</Text>
+            <Text style={styles.sectionHint}>Add people while you record. Pausing won&apos;t stop this.</Text>
           </View>
         </View>
 
@@ -483,7 +485,7 @@ export function CaptureInteractionStep({
           </View>
         ) : (
           <View style={styles.emptyPeople}>
-            <Text style={styles.emptyPeopleText}>No one added yet — use the options below.</Text>
+            <Text style={styles.emptyPeopleText}>No one added yet. Use the options below.</Text>
           </View>
         )}
 
@@ -552,7 +554,7 @@ export function CaptureInteractionStep({
         footer={<Button onPress={savePerson}>{editingPersonId ? 'Save changes' : 'Add person'}</Button>}>
         <PersonFields
           person={formPerson}
-          onChange={(changes) => setFormPerson((current) => createGatherPerson({ ...current, ...changes }))}
+          onChange={(changes) => setFormPerson((current) => updateGatherPerson(current, changes))}
           personError={personError}
         />
       </BottomSheet>
@@ -775,7 +777,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  viewAllPeopleText: { color: colors.inkSoft, fontSize: 13, fontWeight: '800' },
+  viewAllPeopleText: { color: colors.link, fontSize: 13, fontWeight: '800' },
   personActions: { flexDirection: 'row', gap: spacing.x2 },
   iconButton: {
     width: 34,

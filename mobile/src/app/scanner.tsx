@@ -8,6 +8,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 
 import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
 import { GreenHeroCard } from '@/components/green-hero-card';
+import { ScanShareSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { connectionFromScannedSlug } from '@/features/connections/connections-api';
 import { setAuthReturnPath } from '@/features/encounters/capture-draft';
@@ -98,7 +99,16 @@ export default function ScannerScreen() {
     );
   }
 
-  if (!permission?.granted) {
+  if (!permission) {
+    return (
+      <View style={[styles.previewSafe, { paddingTop: insets.top + spacing.x2, paddingHorizontal: spacing.x5 }]}>
+        <BackButton />
+        <ScanShareSkeleton />
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
     return (
       <View style={[styles.permission, { paddingTop: insets.top + spacing.x5, paddingBottom: insets.bottom + spacing.x5 }]}>
         <BackButton />

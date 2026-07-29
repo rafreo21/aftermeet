@@ -6,7 +6,7 @@ import { ActivityIndicator, Share, StyleSheet, Text, TextInput, View } from 'rea
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
-import { RecordingPlayback } from '@/components/recording-playback';
+import { RecordingPlayback, RecordingPlayOrb } from '@/components/recording-playback';
 import { ConnectionDetailSkeleton } from '@/components/skeleton';
 import { Body, Button, PageHeader, Panel, Screen } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
@@ -14,23 +14,25 @@ import {
   findLocalRecordingUri,
   formatDuration,
   readLocalRecordingMetadata,
+  resolveSharedRecordingUrl,
 } from '@/features/encounters/local-recordings';
 import {
-  generateOutboundDraft,
   getEncounter,
   saveEncounter,
   uploadEncounterRecording,
   type EncounterPayload,
 } from '@/features/encounters/encounter-api';
+import {
+  followUpChannelsFromEncounter,
+  followUpDueFromEncounter,
+  FOLLOW_UP_CHANNELS,
+} from '@/features/follow-ups/follow-up-channels';
+import { formatDueLabel } from '@/lib/due-date';
 import { readEnv } from '@/lib/env';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-function resolveSharedRecordingUrl(recording?: EncounterPayload['recording']) {
-  if (!recording?.sharedAudioUrl) return null;
-  const base = readEnv()?.publicCardBaseUrl?.replace(/\/+$/, '');
-  if (!base) return recording.sharedAudioUrl.startsWith('http') ? recording.sharedAudioUrl : null;
-  if (recording.sharedAudioUrl.startsWith('http')) return recording.sharedAudioUrl;
-  return `${base}${recording.sharedAudioUrl.startsWith('/') ? '' : '/'}${recording.sharedAudioUrl}`;
+function resolveSharedRecordingUrlFromEncounter(recording?: EncounterPayload['recording']) {
+  return resolveSharedRecordingUrl(recording);
 }
 
 export default function CaptureDetailScreen() {
@@ -45,6 +47,20 @@ export default function CaptureDetailScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(true);
+
+  const followUpSummary = useMemo(() => {
+    if (!encounter) return null;
+    const channels = followUpChannelsFromEncounter(encounter.actions);
+    const dueAt = followUpDueFromEncounter(encounter.actions);
+    const channelLabels = channels.map(
+      (channel) => FOLLOW_UP_CHANNELS.find((entry) => entry.id === channel)?.label || channel,
+    );
+    return {
+      notes: encounter.privateNotes.trim(),
+      channelLabels,
+      dueLabel: formatDueLabel(dueAt),
+    };
+  }, [encounter]);
 
   const guestUrl = encounter && readEnv()
     ? `${readEnv()!.publicCardBaseUrl}/e/${encounter.shareToken}`
@@ -63,7 +79,7 @@ export default function CaptureDetailScreen() {
     ])
       .then(async ([nextEncounter, localUri]) => {
         setEncounter(nextEncounter);
-        let uri = localUri || resolveSharedRecordingUrl(nextEncounter.recording);
+        let uri = localUri || resolveSharedRecordingUrlFromEncounter(nextEncounter.recording);
         if (!uri && localUri && session.access_token) {
           try {
             const uploaded = await uploadEncounterRecording(
@@ -73,7 +89,7 @@ export default function CaptureDetailScreen() {
               nextEncounter.recording?.mimeType,
             );
             if (uploaded?.sharedAudioUrl) {
-              uri = resolveSharedRecordingUrl({ sharedAudioUrl: uploaded.sharedAudioUrl } as EncounterPayload['recording']) || localUri;
+              uri = resolveSharedRecordingUrlFromEncounter({ sharedAudioUrl: uploaded.sharedAudioUrl } as EncounterPayload['recording']) || localUri;
               setEncounter((current) => current ? {
                 ...current,
                 recording: {
@@ -141,25 +157,6 @@ export default function CaptureDetailScreen() {
     });
   }
 
-  async function copyFollowUpDraft() {
-    if (!session?.access_token || !encounter) return;
-    setSaving(true);
-    try {
-      const body = await generateOutboundDraft(session.access_token, encounter);
-      if (body) {
-        const Clipboard = await import('expo-clipboard');
-        await Clipboard.setStringAsync(body);
-        setSuccessMessage('Follow-up draft copied.');
-        setSuccessSheetOpen(true);
-      }
-    } catch (caught) {
-      setErrorMessage(caught instanceof Error ? caught.message : 'Could not draft a follow-up.');
-      setErrorSheetOpen(true);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   if (loading) {
     return (
       <Screen edges={['top', 'bottom']} reserveTabBar={false}>
@@ -195,14 +192,18 @@ export default function CaptureDetailScreen() {
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Review the share summary, listen to the recording, and edit anything before you follow up.</Body>
+      <Body>Review the share summary and follow-up plan, then save or share when you are ready.</Body>
 
       {hasRecording ? (
         <View style={styles.recorderCard}>
           <View style={styles.recorderHero}>
-            <View style={styles.micOrb}>
-              <Microphone size={28} color={colors.ink} weight="fill" />
-            </View>
+            {recordingUri ? (
+              <RecordingPlayOrb uri={recordingUri} durationSeconds={recordingDuration} size={56} />
+            ) : (
+              <View style={styles.micOrb}>
+                <Microphone size={28} color={colors.ink} weight="fill" />
+              </View>
+            )}
             <View style={styles.recorderMeta}>
               <Text style={styles.recorderTitle}>Recording</Text>
               <Text style={styles.recorderHint}>
@@ -239,7 +240,7 @@ export default function CaptureDetailScreen() {
         <Text style={styles.label}>Meeting recap</Text>
         <TextInput
           value={encounter.sharedSummary}
-          onChangeText={(value) => setEncounter({ ...encounter, sharedSummary: value, privateNotes: '' })}
+          onChangeText={(value) => setEncounter({ ...encounter, sharedSummary: value })}
           multiline
           scrollEnabled
           placeholder="What you discussed, decided, and who owns what next…"
@@ -248,13 +249,25 @@ export default function CaptureDetailScreen() {
         />
       </Panel>
 
-      {encounter.actions[0] ? (
+      {followUpSummary ? (
         <Panel style={styles.section}>
-          <Text style={styles.sectionTitle}>Follow-up</Text>
-          <Text style={styles.bodyCopy}>{encounter.actions[0].title}</Text>
-          <Button variant="secondary" loading={saving} onPress={() => void copyFollowUpDraft()}>
-            Copy follow-up draft
-          </Button>
+          <Text style={styles.sectionTitle}>Follow-up plan</Text>
+          <Text style={styles.label}>Private notes</Text>
+          <Text style={styles.summaryCopy}>
+            {followUpSummary.notes || 'No private notes added.'}
+          </Text>
+          <Text style={styles.label}>Channels</Text>
+          <Text style={styles.summaryCopy}>
+            {followUpSummary.channelLabels.length
+              ? followUpSummary.channelLabels.join(' · ')
+              : 'No follow-up channels selected.'}
+          </Text>
+          {followUpSummary.dueLabel ? (
+            <>
+              <Text style={styles.label}>Due</Text>
+              <Text style={styles.summaryCopy}>{followUpSummary.dueLabel}</Text>
+            </>
+          ) : null}
         </Panel>
       ) : null}
 
@@ -340,6 +353,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   notesField: { height: 140, maxHeight: 140, paddingTop: spacing.x3, textAlignVertical: 'top' },
+  summaryCopy: { color: colors.ink, fontSize: 15, lineHeight: 22 },
   actions: { gap: spacing.x2 },
   success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 18 },

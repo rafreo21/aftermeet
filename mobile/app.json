@@ -10,7 +10,26 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.aftermeet.app",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "linkedin",
+          "twitter",
+          "instagram",
+          "whatsapp",
+          "tg",
+          "fb",
+          "barcelona",
+          "snapchat",
+          "paypal",
+          "venmo",
+          "cashapp",
+          "comgooglecalendar",
+          "googlecalendar",
+          "ms-outlook",
+          "googlegmail"
+        ]
+      }
     },
     "android": {
       "versionCode": 3,
@@ -130,9 +149,10 @@
       [
         "react-native-nfc-manager",
         {
-          "nfcPermission": "Allow AfterMeet to program NFC tags with your card link."
+          "nfcPermission": "Allow AfterMeet to program NFC tags and share your card when someone taps your phone."
         }
-      ]
+      ],
+      "./plugins/withAndroidNfcHce"
     ],
     "experiments": {
       "typedRoutes": true

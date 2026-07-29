@@ -17,6 +17,7 @@ for arg in "$@"; do
 done
 
 cd "$ROOT"
+node scripts/patch-react-native-hce.mjs
 APK="$ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
 MARKER="$ROOT/android/.dev-client-configured"
 
@@ -50,10 +51,16 @@ adb reverse tcp:8081 tcp:8081
 echo "Installing $APK"
 adb install -r -d "$APK"
 
+encoded_url="$(python3 -c "import urllib.parse; print(urllib.parse.quote('http://127.0.0.1:8081', safe=''))")"
+adb shell am start -a android.intent.action.VIEW -d "aftermeet://expo-development-client/?url=${encoded_url}" >/dev/null 2>&1 \
+  || adb shell monkey -p com.aftermeet.app -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+
 echo ""
 echo "Dev client installed."
 echo "  1. In another terminal: cd mobile && npm run android:dev"
-echo "  2. Open AfterMeet on your phone (dev build — same icon, debug variant)"
-echo "  3. It should connect to Metro; shake device → Reload after code changes"
+echo "  2. Or connect USB:       cd mobile && npm run android:dev:connect"
+echo "  3. Shake device → Reload after code changes"
+echo ""
+echo "  APK: mobile/android/app/build/outputs/apk/debug/app-debug.apk"
 echo ""
 echo "Release APK (no Metro): npm run android:install"

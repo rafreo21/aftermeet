@@ -1,9 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import { mobileFetch } from '@/lib/mobile-api';
+import { openUrlCandidates } from '@/lib/open-url-candidates';
 
 type WalletJson = {
   configured?: boolean;
@@ -55,6 +56,20 @@ export async function addGoogleWalletPass(slug: string, accessToken: string) {
   if (!response.ok || !payload.saveUrl) {
     throw new Error(payload.error || 'Google Wallet is not available right now.');
   }
+  if (Platform.OS === 'android') {
+    const opened = await openUrlCandidates([
+      payload.saveUrl,
+      payload.saveUrl.replace(/^https:\/\//, 'intent://') + '#Intent;scheme=https;package=com.google.android.apps.walletnfcrel;end',
+    ]);
+    if (opened) return;
+  }
+
+  const canOpen = await Linking.canOpenURL(payload.saveUrl).catch(() => false);
+  if (canOpen) {
+    await Linking.openURL(payload.saveUrl);
+    return;
+  }
+
   await WebBrowser.openBrowserAsync(payload.saveUrl);
 }
 

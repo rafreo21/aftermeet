@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
-import { FollowUpCell } from '@/components/follow-up-cell';
+import { GroupedFollowUpActions, GroupedFollowUpCell } from '@/components/grouped-follow-up-cell';
 import { Button } from '@/components/ui';
 import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import { groupFollowUpItems, type FollowUpGroup } from '@/features/follow-ups/follow-up-groups';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type FollowUpsSheetProps = {
@@ -30,16 +31,20 @@ export function FollowUpsSheet({
 }: FollowUpsSheetProps) {
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('urgency');
+  const [activeGroup, setActiveGroup] = useState<FollowUpGroup | null>(null);
   const showTools = items.length > 10;
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    let next = items;
+    let next = groupFollowUpItems(items);
     if (normalized) {
-      next = next.filter((item) => (
-        item.personName.toLowerCase().includes(normalized)
-        || item.title.toLowerCase().includes(normalized)
-        || item.encounterTitle.toLowerCase().includes(normalized)
+      next = next.filter((group) => (
+        group.personName.toLowerCase().includes(normalized)
+        || group.encounterTitle.toLowerCase().includes(normalized)
+        || group.items.some((item) => (
+          item.title.toLowerCase().includes(normalized)
+          || item.channel.toLowerCase().includes(normalized)
+        ))
       ));
     }
     if (sortMode === 'recent') {
@@ -48,48 +53,81 @@ export function FollowUpsSheet({
     return next;
   }, [items, query, sortMode]);
 
-  return (
-    <BottomSheet visible={visible} title={title} onClose={onClose}>
-      {showTools ? (
-        <View style={styles.tools}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search follow-ups"
-            placeholderTextColor={colors.muted}
-            style={styles.search}
-          />
-          <View style={styles.sortRow}>
-            <Button
-              variant={sortMode === 'urgency' ? 'primary' : 'secondary'}
-              onPress={() => setSortMode('urgency')}>
-              By urgency
-            </Button>
-            <Button
-              variant={sortMode === 'recent' ? 'primary' : 'secondary'}
-              onPress={() => setSortMode('recent')}>
-              Most recent
-            </Button>
-          </View>
-        </View>
-      ) : null}
+  function runGroup(group: FollowUpGroup) {
+    if (group.items.length === 1) {
+      onPressItem(group.items[0]);
+      return;
+    }
+    setActiveGroup(group);
+  }
 
-      {filtered.length ? (
-        <View style={styles.list}>
-          {filtered.map((item) => (
-            <FollowUpCell
-              key={`${item.encounterId}-${item.actionId}`}
-              item={item}
-              onPress={() => onPressItem(item)}
-              onComplete={() => onCompleteItem(item)}
-              completing={completingId === `${item.encounterId}-${item.actionId}`}
+  return (
+    <>
+      <BottomSheet visible={visible} title={title} onClose={onClose}>
+        {showTools ? (
+          <View style={styles.tools}>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search follow-ups"
+              placeholderTextColor={colors.muted}
+              style={styles.search}
             />
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.empty}>No follow-ups match your search.</Text>
-      )}
-    </BottomSheet>
+            <View style={styles.sortRow}>
+              <Button
+                variant={sortMode === 'urgency' ? 'primary' : 'secondary'}
+                onPress={() => setSortMode('urgency')}>
+                By urgency
+              </Button>
+              <Button
+                variant={sortMode === 'recent' ? 'primary' : 'secondary'}
+                onPress={() => setSortMode('recent')}>
+                Most recent
+              </Button>
+            </View>
+          </View>
+        ) : null}
+
+        {filtered.length ? (
+          <View style={styles.list}>
+            {filtered.map((group) => (
+              <GroupedFollowUpCell
+                key={group.id}
+                group={group}
+                onPress={() => runGroup(group)}
+                onComplete={() => {
+                  const item = group.items[0];
+                  if (item) onCompleteItem(item);
+                }}
+                completing={group.items.length === 1 && completingId === `${group.items[0]?.encounterId}-${group.items[0]?.actionId}`}
+              />
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.empty}>No follow-ups match your search.</Text>
+        )}
+      </BottomSheet>
+
+      <BottomSheet
+        visible={Boolean(activeGroup)}
+        title={activeGroup?.personName.trim() || 'Follow-up actions'}
+        onClose={() => setActiveGroup(null)}>
+        {activeGroup ? (
+          <GroupedFollowUpActions
+            group={activeGroup}
+            completingId={completingId}
+            onPressItem={(actionId) => {
+              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              if (item) onPressItem(item);
+            }}
+            onCompleteItem={(actionId) => {
+              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              if (item) onCompleteItem(item);
+            }}
+          />
+        ) : null}
+      </BottomSheet>
+    </>
   );
 }
 

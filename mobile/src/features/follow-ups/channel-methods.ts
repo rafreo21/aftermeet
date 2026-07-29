@@ -1,4 +1,9 @@
 import type { EncounterAction } from '@/features/encounters/encounter-api';
+import {
+  displayFollowUpTitle,
+  isFollowUpChannel,
+  isGarbageFollowUpText,
+} from '@/features/follow-ups/follow-up-channels';
 import type { ContactMethod, ContactMethodType } from '@/features/card/types';
 import { METHOD_META } from '@/features/card/method-meta';
 import { contactMethodHref } from '@/lib/contact-methods';
@@ -11,6 +16,9 @@ export function channelToMethodType(channel: EncounterAction['channel']): Missin
     case 'linkedin': return 'linkedin';
     case 'whatsapp': return 'whatsapp';
     case 'email': return 'email';
+    case 'instagram': return 'instagram';
+    case 'x': return 'x';
+    case 'tiktok': return 'tiktok';
     case 'meeting': return 'calendly';
     case 'send': return 'email';
     default: return 'preferred_contact';
@@ -62,17 +70,24 @@ export function buildTailoredRequestEmail(input: {
   personName: string;
   methodType: MissingMethodType;
   followUpTitle?: string;
+  followUpChannel?: string;
 }) {
   const greeting = input.personName.trim()
     ? `Hey ${input.personName.split(' ')[0]},`
     : 'Hey there,';
-  const followUp = input.followUpTitle?.trim()
-    ? `\n\nI wanted to follow up: ${input.followUpTitle.trim()}.`
+  const cleanedFollowUp = input.followUpTitle?.trim()
+    && !isGarbageFollowUpText(input.followUpTitle)
+    && input.followUpChannel
+    && isFollowUpChannel(input.followUpChannel)
+    ? displayFollowUpTitle(input.followUpTitle, input.followUpChannel)
+    : '';
+  const followUp = cleanedFollowUp
+    ? `\n\nI wanted to follow up on ${cleanedFollowUp}.`
     : '';
   const methodLabel = methodRequestLabel(input.methodType);
 
   if (input.methodType === 'preferred_contact') {
-    return `${greeting}\n\nIt was great meeting you.${followUp}\n\nCould you share the best way to reach you — phone, WhatsApp, LinkedIn, or anything you prefer — on your AfterMeet card?\n\nThanks!`;
+    return `${greeting}\n\nIt was great meeting you.${followUp}\n\nCould you share the best way to reach you on your AfterMeet card?\n\nThanks!`;
   }
 
   return `${greeting}\n\nIt was great meeting you.${followUp}\n\nCould you add your ${methodLabel} to your AfterMeet card so I can connect with you more easily?\n\nThanks!`;

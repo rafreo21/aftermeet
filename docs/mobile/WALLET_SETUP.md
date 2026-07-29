@@ -43,7 +43,15 @@ Add these in the AfterMeet project on Vercel → Settings → Environment Variab
 
 ## Verify configuration
 
-After deploying with env vars:
+After adding env vars locally:
+
+```bash
+npm run verify:google-wallet
+```
+
+This checks your `.env.local`, builds a test save link, and prints it for testing on Android.
+
+After deploying with env vars on Vercel:
 
 ```bash
 curl -H "Authorization: Bearer <mobile-access-token>" \

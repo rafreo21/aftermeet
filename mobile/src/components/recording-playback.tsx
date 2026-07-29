@@ -9,9 +9,72 @@ import { colors, radius, spacing } from '@/theme/tokens';
 type RecordingPlaybackProps = {
   uri: string;
   durationSeconds?: number;
+  variant?: 'full' | 'compact';
 };
 
-export function RecordingPlayback({ uri, durationSeconds = 0 }: RecordingPlaybackProps) {
+export function RecordingPlayOrb({
+  uri,
+  durationSeconds = 0,
+  size = 44,
+}: {
+  uri: string;
+  durationSeconds?: number;
+  size?: number;
+}) {
+  const player = useAudioPlayer(uri || null);
+  const status = useAudioPlayerStatus(player);
+
+  useEffect(() => {
+    void setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!uri) return;
+    try {
+      player.replace(uri);
+    } catch {
+      // ignore load errors in compact control
+    }
+  }, [player, uri]);
+
+  const togglePlayback = useCallback(() => {
+    if (!uri) return;
+    try {
+      if (status.playing) {
+        player.pause();
+        return;
+      }
+      player.replace(uri);
+      player.play();
+    } catch {
+      // ignore playback errors in compact control
+    }
+  }, [player, status.playing, uri]);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={status.playing ? 'Pause recording' : 'Play recording'}
+      onPress={togglePlayback}
+      style={({ pressed }) => [
+        styles.playOrb,
+        { width: size, height: size, borderRadius: size / 2 },
+        status.playing && styles.playOrbActive,
+        pressed && styles.playOrbPressed,
+      ]}>
+      {status.playing ? (
+        <Pause size={size * 0.45} color={colors.white} weight="fill" />
+      ) : (
+        <Play size={size * 0.45} color={colors.ink} weight="fill" />
+      )}
+    </Pressable>
+  );
+}
+
+export function RecordingPlayback({ uri, durationSeconds = 0, variant = 'full' }: RecordingPlaybackProps) {
   const player = useAudioPlayer(uri || null);
   const status = useAudioPlayerStatus(player);
   const [playbackError, setPlaybackError] = useState('');
@@ -59,6 +122,19 @@ export function RecordingPlayback({ uri, durationSeconds = 0 }: RecordingPlaybac
     if (status.isLoaded && elapsed > 0 && elapsed < total) return 'Paused';
     return 'Ready to play';
   }, [elapsed, playbackError, status.isLoaded, status.playing, total, uri]);
+
+  if (variant === 'compact') {
+    return (
+      <View style={styles.compactRow}>
+        <RecordingPlayOrb uri={uri} durationSeconds={durationSeconds} />
+        <View style={styles.compactCopy}>
+          <Text style={styles.label}>Voice recording</Text>
+          <Text style={styles.status}>{statusLabel}</Text>
+        </View>
+        <Text style={styles.duration}>{formatDuration(total)}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.card}>
@@ -133,4 +209,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   duration: { color: colors.ink, fontSize: 13, fontWeight: '700' },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+  },
+  compactCopy: { flex: 1, gap: 2 },
+  playOrb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  playOrbActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  playOrbPressed: { opacity: 0.86 },
 });

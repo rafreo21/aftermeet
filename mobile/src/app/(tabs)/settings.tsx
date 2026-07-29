@@ -2,11 +2,20 @@ import { router } from 'expo-router';
 import { CaretRight } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
+import { SettingsSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
-  const { session, configured, signOut } = useAuth();
+  const { session, configured, signOut, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Screen>
+        <SettingsSkeleton />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

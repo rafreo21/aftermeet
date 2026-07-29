@@ -206,43 +206,49 @@ export default function CaptureHomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[1]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void loadHome(true)} tintColor={colors.ink} />
           }>
-          <GreenHeroCard
-            icon={<Microphone size={28} color={colors.white} weight="fill" />}
-            title="Capture while it is fresh"
-            copy="Record the meeting, pull out private notes and a shared summary, then add a follow-up before you forget."
-            primaryLabel="Begin capture"
-            onPrimary={() => void beginFreshCapture()}
-            secondaryLabel={session ? undefined : 'Sign in to sync'}
-            onSecondary={session ? undefined : () => router.push('/auth')}
-          />
+          <View style={styles.heroBlock}>
+            <GreenHeroCard
+              icon={<Microphone size={28} color={colors.white} weight="fill" />}
+              title="Capture while it is fresh"
+              copy="Record the meeting, pull out private notes and a shared summary, then add a follow-up before you forget."
+              primaryLabel="Begin capture"
+              onPrimary={() => void beginFreshCapture()}
+              secondaryLabel={session ? undefined : 'Sign in to sync'}
+              onSecondary={session ? undefined : () => router.push('/auth')}
+            />
 
-          {!session && drafts.length ? (
-            <Text style={styles.localNote}>Saved on this device only · Sign in to sync across devices</Text>
-          ) : null}
-
-          <View style={styles.tabs}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setTab('drafts')}
-              style={[styles.tab, tab === 'drafts' && styles.tabActive]}>
-              <Text style={[styles.tabLabel, tab === 'drafts' && styles.tabLabelActive]}>
-                Drafts{drafts.length ? ` (${drafts.length})` : ''}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setTab('previous')}
-              style={[styles.tab, tab === 'previous' && styles.tabActive]}>
-              <Text style={[styles.tabLabel, tab === 'previous' && styles.tabLabelActive]}>
-                Previous{encounters.length ? ` (${encounters.length})` : ''}
-              </Text>
-            </Pressable>
+            {!session && drafts.length ? (
+              <Text style={styles.localNote}>Saved on this device only · Sign in to sync across devices</Text>
+            ) : null}
           </View>
 
-          {loading ? <CaptureListSkeleton count={4} /> : null}
+          <View style={styles.tabsSticky}>
+            <View style={styles.tabs}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setTab('drafts')}
+                style={[styles.tab, tab === 'drafts' && styles.tabActive]}>
+                <Text style={[styles.tabLabel, tab === 'drafts' && styles.tabLabelActive]}>
+                  Drafts{drafts.length ? ` (${drafts.length})` : ''}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setTab('previous')}
+                style={[styles.tab, tab === 'previous' && styles.tabActive]}>
+                <Text style={[styles.tabLabel, tab === 'previous' && styles.tabLabelActive]}>
+                  Previous{encounters.length ? ` (${encounters.length})` : ''}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.listBlock}>
+            {loading ? <CaptureListSkeleton count={4} /> : null}
 
           {tab === 'drafts' ? (
             <>
@@ -347,6 +353,7 @@ export default function CaptureHomeScreen() {
           )}
 
           <Text style={styles.buildLabel}>{formatBuildLabel()}</Text>
+          </View>
         </ScrollView>
       </View>
 
@@ -376,9 +383,22 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, lineHeight: 32 },
   scroll: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: spacing.x5,
     paddingBottom: spacing.x6,
+  },
+  heroBlock: {
+    paddingHorizontal: spacing.x5,
     paddingTop: spacing.x2,
+    gap: spacing.x3,
+  },
+  tabsSticky: {
+    paddingHorizontal: spacing.x5,
+    paddingVertical: spacing.x2,
+    backgroundColor: colors.canvas,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  listBlock: {
+    paddingHorizontal: spacing.x5,
     gap: spacing.x3,
   },
   localNote: {

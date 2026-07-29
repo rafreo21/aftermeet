@@ -40,7 +40,7 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
         onPress={() => selectPreset('none')}
         style={[styles.skip, activePreset === 'none' && styles.skipActive]}>
         <Text style={[styles.skipText, activePreset === 'none' && styles.skipTextActive]}>
-          No rush — skip
+          No rush. Skip
         </Text>
       </Pressable>
     </View>

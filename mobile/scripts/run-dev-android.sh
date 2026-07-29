@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run AfterMeet dev client on a USB-connected Android phone.
-# Fixes "stuck on splash screen" by forwarding Metro (8081) to the phone.
+# Start Metro for the AfterMeet Android dev client.
+# USB: run connect-android-dev.sh (or npm run android:dev:connect) with the phone plugged in.
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
@@ -10,36 +10,33 @@ export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 cd "$ROOT"
 
-if ! adb devices | grep -v '^List' | grep -q 'device$'; then
-  echo ""
-  echo "No Android device found."
-  echo "1. Plug in your phone with USB"
-  echo "2. On phone: Settings → Developer options → USB debugging ON"
-  echo "3. Tap Allow on the 'USB debugging' prompt"
-  echo "4. Run this script again"
-  echo ""
-  exit 1
-fi
+METRO_PORT=8081
+SCHEME="aftermeet"
 
-echo "Forwarding phone port 8081 → Mac Metro (8081)…"
 if adb devices | grep -v '^List' | grep -q 'device$'; then
-  adb reverse tcp:8081 tcp:8081
+  echo "Forwarding phone port $METRO_PORT → Mac Metro ($METRO_PORT)…"
+  adb reverse "tcp:$METRO_PORT" "tcp:$METRO_PORT"
 else
-  echo "Warning: no USB device — plug in your phone or use the same Wi‑Fi + manual URL in the dev menu."
+  echo ""
+  echo "No USB device yet — Metro will still start."
+  echo "When the phone is plugged in, run:  npm run android:dev:connect"
+  lan_ip="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
+  if [[ -n "$lan_ip" ]]; then
+    echo "Or on the same Wi‑Fi, enter in the dev menu: http://${lan_ip}:${METRO_PORT}"
+  fi
+  echo ""
 fi
 
-# Avoid stale Metro blocking startup in non-interactive shells.
-if lsof -ti:8081 >/dev/null 2>&1; then
-  echo "Stopping existing Metro on port 8081…"
-  lsof -ti:8081 | xargs kill -9 2>/dev/null || true
+if lsof -ti:"$METRO_PORT" >/dev/null 2>&1; then
+  echo "Stopping existing Metro on port $METRO_PORT…"
+  lsof -ti:"$METRO_PORT" | xargs kill -9 2>/dev/null || true
   sleep 1
 fi
 
 echo ""
 echo "Starting Metro for dev client. Keep this terminal open."
-echo "Open the AfterMeet dev build on your phone (not Expo Go)."
-echo "Install dev client once: npm run android:dev-client"
-echo "If it was already open, force-quit and reopen, or shake → Reload."
+echo "First-time / live updates not working:  npm run android:dev:connect"
+echo "Release APK (no live reload):           npm run android:install"
 echo ""
 
-npx expo start --dev-client --clear --port 8081
+npx expo start --dev-client --clear --port "$METRO_PORT" --lan --scheme "$SCHEME"

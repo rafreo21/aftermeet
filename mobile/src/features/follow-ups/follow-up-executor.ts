@@ -1,13 +1,19 @@
-import { Linking } from 'react-native';
-
+import { openExternalHref } from '@/features/card/contact-actions';
 import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { requestContactField } from '@/features/follow-ups/follow-up-api';
-import { resolveFollowUpAction, type ActionContactContext } from '@/features/follow-ups/action-links';
+import {
+  openMeetingCompose,
+  resolveFollowUpAction,
+  type ActionContactContext,
+  type MeetingComposeContext,
+} from '@/features/follow-ups/action-links';
 import {
   buildTailoredRequestEmail,
   requestEmailSubject,
   type MissingMethodType,
 } from '@/features/follow-ups/channel-methods';
+import type { FollowUpAudienceChoice } from '@/features/follow-ups/follow-up-participants';
+import { primaryParticipantLabel } from '@/features/follow-ups/follow-up-participants';
 import { openEmailCompose } from '@/lib/email-compose';
 import type { MobileCard } from '@/features/card/types';
 import type { ConnectionItem } from '@/features/connections/connections-api';
@@ -40,8 +46,30 @@ export function contactContextFromFollowUp(item: FollowUpItem): ActionContactCon
   };
 }
 
+export function applyAudienceToContext(
+  context: ActionContactContext,
+  audience: FollowUpAudienceChoice,
+  userName: string,
+): ActionContactContext {
+  return {
+    ...context,
+    userName,
+    audienceMode: audience.mode,
+    audienceParticipants: audience.participants,
+    personName: primaryParticipantLabel(audience.participants),
+    personEmail: audience.participants.find((person) => person.email.includes('@'))?.email || context.personEmail,
+  };
+}
+
 export type FollowUpExecution =
-  | { type: 'open'; href: string; external: boolean }
+  | {
+      type: 'open';
+      href: string;
+      candidates?: string[];
+      external: boolean;
+      meetingCompose?: MeetingComposeContext;
+      calendarProvider?: 'google' | 'microsoft' | null;
+    }
   | {
       type: 'request';
       item: FollowUpItem;
@@ -71,7 +99,14 @@ export function planFollowUpExecution(
   );
 
   if (action.href && !action.missingMethod) {
-    return { type: 'open', href: action.href, external: action.external };
+    return {
+      type: 'open',
+      href: action.href,
+      candidates: action.candidates,
+      external: action.external,
+      meetingCompose: action.meetingCompose,
+      calendarProvider: action.calendarProvider,
+    };
   }
 
   const methodType = action.missingMethod || 'preferred_contact';
@@ -83,11 +118,13 @@ export function planFollowUpExecution(
     personName: context.personName,
     methodType,
     followUpTitle: item.title,
+    followUpChannel: item.channel,
   });
   const preferredContactEmailBody = buildTailoredRequestEmail({
     personName: context.personName,
     methodType: 'preferred_contact',
     followUpTitle: item.title,
+    followUpChannel: item.channel,
   });
 
   if (recipientEmail.includes('@')) {
@@ -111,7 +148,11 @@ export function planFollowUpExecution(
 
 export async function openFollowUpExecution(execution: FollowUpExecution) {
   if (execution.type !== 'open') return;
-  await Linking.openURL(execution.href);
+  if (execution.meetingCompose) {
+    const opened = await openMeetingCompose(execution.meetingCompose, execution.calendarProvider);
+    if (opened) return;
+  }
+  await openExternalHref(execution.href, execution.candidates);
 }
 
 export async function sendContactFieldRequest(
@@ -131,13 +172,9 @@ export async function sendContactFieldRequest(
 
 export async function openRequestEmail(
   execution: Extract<FollowUpExecution, { type: 'request' | 'manual' }>,
-  variant: 'tailored' | 'preferred',
-  preferGmail: boolean,
 ) {
   const recipientEmail = execution.recipientEmail?.trim() || '';
-  const body = variant === 'preferred'
-    ? execution.preferredContactEmailBody
-    : execution.tailoredEmailBody;
+  const body = execution.tailoredEmailBody;
   const subject = execution.emailSubject || requestEmailSubject('preferred_contact');
 
   if (!recipientEmail.includes('@') || !body) return;
@@ -146,5 +183,5 @@ export async function openRequestEmail(
     to: recipientEmail,
     subject,
     body,
-  }, preferGmail);
+  });
 }

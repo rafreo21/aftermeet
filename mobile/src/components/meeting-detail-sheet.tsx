@@ -1,5 +1,6 @@
 import { CheckCircle, Microphone } from 'phosphor-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
@@ -21,6 +22,8 @@ type MeetingDetailSheetProps = {
   onCompleteFollowUp: (item: FollowUpItem) => void;
 };
 
+type DetailTab = 'summary' | 'transcript';
+
 export function MeetingDetailSheet({
   visible,
   encounter,
@@ -30,11 +33,16 @@ export function MeetingDetailSheet({
   onPressFollowUp,
   onCompleteFollowUp,
 }: MeetingDetailSheetProps) {
+  const [tab, setTab] = useState<DetailTab>('summary');
+
   if (!encounter) return null;
 
   const consentLabel = encounter.consent?.confirmed
     ? `${encounter.consent.method === 'written' ? 'Written' : 'Verbal'} consent confirmed`
     : 'Consent not recorded';
+  const hasSummary = Boolean(encounter.sharedSummary.trim());
+  const hasTranscript = Boolean(encounter.transcript.trim());
+  const activeTab = tab === 'transcript' && hasTranscript ? 'transcript' : 'summary';
 
   return (
     <BottomSheet
@@ -43,35 +51,62 @@ export function MeetingDetailSheet({
       onClose={onClose}>
       <View style={styles.metaRow}>
         <Text style={styles.meta}>{formatMeetingDate(encounter.startedAt)}</Text>
-        <View style={styles.consentBadge}>
-          {encounter.consent?.confirmed ? (
-            <CheckCircle size={14} color={colors.ink} weight="fill" />
-          ) : (
-            <Microphone size={14} color={colors.muted} weight="bold" />
-          )}
-          <Text style={styles.consentText}>{consentLabel}</Text>
-        </View>
       </View>
-
-      {recordingUri ? (
-        <RecordingPlayback uri={recordingUri} durationSeconds={encounter.durationSeconds} />
-      ) : null}
-
-      {encounter.sharedSummary.trim() ? (
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Meeting context</Text>
-          <Body>{encounter.sharedSummary.trim()}</Body>
-        </View>
-      ) : null}
-
-      {encounter.transcript.trim() ? (
-        <CollapsibleTranscriptSection value={encounter.transcript} defaultOpen={false} />
-      ) : null}
 
       {encounter.personName.trim() ? (
         <View style={styles.block}>
           <Text style={styles.blockTitle}>People in this conversation</Text>
           <Text style={styles.peopleLine}>{encounter.personName.trim()}</Text>
+        </View>
+      ) : null}
+
+      {recordingUri ? (
+        <RecordingPlayback uri={recordingUri} durationSeconds={encounter.durationSeconds} />
+      ) : encounter.durationSeconds || encounter.recording ? (
+        <Text style={styles.recordingMissing}>Recording is not available on this device yet.</Text>
+      ) : null}
+
+      <View style={styles.consentBadge}>
+        {encounter.consent?.confirmed ? (
+          <CheckCircle size={14} color={colors.ink} weight="fill" />
+        ) : (
+          <Microphone size={14} color={colors.muted} weight="bold" />
+        )}
+        <Text style={styles.consentText}>{consentLabel}</Text>
+      </View>
+
+      {(hasSummary || hasTranscript) ? (
+        <View style={styles.block}>
+          <View style={styles.tabs}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setTab('summary')}
+              style={[styles.tab, activeTab === 'summary' && styles.tabActive]}>
+              <Text style={[styles.tabLabel, activeTab === 'summary' && styles.tabLabelActive]}>
+                Shared summary
+              </Text>
+            </Pressable>
+            {hasTranscript ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setTab('transcript')}
+                style={[styles.tab, activeTab === 'transcript' && styles.tabActive]}>
+                <Text style={[styles.tabLabel, activeTab === 'transcript' && styles.tabLabelActive]}>
+                  Transcript
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {activeTab === 'summary' ? (
+            hasSummary ? (
+              <Body>{encounter.sharedSummary.trim()}</Body>
+            ) : (
+              <Text style={styles.emptyTab}>No shared summary yet.</Text>
+            )
+          ) : (
+            <CollapsibleTranscriptSection value={encounter.transcript} defaultOpen />
+          )}
         </View>
       ) : null}
 
@@ -111,5 +146,29 @@ const styles = StyleSheet.create({
   block: { gap: spacing.x2 },
   blockTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   peopleLine: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.x2,
+    padding: 4,
+    borderRadius: radius.large,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.x2,
+    borderRadius: radius.medium,
+  },
+  tabActive: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  tabLabel: { color: colors.muted, fontSize: 12, fontWeight: '800' },
+  tabLabelActive: { color: colors.ink },
+  emptyTab: { color: colors.muted, fontSize: 14, lineHeight: 20 },
+  recordingMissing: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   list: { gap: spacing.x3 },
 });

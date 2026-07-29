@@ -52,13 +52,15 @@ export function PhoneField({
       <span className="text-sm font-semibold text-[#454745]">{label}</span>
       <div className={`phone-field ${error ? "phone-field-error" : ""}`}>
         <div className="phone-field-country">
+          <span className="phone-field-dial" aria-hidden="true">+{country.dialCode}</span>
           <select
             aria-label="Country code"
+            className="phone-field-country-select"
             value={parts.countryIso}
             onChange={(event) => update({ ...parts, countryIso: event.target.value })}>
             {COUNTRIES.map((entry) => (
               <option key={entry.iso} value={entry.iso}>
-                {entry.flag} +{entry.dialCode} {entry.name}
+                {entry.name} (+{entry.dialCode})
               </option>
             ))}
           </select>

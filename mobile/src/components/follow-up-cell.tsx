@@ -1,9 +1,20 @@
-import { Check, Phone, EnvelopeSimple, LinkedinLogo, CalendarBlank, PaperPlaneTilt, WhatsappLogo } from 'phosphor-react-native';
+import {
+  CalendarBlank,
+  Check,
+  EnvelopeSimple,
+  InstagramLogo,
+  LinkedinLogo,
+  Phone,
+  TiktokLogo,
+  WhatsappLogo,
+  XLogo,
+} from 'phosphor-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { channelLabel } from '@/features/follow-ups/action-links';
+import { displayFollowUpTitle, isFollowUpChannel } from '@/features/follow-ups/follow-up-channels';
 import { dueTone, formatDueLabel } from '@/lib/due-date';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -22,8 +33,10 @@ function channelIcon(channel: FollowUpItem['channel']): ReactNode {
     case 'email': return <EnvelopeSimple {...props} />;
     case 'meeting': return <CalendarBlank {...props} />;
     case 'whatsapp': return <WhatsappLogo {...props} />;
-    case 'send': return <PaperPlaneTilt {...props} />;
-    default: return <PaperPlaneTilt {...props} />;
+    case 'instagram': return <InstagramLogo {...props} />;
+    case 'x': return <XLogo {...props} />;
+    case 'tiktok': return <TiktokLogo {...props} />;
+    default: return <EnvelopeSimple {...props} />;
   }
 }
 
@@ -42,7 +55,13 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
           <Text style={styles.title} numberOfLines={1}>
             {channelLabel(item.channel)} · {item.personName.trim() || 'Contact'}
           </Text>
-          {item.title ? <Text style={styles.subtitle} numberOfLines={2}>{item.title}</Text> : null}
+          {item.title ? (
+            <Text style={styles.subtitle} numberOfLines={2}>
+              {isFollowUpChannel(item.channel)
+                ? displayFollowUpTitle(item.title, item.channel)
+                : item.title}
+            </Text>
+          ) : null}
         </View>
         {dueLabel ? (
           <Text style={[

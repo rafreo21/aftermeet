@@ -28,6 +28,16 @@ export function createGatherPerson(partial?: Partial<GatherPerson>): GatherPerso
   };
 }
 
+/** Live form edits — preserves spaces while typing. Trim on save via createGatherPerson. */
+export function updateGatherPerson(current: GatherPerson, changes: Partial<GatherPerson>): GatherPerson {
+  return {
+    ...current,
+    ...changes,
+    id: changes.id ?? current.id,
+    exchangeId: changes.exchangeId !== undefined ? changes.exchangeId : current.exchangeId,
+  };
+}
+
 export function normalizeGatherPerson(value: Partial<GatherPerson>): GatherPerson {
   return createGatherPerson(value);
 }

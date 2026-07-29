@@ -56,7 +56,6 @@ export function buildPlainSignature(profile: SignatureProfile) {
   lines.push("");
   lines.push(`View my card: ${profile.cardUrl.trim()}`);
   lines.push("");
-  lines.push("—");
   lines.push("Shared with AfterMeet");
   return lines.join("\n");
 }

@@ -42,7 +42,7 @@ import { TextAreaField, TextField } from "../../../components/FormField";
 import { PhoneField } from "../../../components/PhoneField";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
-import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from "../../../../lib/theme-contrast";
+import { themeCoverBadgeStyle, themeForegroundColor, themeGradientCss, themeSurfaceStyle } from "../../../../lib/theme-contrast";
 import {
   createLibraryCard,
   getActiveCardId,
@@ -394,7 +394,7 @@ export default function CardEditor() {
                       key={theme}
                       aria-label={`Use ${theme}`}
                       className={draft.theme === theme ? "selected" : ""}
-                      style={{ background: theme }}
+                      style={{ background: themeGradientCss(theme) }}
                       onClick={() => update("theme", theme)}>
                       {draft.theme === theme ? <CheckIcon size={16} weight="bold" color={themeForegroundColor(theme)} /> : null}
                     </button>
@@ -496,7 +496,7 @@ export default function CardEditor() {
                 className={`card-cover ${draft.coverPhoto ? "has-cover-photo" : ""}`}
                 style={draft.coverPhoto
                   ? { backgroundImage: `linear-gradient(rgba(22,51,0,.18), rgba(22,51,0,.18)), url(${draft.coverPhoto})`, color: "#FFFFFF" }
-                  : { background: draft.theme, color: previewTheme.color }}>
+                  : { background: previewTheme.backgroundGradient, color: previewTheme.color }}>
                 <div className="card-logo" style={draft.coverPhoto ? undefined : coverBadgeStyle}>
                   {draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : draft.company[0] || "A"}
                 </div>
@@ -506,13 +506,13 @@ export default function CardEditor() {
                 <div className="card-avatar">{draft.photo ? <img src={draft.photo} alt="" /> : initials}</div>
                 <h2>{draft.name || "Your name"}</h2><p className="card-role">{draft.role || "Your role"}{draft.company && ` · ${draft.company}`}</p>
                 <p className="card-bio">{draft.bio || "Your introduction will appear here."}</p>
-                <div className="card-actions"><Button fullWidth style={{ background: draft.theme }}>Save contact</Button><Button fullWidth variant="secondary">Share details</Button></div>
+                <div className="card-actions"><Button fullWidth style={{ background: previewTheme.backgroundGradient }}>Save contact</Button><Button fullWidth variant="secondary">Share details</Button></div>
                 <div className="preview-methods">{draft.methods.map((method) => {
                   const meta = methodMeta[method.type];
                   const href = contactMethodHref(method);
                   const content = (
                     <>
-                      <span style={{ background: draft.theme, color: previewTheme.color }}>
+                      <span style={{ background: previewTheme.backgroundGradient, color: previewTheme.color }}>
                         <meta.Icon weight="bold" color={previewTheme.color} />
                       </span>
                       <p><strong>{method.label}</strong><small>{method.value}</small></p>

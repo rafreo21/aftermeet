@@ -22,7 +22,7 @@ export function CaptureLeaveSheet({ visible, onStay, onSaveDraft, onDiscard }: C
         </>
       }>
       <Body>
-        Save to drafts to pick this up later from Capture. Discard clears this session — recording, transcript, people, and notes.
+        Save to drafts to pick this up later from Capture. Discard clears this session: recording, transcript, people, and notes.
       </Body>
     </BottomSheet>
   );

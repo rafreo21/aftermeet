@@ -67,11 +67,11 @@ function linkedInSearchUrl(personName: string) {
 }
 
 function mailtoLink(to: string, subject: string, body: string) {
-  const params = new URLSearchParams();
-  if (subject) params.set("subject", subject);
-  if (body) params.set("body", body);
-  const query = params.toString();
-  if (to) return `mailto:${to}${query ? `?${query}` : ""}`;
+  const parts: string[] = [];
+  if (subject.trim()) parts.push(`subject=${encodeURIComponent(subject.trim())}`);
+  if (body.trim()) parts.push(`body=${encodeURIComponent(body.trim())}`);
+  const query = parts.join("&");
+  if (to) return `mailto:${encodeURIComponent(to.trim())}${query ? `?${query}` : ""}`;
   return `mailto:${query ? `?${query}` : ""}`;
 }
 

@@ -271,7 +271,7 @@ export function CaptureRecordStep({
             <Text style={styles.successTitle}>Recording ready</Text>
             <Text style={styles.successBody}>
               {recorder.displayTranscript.trim()
-                ? 'Tap Finish to gather meeting context — recording has no time limit.'
+                ? 'Tap Finish to gather meeting context. Recording has no time limit.'
                 : 'Continue to gather context, or paste a transcript on the next step.'}
             </Text>
           </View>

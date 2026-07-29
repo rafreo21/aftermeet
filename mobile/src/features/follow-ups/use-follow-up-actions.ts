@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useAuth } from '@/features/auth/auth-context';
+import { useCard } from '@/features/card/card-context';
 import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { completeFollowUp } from '@/features/follow-ups/follow-up-api';
 import {
+  applyAudienceToContext,
   contactContextFromCard,
   contactContextFromFollowUp,
   openFollowUpExecution,
@@ -11,38 +14,85 @@ import {
   sendContactFieldRequest,
   type FollowUpExecution,
 } from '@/features/follow-ups/follow-up-executor';
-import { fetchConnectedAccounts } from '@/features/follow-ups/integrations-api';
+import {
+  encounterHasMultipleParticipants,
+  participantsForEncounter,
+  resolveFollowUpUserName,
+  type FollowUpAudienceChoice,
+} from '@/features/follow-ups/follow-up-participants';
+import { fetchConnectedAccounts, type ConnectedAccountStatus } from '@/features/integrations/integrations-api';
 import type { MobileCard } from '@/features/card/types';
 import type { ConnectionItem } from '@/features/connections/connections-api';
 
-export function useFollowUpActions(accessToken?: string | null) {
+function resolveCalendarProvider(status: ConnectedAccountStatus | null): 'google' | 'microsoft' | null {
+  if (!status) return null;
+  if (status.google.connected) return 'google';
+  if (status.microsoft.connected) return 'microsoft';
+  return null;
+}
+
+type RunFollowUpInput = {
+  connection?: ConnectionItem | null;
+  card?: MobileCard | null;
+};
+
+type UseFollowUpActionsOptions = {
+  allFollowUps?: FollowUpItem[];
+};
+
+export function useFollowUpActions(
+  accessToken?: string | null,
+  options: UseFollowUpActionsOptions = {},
+) {
+  const { allFollowUps = [] } = options;
+  const { session } = useAuth();
+  const { card, cards } = useCard();
+  const userName = useMemo(() => resolveFollowUpUserName({
+    activeCardName: card.name,
+    cards,
+    authName: String(session?.user.user_metadata?.full_name || session?.user.user_metadata?.name || ''),
+    authEmail: session?.user.email || '',
+  }), [card.name, cards, session?.user.email, session?.user.user_metadata]);
   const [missingExecution, setMissingExecution] = useState<FollowUpExecution | null>(null);
   const [missingOpen, setMissingOpen] = useState(false);
+  const [audienceItem, setAudienceItem] = useState<FollowUpItem | null>(null);
+  const [audienceOpen, setAudienceOpen] = useState(false);
+  const [pendingContextInput, setPendingContextInput] = useState<RunFollowUpInput | null>(null);
   const [loading, setLoading] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
-  const [googleConnected, setGoogleConnected] = useState(false);
+  const [calendarProvider, setCalendarProvider] = useState<'google' | 'microsoft' | null>(null);
 
   useEffect(() => {
     if (!accessToken) {
-      setGoogleConnected(false);
+      setCalendarProvider(null);
       return;
     }
     void fetchConnectedAccounts(accessToken)
-      .then((status) => setGoogleConnected(status.google.connected))
-      .catch(() => setGoogleConnected(false));
+      .then((status) => setCalendarProvider(resolveCalendarProvider(status)))
+      .catch(() => setCalendarProvider(null));
   }, [accessToken]);
 
-  const runFollowUp = useCallback((
+  const executeFollowUp = useCallback((
     item: FollowUpItem,
-    contextInput?: {
-      connection?: ConnectionItem | null;
-      card?: MobileCard | null;
-    },
+    contextInput?: RunFollowUpInput,
+    audience?: FollowUpAudienceChoice,
   ) => {
-    const context = contextInput?.connection
+    let context = contextInput?.connection
       ? contactContextFromCard(contextInput.connection, contextInput.card ?? null)
       : contactContextFromFollowUp(item);
     context.encounterTitle = item.encounterTitle;
+    context.calendarProvider = calendarProvider;
+
+    if (audience) {
+      context = applyAudienceToContext(context, audience, userName);
+    } else {
+      context.userName = userName;
+      context.audienceParticipants = [{
+        key: item.personEmail.trim().toLowerCase() || item.personName.trim().toLowerCase() || 'contact',
+        name: item.personName,
+        email: item.personEmail,
+      }];
+    }
 
     const execution = planFollowUpExecution(item, context);
 
@@ -53,6 +103,36 @@ export function useFollowUpActions(accessToken?: string | null) {
 
     setMissingExecution(execution);
     setMissingOpen(true);
+  }, [calendarProvider, userName]);
+
+  const runFollowUp = useCallback((
+    item: FollowUpItem,
+    contextInput?: RunFollowUpInput,
+  ) => {
+    if (encounterHasMultipleParticipants(allFollowUps, item.encounterId)) {
+      setAudienceItem(item);
+      setPendingContextInput(contextInput ?? null);
+      setAudienceOpen(true);
+      return;
+    }
+
+    executeFollowUp(item, contextInput);
+  }, [allFollowUps, executeFollowUp]);
+
+  const confirmAudience = useCallback((choice: FollowUpAudienceChoice) => {
+    if (!audienceItem) return;
+    const item = audienceItem;
+    const contextInput = pendingContextInput;
+    setAudienceOpen(false);
+    setAudienceItem(null);
+    setPendingContextInput(null);
+    executeFollowUp(item, contextInput ?? undefined, choice);
+  }, [audienceItem, pendingContextInput, executeFollowUp]);
+
+  const closeAudience = useCallback(() => {
+    setAudienceOpen(false);
+    setAudienceItem(null);
+    setPendingContextInput(null);
   }, []);
 
   const markComplete = useCallback(async (
@@ -86,27 +166,20 @@ export function useFollowUpActions(accessToken?: string | null) {
     }
   }, [accessToken, closeMissing, missingExecution]);
 
-  const draftTailoredEmail = useCallback(async (preferGmail: boolean) => {
+  const draftRequestEmail = useCallback(async () => {
     if (!missingExecution || missingExecution.type === 'open') return;
     setLoading(true);
     try {
-      await openRequestEmail(missingExecution, 'tailored', preferGmail);
+      await openRequestEmail(missingExecution);
       closeMissing();
     } finally {
       setLoading(false);
     }
   }, [closeMissing, missingExecution]);
 
-  const draftPreferredEmail = useCallback(async (preferGmail: boolean) => {
-    if (!missingExecution || missingExecution.type === 'open') return;
-    setLoading(true);
-    try {
-      await openRequestEmail(missingExecution, 'preferred', preferGmail);
-      closeMissing();
-    } finally {
-      setLoading(false);
-    }
-  }, [closeMissing, missingExecution]);
+  const audienceParticipants = audienceItem
+    ? participantsForEncounter(allFollowUps, audienceItem.encounterId)
+    : [];
 
   return {
     runFollowUp,
@@ -115,10 +188,13 @@ export function useFollowUpActions(accessToken?: string | null) {
     missingOpen,
     missingExecution,
     missingLoading: loading,
-    googleConnected,
     closeMissing,
     requestMissingField,
-    draftTailoredEmail,
-    draftPreferredEmail,
+    draftRequestEmail,
+    audienceOpen,
+    audienceItem,
+    audienceParticipants,
+    confirmAudience,
+    closeAudience,
   };
 }

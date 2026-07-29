@@ -13,6 +13,7 @@ import { useAppInsets } from '@/lib/safe-area';
 import { useCard } from '@/features/card/card-context';
 import { describePublishError } from '@/features/card/publish-card';
 import { setAuthReturnPath } from '@/features/encounters/capture-draft';
+import { CardThemeGradient, CardThemeGradientFill } from '@/components/card-theme-gradient';
 import { CARD_THEMES, normalizeThemeColor, themeForegroundColor, themeMatches } from '@/features/card/theme-colors';
 import type { MobileCard } from '@/features/card/types';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -325,9 +326,9 @@ export default function EditCardScreen() {
                       onPress={() => updateField('theme', theme)}
                       style={[
                         styles.swatch,
-                        { backgroundColor: theme },
                         themeMatches(draft.theme, theme) && styles.swatchSelected,
                       ]}>
+                      <CardThemeGradientFill theme={theme} />
                       {themeMatches(draft.theme, theme) ? (
                         <Check size={18} color={themeForegroundColor(theme)} weight="bold" />
                       ) : null}
@@ -369,7 +370,7 @@ export default function EditCardScreen() {
                   <Text style={styles.statLabel}>Methods</Text>
                 </View>
                 <View style={styles.statPill}>
-                  <View style={[styles.statSwatch, { backgroundColor: normalizeThemeColor(draft.theme) }]} />
+                  <CardThemeGradient theme={normalizeThemeColor(draft.theme)} style={styles.statSwatch} />
                   <Text style={styles.statLabel}>Theme</Text>
                 </View>
                 <View style={styles.statPill}>
@@ -602,6 +603,7 @@ const styles = StyleSheet.create({
   swatch: {
     width: 48,
     height: 48,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.medium,

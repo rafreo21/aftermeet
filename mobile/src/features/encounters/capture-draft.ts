@@ -7,6 +7,8 @@ import {
   syncLegacyPersonFields,
   type GatherPerson,
 } from '@/features/encounters/gather-people';
+import type { FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
+import { normalizeFollowUpChannels } from '@/features/follow-ups/follow-up-channels';
 
 export type { GatherPerson };
 export { MAX_GATHER_PEOPLE } from '@/features/encounters/gather-people';
@@ -34,6 +36,7 @@ export type CaptureWizardDraft = {
   sharedSummary: string;
   followUp: string;
   followUpType: EncounterPayload['actions'][number]['channel'];
+  followUpChannels: FollowUpChannel[];
   dueAt: string;
   gatherSessionStartedAt: string;
   importFileName: string;
@@ -68,7 +71,7 @@ function draftStorageKey(encounterId: string) {
 
 function migrateCaptureStep(step: number) {
   // Old 4-step wizard: 0=Record, 1=Gather, 2=Context, 3=Follow-up
-  // New 3-step: 0=Interaction, 1=Context, 2=Follow-up
+  // Current 3-step: 0=Interaction, 1=Context, 2=Follow-up
   if (step <= 0) return 0;
   if (step === 1) return 0;
   if (step === 2) return 1;
@@ -79,6 +82,13 @@ function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft
   const people = migrateGatherPeople(parsed);
   const synced = syncLegacyPersonFields(people);
   const rawStep = typeof parsed.step === 'number' ? parsed.step : 0;
+  const followUpChannels = normalizeFollowUpChannels(
+    parsed.followUpChannels?.length
+      ? parsed.followUpChannels
+      : parsed.followUpType
+        ? [parsed.followUpType as FollowUpChannel]
+        : [],
+  );
   return {
     ...EMPTY_CAPTURE_DRAFT,
     ...parsed,
@@ -88,7 +98,9 @@ function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft
     updatedAt: parsed.updatedAt || new Date().toISOString(),
     gatherSessionStartedAt: parsed.gatherSessionStartedAt || '',
     step: migrateCaptureStep(rawStep),
-    privateNotes: '',
+    privateNotes: typeof parsed.privateNotes === 'string' ? parsed.privateNotes : '',
+    followUpChannels,
+    followUpType: followUpChannels[0] || 'email',
   };
 }
 
@@ -126,6 +138,7 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   sharedSummary: '',
   followUp: '',
   followUpType: 'email',
+  followUpChannels: [],
   dueAt: '',
   gatherSessionStartedAt: '',
   importFileName: '',
