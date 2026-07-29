@@ -63,16 +63,18 @@ export function shouldUseUnifiedSpeechCapture() {
 }
 
 /**
- * Prefer a durable audio file on device.
- * - `unified`: speech module records + live STT (when native recording is supported)
- * - otherwise: expo-audio for the file; live STT may run alongside as captions
+ * Capture mode for live STT + optional on-device file.
+ * Android's mic is exclusive — do not run expo-audio and speech recognition together
+ * (that killed live transcript). Prefer speech-first; expo-audio only when STT is unavailable.
  */
 export function resolveSpeechCaptureMode(): SpeechCaptureMode {
   if (shouldUseUnifiedSpeechCapture()) return 'unified';
+  if (isNativeSpeechTranscriptionAvailable()) return 'transcript-only';
   return 'none';
 }
 
-export function canUseLiveSpeechCaptions() {
+/** Try unified (file + live) even when supportsRecording() is conservative. */
+export function shouldAttemptUnifiedSpeechCapture() {
   return isNativeSpeechTranscriptionAvailable();
 }
 
