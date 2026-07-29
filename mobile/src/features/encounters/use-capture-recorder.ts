@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveTranscript, type LiveTranscriptStatus } from '@/features/encounters/live-transcript';
 import {
   NativeSpeechCapture,
+  canUseLiveSpeechCaptions,
   isNativeSpeechTranscriptionAvailable,
   resolveSpeechCaptureMode,
   type SpeechCaptureMode,
@@ -85,6 +86,7 @@ export function useCaptureRecorder({
   const recordingStateRef = useRef<RecordingState>('idle');
   const speechCaptureRef = useRef(new NativeSpeechCapture());
   const liveSttReceivedRef = useRef(false);
+  const liveCaptionsRef = useRef(false);
   const speechTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopRecordingRef = useRef<() => Promise<void>>(async () => {});
   const lastTranscribeMetaRef = useRef<ImportRecordingMeta | undefined>(undefined);
@@ -297,6 +299,7 @@ export function useCaptureRecorder({
     setPlaybackReady(false);
     setPlaybackSource(null);
     onErrorRef.current('');
+    liveCaptionsRef.current = false;
 
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
@@ -326,13 +329,24 @@ export function useCaptureRecorder({
         speechCaptureRef.current.resetSession();
       }
 
+      // Durable file via expo-audio; live captions via speech when available.
       setCaptureMode('none');
       captureModeRef.current = 'none';
       liveTranscript.markListening();
       await startExpoAudioRecording();
+
+      if (canUseLiveSpeechCaptions()) {
+        speechCaptureRef.current.resetSession();
+        const captionsStarted = await startSpeechCapture('transcript-only');
+        liveCaptionsRef.current = captionsStarted;
+        if (!captionsStarted) {
+          liveTranscript.markListening();
+        }
+      }
     } catch {
       onErrorRef.current('Could not start recording. Check microphone permission and try again.');
       setRecordingState('idle');
+      liveCaptionsRef.current = false;
     }
   }, [liveTranscript, publishDuration, startExpoAudioRecording, startSpeechCapture, startSpeechTimer]);
 
@@ -343,6 +357,9 @@ export function useCaptureRecorder({
         clearSpeechTimer();
         speechCaptureRef.current.abort();
       } else {
+        if (liveCaptionsRef.current) {
+          speechCaptureRef.current.abort();
+        }
         audioRecorder.pause();
       }
       setRecordingState('paused');
@@ -358,6 +375,11 @@ export function useCaptureRecorder({
         if (started) startSpeechTimer();
       } else {
         audioRecorder.record();
+        if (liveCaptionsRef.current || canUseLiveSpeechCaptions()) {
+          speechCaptureRef.current.resetSession();
+          const captionsStarted = await startSpeechCapture('transcript-only');
+          liveCaptionsRef.current = captionsStarted;
+        }
       }
     }
   }, [
@@ -383,6 +405,13 @@ export function useCaptureRecorder({
         uri = await stopSpeechCapture();
         speechCaptureRef.current.resetSession();
       } else {
+        liveTranscript.commitPendingSpeech();
+        if (liveCaptionsRef.current) {
+          // Captions only — ignore any speech-module URI; expo-audio owns the file.
+          await speechCaptureRef.current.stop().catch(() => null);
+          speechCaptureRef.current.resetSession();
+          liveCaptionsRef.current = false;
+        }
         await audioRecorder.stop();
         uri = audioRecorder.uri ?? recorderState.url;
       }
@@ -391,7 +420,8 @@ export function useCaptureRecorder({
       let cleaned = liveTranscript.finalizeTranscript();
 
       if (uri) {
-        if (!liveSttReceivedRef.current) {
+        // Prefer a full transcript: use live STT when rich enough, else server.
+        if (!liveSttReceivedRef.current || cleaned.trim().length < 20) {
           cleaned = await maybeTranscribeFromServer(uri, cleaned);
         } else if (cleaned) {
           onTranscriptFinalizedRef.current?.(cleaned);
@@ -473,6 +503,11 @@ export function useCaptureRecorder({
       setSpeechSeconds(0);
       setSpeechAudioLevel(0);
     } else {
+      if (liveCaptionsRef.current) {
+        speechCaptureRef.current.abort();
+        speechCaptureRef.current.resetSession();
+        liveCaptionsRef.current = false;
+      }
       try {
         if (audioRecorder.isRecording) {
           await audioRecorder.stop();

@@ -240,17 +240,21 @@ export function CaptureInteractionStep({
     || recorder.serverTranscribePhase === 'revealing'
     || recorder.transcriptStatus === 'transcribing';
   const showLiveTranscript =
-    recorder.recordingComplete
+    isRecording
+    || recorder.recordingComplete
     || isTranscribingImport
     || Boolean(recorder.displayTranscript.trim())
-    || recorder.serverTranscribePhase === 'failed';
+    || recorder.serverTranscribePhase === 'failed'
+    || recorder.serverTranscribePhase === 'preparing'
+    || recorder.serverTranscribePhase === 'transcribing'
+    || recorder.serverTranscribePhase === 'revealing';
 
   const liveTranscriptHint = (() => {
     switch (recorder.serverTranscribePhase) {
       case 'preparing':
         return 'Reading audio file…';
       case 'transcribing':
-        return 'Transcribing your import…';
+        return 'Transcribing recording…';
       case 'revealing':
         return 'Writing transcript…';
       case 'failed':
@@ -261,6 +265,7 @@ export function CaptureInteractionStep({
         if (recorder.transcriptStatus === 'transcribing') return 'Transcribing recording…';
         if (recorder.transcriptStatus === 'receiving') return 'Receiving speech live…';
         if (recorder.transcriptStatus === 'listening') return 'Listening for words…';
+        if (isRecording) return 'Listening for words…';
         return recorder.displayTranscript.trim() ? 'Editable meeting record' : 'Transcript will appear here';
     }
   })();
