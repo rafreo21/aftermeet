@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { BriefcaseIcon } from "@phosphor-icons/react/dist/csr/Briefcase";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/csr/Buildings";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Button } from "../../components/Button";
 import { ContactMethodIcon } from "../../components/ContactMethodIcon";
 import { TextField } from "../../components/FormField";
@@ -65,6 +66,15 @@ export function PublicExchangeForm({
 
   function showField(field: OptionalField) {
     setActiveFields((current) => new Set(current).add(field));
+  }
+
+  function hideField(field: OptionalField) {
+    setActiveFields((current) => {
+      const next = new Set(current);
+      next.delete(field);
+      return next;
+    });
+    setFieldValue(field, "");
   }
 
   function fieldValue(field: OptionalField) {
@@ -159,15 +169,24 @@ export function PublicExchangeForm({
 
       <div className="public-exchange-optional">
         {OPTIONAL_PILLS.filter((pill) => activeFields.has(pill.id)).map((pill) => (
-          <TextField
-            key={pill.id}
-            id={`exchange-${pill.id}`}
-            label={pill.fieldLabel}
-            value={fieldValue(pill.id)}
-            onChange={(event) => setFieldValue(pill.id, event.target.value)}
-            autoComplete={pill.id === "role" ? "organization-title" : pill.id === "company" ? "organization" : "off"}
-            placeholder={pill.placeholder}
-          />
+          <div key={pill.id} className="public-exchange-optional-field">
+            <TextField
+              id={`exchange-${pill.id}`}
+              label={pill.fieldLabel}
+              value={fieldValue(pill.id)}
+              onChange={(event) => setFieldValue(pill.id, event.target.value)}
+              autoComplete={pill.id === "role" ? "organization-title" : pill.id === "company" ? "organization" : "off"}
+              placeholder={pill.placeholder}
+            />
+            <button
+              type="button"
+              className="public-exchange-remove"
+              aria-label={`Remove ${pill.label}`}
+              onClick={() => hideField(pill.id)}
+            >
+              <XIcon size={16} weight="bold" aria-hidden />
+            </button>
+          </div>
         ))}
 
         <div className="public-exchange-optional-pills">

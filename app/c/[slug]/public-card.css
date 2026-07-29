@@ -339,6 +339,31 @@
   gap: 10px;
 }
 
+.public-exchange-optional-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.public-exchange-remove {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid #d8dfd2;
+  border-radius: 999px;
+  background: #fff;
+  color: #71806b;
+  cursor: pointer;
+}
+
+.public-exchange-remove:hover {
+  border-color: #163300;
+  color: #163300;
+}
+
 .public-exchange-optional-pills {
   display: flex;
   flex-wrap: wrap;
