@@ -997,7 +997,7 @@ export default function NewEncounterPage() {
                 )}
                 <div className="encounter-connect-actions">
                   <LinkButton variant="secondary" href="/app/cards#share"><QrCodeIcon size={16} weight="bold" />Share your card</LinkButton>
-                  <LinkButton variant="ghost" href="/app/contacts"><UsersThreeIcon size={16} weight="bold" />Open People</LinkButton>
+                  <LinkButton variant="ghost" href="/app/people"><UsersThreeIcon size={16} weight="bold" />Open Connections</LinkButton>
                 </div>
                 <p className="follow-up-note">You can continue without linking—add their details later from People.</p>
               </>

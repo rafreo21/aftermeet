@@ -17,8 +17,22 @@ AfterMeet is split into two product lines. **Most of what ships today is the con
 | **Job to be done** | Share identity, capture people, remember context, follow up in one tap | Activate relationship data across a team — CRM, campaigns, attribution, org cards |
 | **Status** | **Current focus** — pilot and polish | **Later** — shown below; detailed planning TBD |
 | **Loops** | 01 Share identity · 02 Capture people · 03 Remember context | 04 Activate data (+ team/workspace layer) |
+| **Source of truth UX** | **Mobile app** (most up to date) · Consumer section of web | Business section of web only |
 
 Shared platform (auth, cards, encounters, Postgres) serves both. Business features build on consumer foundations; they are not a separate app.
+
+### Web surfaces (split to match mobile)
+
+Mobile defines the consumer loop. Web is **two apps**:
+
+| Build | Base path | Scope |
+|-------|-----------|--------|
+| **Consumer web** | `/app` | Exact mobile consumer: Home, Card, Connections, Follow-ups, Capture, Scan — **no business** |
+| **Business web** | `/business` | Card creation + Contacts CRM · Activate · Outbound — business / not consumer pilot |
+
+Public pages (`/c/[slug]`, `/e/[token]`) stay shared. Agent memory: `.cursor/rules/two-web-builds.mdc` (call out “two web builds”).
+
+Legacy `/app/contacts`, `/app/activate`, `/app/outbound` redirect to `/business/*`.
 
 ---
 

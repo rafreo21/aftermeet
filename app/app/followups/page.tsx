@@ -48,9 +48,9 @@ export default function FollowupsPage() {
   }
 
   return (
-    <AppShell active="followups" title="Inbox" subtitle="Reviewed actions and reminders that need your attention.">
+    <AppShell active="followups" title="Follow-ups" subtitle="Consumer inbox — reviewed actions from captures that need your attention.">
       <div className="flow-page">
-        <div className="flow-heading"><div><h1>Keep the promise.</h1><p>Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton variant="secondary" href="/app/outbound"><PaperPlaneTiltIcon size={17} weight="bold" />Outbound queue</LinkButton><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture encounter</LinkButton></div></div>
+        <div className="flow-heading"><div><h1>Keep the promise.</h1><p>Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture</LinkButton></div></div>
         {message && <StatusMessage tone="success" action={<Button size="small" variant="ghost" onClick={() => setMessage("")}>Dismiss</Button>}>{message}</StatusMessage>}
         {!hydrated ? <PageSkeleton rows={3} /> : openActions.length ? <div className="inbox-list">{openActions.map(({ encounter, action }) => {
   const context = buildActionLinkContext(

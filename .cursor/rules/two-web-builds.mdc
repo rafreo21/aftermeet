@@ -1,0 +1,24 @@
+---
+description: AfterMeet — two separate web builds (consumer vs business). Call out with "two web builds" or "consumer/business web".
+alwaysApply: true
+---
+
+# Two separate web builds (agreed 2026-07-29)
+
+Ship **two separate web apps**, not one mixed product. Mobile consumer is the UX source of truth.
+
+## Route split (live)
+
+| App | Base path | Scope |
+|-----|-----------|--------|
+| **Consumer** | `/app` | Exact mobile consumer — Home, Card, Connections, Follow-ups, Capture, Scan. **No business.** |
+| **Business** | `/business` | Card creation + Contacts CRM · Activate · Outbound. Labeled **business / not consumer pilot**. |
+
+Legacy `/app/contacts`, `/app/activate`, `/app/outbound` redirect into `/business/*`.
+
+## Rules for agents
+
+- Do not put Contacts CRM, Activate, HubSpot, campaigns, team workspace, or Outbound under `/app`.
+- Consumer web mirrors mobile consumer only.
+- Business web stays under `/business` (BusinessShell), including card create/edit at `/business/cards` and `/business/card/edit`.
+- Shared platform (auth, Postgres, public `/c` and `/e`) can stay; **product surfaces stay separate**.

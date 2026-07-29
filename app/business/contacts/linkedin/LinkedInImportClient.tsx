@@ -6,7 +6,7 @@ import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockw
 import { FloppyDiskIcon } from "@phosphor-icons/react/dist/csr/FloppyDisk";
 import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
-import { AppShell } from "../../../components/AppShell";
+import { BusinessShell } from "../../../components/BusinessShell";
 import { StatusMessage } from "../../../components/AsyncState";
 import { Button, LinkButton } from "../../../components/Button";
 import {
@@ -23,8 +23,8 @@ import { isFillableEnrichmentResult } from "../../../../lib/contact-enrichment";
 import { resolveAndSaveContact } from "../../../../lib/person-links";
 import { normalizeLinkedInUrl, parseLinkedInProfileInput } from "../../../../lib/linkedin-profile";
 import type { LinkedInImportInitialState } from "../../../../lib/linkedin-import-state";
-import "../../product.css";
-import "../../flow.css";
+import "../../../app/product.css";
+import "../../../app/flow.css";
 
 type LinkedInProfileResponse = {
   profile?: {
@@ -355,12 +355,12 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
   ];
 
   return (
-    <AppShell
+    <BusinessShell
       active="contacts"
       title="Add from LinkedIn"
       subtitle="Paste a profile URL or capture from the browser extension."
       actions={
-        <LinkButton size="small" variant="ghost" href="/app/contacts">
+        <LinkButton size="small" variant="ghost" href="/business/contacts">
           <ArrowLeftIcon size={16} />Contacts
         </LinkButton>
       }
@@ -410,19 +410,19 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           <>
             <StatusMessage tone="success">Saved to your contacts.</StatusMessage>
             <div className="form-actions align-start">
-              <LinkButton variant="secondary" href="/app/contacts/linkedin">
+              <LinkButton variant="secondary" href="/business/contacts/linkedin">
                 <LinkedinLogoIcon size={16} weight="bold" />Capture another profile
               </LinkButton>
             </div>
           </>
         ) : null}
         <div className="form-actions">
-          <LinkButton variant="ghost" href="/app/contacts">Cancel</LinkButton>
+          <LinkButton variant="ghost" href="/business/contacts">Cancel</LinkButton>
           {!savedId ? (
             <Button type="submit"><FloppyDiskIcon size={18} weight="bold" />Save contact</Button>
           ) : (
             <>
-              <LinkButton variant="secondary" href={`/app/contacts/${savedId}`}>Open contact</LinkButton>
+              <LinkButton variant="secondary" href={`/business/contacts/${savedId}`}>Open contact</LinkButton>
               <LinkButton href={`/app/encounters/new?contact=${encodeURIComponent(savedId)}`}>
                 <MicrophoneIcon size={18} weight="fill" />Capture moment
               </LinkButton>
@@ -430,6 +430,6 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
           )}
         </div>
       </form>
-    </AppShell>
+    </BusinessShell>
   );
 }

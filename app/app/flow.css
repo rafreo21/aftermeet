@@ -288,6 +288,46 @@
 .people-connection-row h3 { margin: 0 0 4px; }
 .people-connection-row p { margin: 0; color: var(--p-muted); font-size: 12px; }
 .people-connection-row small { color: var(--p-muted); font-size: 11px; }
+
+.connections-page { gap: 18px; }
+.connections-toolbar { display: flex; gap: 10px; align-items: center; }
+.connections-search { flex: 1; min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 8px; background: white; border: 1px solid var(--p-line, #d7ddd2); }
+.connections-search input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 15px; color: var(--p-navy); }
+.connections-list { display: grid; gap: 8px; }
+.connections-enriching, .connections-empty-search { margin: 0; text-align: center; color: var(--p-muted); font-size: 12px; }
+.connections-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 9px; background: white; border: 1px solid rgba(22,51,0,.06); color: inherit; text-decoration: none; box-shadow: 0 7px 20px rgba(22,51,0,.04); }
+.connections-row:hover { border-color: rgba(22,51,0,.14); }
+.connections-avatar { width: 44px; height: 44px; border-radius: 999px; object-fit: cover; background: #E9F7DF; flex: 0 0 auto; }
+.connections-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.connections-copy strong { font-size: 15px; color: var(--p-navy); }
+.connections-copy span, .connections-copy small { color: var(--p-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connections-empty-prompt { width: 100%; display: grid; gap: 8px; justify-items: start; text-align: left; padding: 22px; border: 0; border-radius: 12px; background: white; box-shadow: 0 7px 20px rgba(22,51,0,.04); cursor: pointer; }
+.connections-empty-prompt strong { font-size: 16px; color: var(--p-navy); }
+.connections-empty-prompt span:last-child { color: var(--p-muted); font-size: 13px; }
+.connections-modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(14,20,12,.42); display: grid; place-items: end center; padding: 18px; }
+.connections-modal { width: min(440px, 100%); background: white; border-radius: 16px 16px 12px 12px; padding: 20px; display: grid; gap: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+.connections-modal-compact { place-self: center; border-radius: 16px; }
+.connections-modal header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.connections-modal header h2 { margin: 0; font-size: 20px; }
+.connections-modal header button { width: 36px; height: 36px; border: 0; border-radius: 999px; background: var(--p-ice); color: var(--p-navy); display: grid; place-items: center; cursor: pointer; }
+.connections-modal > p { margin: 0; color: var(--p-muted); font-size: 14px; }
+.connections-add-options { display: grid; gap: 10px; }
+.connections-manual-form { display: grid; gap: 12px; }
+.connections-section { display: grid; gap: 12px; }
+.connections-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.connections-section-head h2 { margin: 0; font-size: 18px; }
+.connections-count { display: block; margin-top: 6px; color: var(--p-muted); font-size: 13px; }
+.connections-card-cta { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 12px; background: var(--p-navy); color: white; text-decoration: none; }
+.connections-card-cta strong { display: block; font-size: 15px; }
+.connections-card-cta span { color: #C5D3BF; font-size: 12px; }
+.connections-card-cta-muted { background: white; color: var(--p-navy); border: 1px solid rgba(22,51,0,.08); }
+.connections-card-cta-muted span { color: var(--p-muted); }
+.header-actions-row { display: flex; align-items: center; gap: 8px; }
+
+@media (max-width: 720px) {
+  .connections-modal-backdrop { place-items: end center; }
+  .connections-toolbar { flex-direction: column; align-items: stretch; }
+}
 .visitor-signin-prompt { margin-top: 18px; padding: 18px; border-radius: 12px; background: var(--p-sky); display: grid; gap: 14px; }
 .visitor-signin-prompt.compact { margin-top: 14px; padding: 14px; }
 .visitor-signin-prompt strong { display: block; font-size: 18px; margin: 8px 0 4px; }

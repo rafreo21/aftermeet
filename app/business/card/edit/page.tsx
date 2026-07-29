@@ -1,0 +1,533 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { ChatCircleDotsIcon } from "@phosphor-icons/react/dist/csr/ChatCircleDots";
+import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimple";
+import { GlobeIcon } from "@phosphor-icons/react/dist/csr/Globe";
+import { DiscordLogoIcon } from "@phosphor-icons/react/dist/csr/DiscordLogo";
+import { FacebookLogoIcon } from "@phosphor-icons/react/dist/csr/FacebookLogo";
+import { GithubLogoIcon } from "@phosphor-icons/react/dist/csr/GithubLogo";
+import { InstagramLogoIcon } from "@phosphor-icons/react/dist/csr/InstagramLogo";
+import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
+import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
+import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
+import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
+import { PaypalLogoIcon } from "@phosphor-icons/react/dist/csr/PaypalLogo";
+import { PhoneIcon } from "@phosphor-icons/react/dist/csr/Phone";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { SkypeLogoIcon } from "@phosphor-icons/react/dist/csr/SkypeLogo";
+import { SnapchatLogoIcon } from "@phosphor-icons/react/dist/csr/SnapchatLogo";
+import { StarIcon } from "@phosphor-icons/react/dist/csr/Star";
+import { TelegramLogoIcon } from "@phosphor-icons/react/dist/csr/TelegramLogo";
+import { ThreadsLogoIcon } from "@phosphor-icons/react/dist/csr/ThreadsLogo";
+import { TiktokLogoIcon } from "@phosphor-icons/react/dist/csr/TiktokLogo";
+import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { TwitchLogoIcon } from "@phosphor-icons/react/dist/csr/TwitchLogo";
+import { UserCircleIcon } from "@phosphor-icons/react/dist/csr/UserCircle";
+import { WhatsappLogoIcon } from "@phosphor-icons/react/dist/csr/WhatsappLogo";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { XLogoIcon } from "@phosphor-icons/react/dist/csr/XLogo";
+import { YoutubeLogoIcon } from "@phosphor-icons/react/dist/csr/YoutubeLogo";
+import { BusinessShell } from "../../../components/BusinessShell";
+import { Button, IconButton, LinkButton } from "../../../components/Button";
+import { TextAreaField, TextField } from "../../../components/FormField";
+import { PhoneField } from "../../../components/PhoneField";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
+import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
+import { themeCoverBadgeStyle, themeForegroundColor, themeGradientCss, themeSurfaceStyle } from "../../../../lib/theme-contrast";
+import {
+  createLibraryCard,
+  getActiveCardId,
+  MAX_CARDS,
+  readCardLibrary,
+  setActiveCardId,
+  upsertLibraryCard,
+} from "../../../../lib/card-library";
+import { hydrateCardLibraryFromServer, queueCardSync } from "../../../../lib/card-library-sync";
+import "../../../app/product.css";
+
+type MethodType =
+  | "email" | "phone" | "website" | "link" | "address"
+  | "x" | "instagram" | "threads" | "linkedin" | "facebook" | "youtube" | "snapchat" | "tiktok" | "twitch" | "yelp"
+  | "whatsapp" | "signal" | "discord" | "skype" | "telegram"
+  | "github" | "calendly"
+  | "paypal" | "venmo" | "cashapp";
+type ContactMethod = { id: string; type: MethodType; value: string; label: string };
+type CardDraft = {
+  id: string; slug: string; createdAt: string; updatedAt: string;
+  label: string; name: string; role: string; company: string; bio: string;
+  theme: string; photo: string; companyLogo: string; coverPhoto: string; methods: ContactMethod[];
+};
+
+const methodMeta = {
+  email: { category: "General", name: "Email", placeholder: "you@example.com", label: "Work", Icon: EnvelopeSimpleIcon },
+  phone: { category: "General", name: "Phone", placeholder: "+44 7700 900000", label: "Mobile", Icon: PhoneIcon },
+  website: { category: "General", name: "Company URL", placeholder: "https://yourcompany.com", label: "Visit our website", Icon: GlobeIcon },
+  link: { category: "General", name: "Link", placeholder: "https://example.com", label: "Open link", Icon: LinkIcon },
+  address: { category: "General", name: "Address", placeholder: "Street, city, postcode", label: "Office", Icon: MapPinIcon },
+  x: { category: "Social", name: "X", placeholder: "@username or profile URL", label: "Follow me on X", Icon: XLogoIcon },
+  instagram: { category: "Social", name: "Instagram", placeholder: "@username or profile URL", label: "Follow on Instagram", Icon: InstagramLogoIcon },
+  threads: { category: "Social", name: "Threads", placeholder: "@username or profile URL", label: "Follow on Threads", Icon: ThreadsLogoIcon },
+  linkedin: { category: "Social", name: "LinkedIn", placeholder: "Profile URL or username", label: "Connect on LinkedIn", Icon: LinkedinLogoIcon },
+  facebook: { category: "Social", name: "Facebook", placeholder: "Profile or page URL", label: "Find us on Facebook", Icon: FacebookLogoIcon },
+  youtube: { category: "Social", name: "YouTube", placeholder: "Channel URL or handle", label: "Watch on YouTube", Icon: YoutubeLogoIcon },
+  snapchat: { category: "Social", name: "Snapchat", placeholder: "Username or profile URL", label: "Add on Snapchat", Icon: SnapchatLogoIcon },
+  tiktok: { category: "Social", name: "TikTok", placeholder: "@username or profile URL", label: "Follow on TikTok", Icon: TiktokLogoIcon },
+  twitch: { category: "Social", name: "Twitch", placeholder: "Channel URL or username", label: "Watch on Twitch", Icon: TwitchLogoIcon },
+  yelp: { category: "Social", name: "Yelp", placeholder: "Business page URL", label: "Review us on Yelp", Icon: StarIcon },
+  whatsapp: { category: "Messaging", name: "WhatsApp", placeholder: "Number or wa.me link", label: "Message on WhatsApp", Icon: WhatsappLogoIcon },
+  signal: { category: "Messaging", name: "Signal", placeholder: "Username or phone number", label: "Message on Signal", Icon: ChatCircleDotsIcon },
+  discord: { category: "Messaging", name: "Discord", placeholder: "Username or invite URL", label: "Connect on Discord", Icon: DiscordLogoIcon },
+  skype: { category: "Messaging", name: "Skype", placeholder: "Skype username", label: "Call on Skype", Icon: SkypeLogoIcon },
+  telegram: { category: "Messaging", name: "Telegram", placeholder: "@username or t.me link", label: "Message on Telegram", Icon: TelegramLogoIcon },
+  github: { category: "Business", name: "GitHub", placeholder: "Username or profile URL", label: "View my GitHub", Icon: GithubLogoIcon },
+  calendly: { category: "Business", name: "Calendly", placeholder: "https://calendly.com/you", label: "Book a meeting", Icon: CalendarBlankIcon },
+  paypal: { category: "Payment", name: "PayPal", placeholder: "PayPal.me URL or username", label: "Pay with PayPal", Icon: PaypalLogoIcon },
+  venmo: { category: "Payment", name: "Venmo", placeholder: "Venmo username or URL", label: "Pay with Venmo", Icon: CurrencyDollarIcon },
+  cashapp: { category: "Payment", name: "Cash App", placeholder: "$cashtag or URL", label: "Pay with Cash App", Icon: CurrencyDollarIcon },
+} as const;
+
+const methodCategories = ["General", "Social", "Messaging", "Business", "Payment"] as const;
+const methodFieldLabels: Partial<Record<MethodType, string>> = {
+  email: "Email address",
+  phone: "Phone number",
+  website: "Company website URL",
+  link: "Destination URL",
+  address: "Street address",
+  calendly: "Booking page URL",
+  whatsapp: "WhatsApp number or link",
+  signal: "Signal username or number",
+  discord: "Discord username or invite",
+  skype: "Skype username",
+  telegram: "Telegram username or link",
+  paypal: "PayPal username or link",
+  venmo: "Venmo username or link",
+  cashapp: "Cash App cashtag or link",
+};
+
+function fieldLabel(type: MethodType) {
+  if (methodFieldLabels[type]) return methodFieldLabels[type]!;
+  if (["x", "instagram", "threads", "linkedin", "facebook", "youtube", "snapchat", "tiktok", "twitch", "yelp", "github"].includes(type)) {
+    return "Profile URL or username";
+  }
+  return `${methodMeta[type].name} details`;
+}
+
+function suggestionsFor(type: MethodType) {
+  if (type === "phone") return ["Mobile", "Work", "Home", "Office"];
+  if (type === "email") return ["Work", "Personal", "Bookings", "Press"];
+  if (type === "address") return ["Office", "Studio", "Shop", "Meet me here"];
+  if (["website", "link"].includes(type)) return ["Visit our website", "View my work", "Learn more"];
+  if (type === "calendly") return ["Book a meeting", "Schedule a call", "Check availability"];
+  if (["paypal", "venmo", "cashapp"].includes(type)) return ["Send a payment", "Pay me", "Tip me"];
+  if (["whatsapp", "signal", "discord", "skype", "telegram"].includes(type)) return [`Message on ${methodMeta[type].name}`, "Chat with me", "Get in touch"];
+  return [`Connect on ${methodMeta[type].name}`, `Follow on ${methodMeta[type].name}`, "View profile"];
+}
+
+const initialDraft: CardDraft = {
+  id: "primary-card",
+  slug: "alex-morgan",
+  createdAt: "",
+  updatedAt: "",
+  label: "My primary card",
+  name: "Alex Morgan",
+  role: "Independent Consultant",
+  company: "Northstar Advisory",
+  bio: "I help growing teams turn messy ideas into clear products people want.",
+  theme: "#9fe870",
+  photo: "",
+  companyLogo: "",
+  coverPhoto: "",
+  methods: [
+    { id: "email", type: "email", value: "alex@example.com", label: "Work" },
+    { id: "website", type: "website", value: "https://northstar.example", label: "Visit my website" },
+  ],
+};
+
+const themes = ["#9fe870", "#ff6b5e", "#ff9f43", "#ffc107", "#14b8a6", "#2495e8", "#5146e5", "#a83df0", "#163300", "#aeb8aa"];
+const steps = [
+  { label: "Design card", Icon: UserCircleIcon },
+  { label: "Contact methods", Icon: PlusIcon },
+  { label: "Review", Icon: CheckCircleIcon },
+];
+
+function loadDraft() {
+  if (typeof window === "undefined") return initialDraft;
+  try {
+    let cards = readCardLibrary(localStorage);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1" && cards.length < MAX_CARDS) {
+      const created = createLibraryCard({
+        ...initialDraft,
+        id: undefined,
+        slug: undefined,
+        label: `Card ${cards.length + 1}`,
+        name: "",
+        role: "",
+        company: "",
+        bio: "",
+        methods: [],
+      });
+      cards = upsertLibraryCard(localStorage, created);
+      window.history.replaceState(null, "", `/business/card/edit?id=${created.id}`);
+      return created as CardDraft;
+    }
+    const requestedId = params.get("id") || getActiveCardId(localStorage, cards);
+    const selected = cards.find((card) => card.id === requestedId) || cards[0];
+    if (selected) {
+      setActiveCardId(localStorage, selected.id);
+      return { ...initialDraft, ...selected } as CardDraft;
+    }
+    const legacy = JSON.parse(localStorage.getItem("aftermeet-profile-v1") || "null");
+    const photo = localStorage.getItem("aftermeet-profile-photo-v1") || "";
+    if (legacy) {
+      return {
+        ...initialDraft, ...legacy, photo,
+        methods: [
+          { id: "email", type: "email", value: legacy.email || "", label: "Work" },
+          { id: "website", type: "website", value: legacy.website || "", label: "Visit my website" },
+        ],
+      };
+    }
+  } catch {}
+  return initialDraft;
+}
+
+export default function CardEditor() {
+  const [draft, setDraft] = useState<CardDraft>(initialDraft);
+  const [hydrated, setHydrated] = useState(false);
+  const [step, setStep] = useState(0);
+  const [saved, setSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [editing, setEditing] = useState<ContactMethod | null>(null);
+  const [methodError, setMethodError] = useState("");
+  const photoInput = useRef<HTMLInputElement>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void hydrateCardLibraryFromServer().then(() => {
+      setDraft(loadDraft());
+      const storedStep = Number(localStorage.getItem("aftermeet-card-step-v2"));
+      if (Number.isInteger(storedStep) && storedStep >= 0 && storedStep <= 2) setStep(storedStep);
+      setHydrated(true);
+    }).catch(() => {
+      setDraft(loadDraft());
+      setHydrated(true);
+    });
+  }, []);
+
+  const initials = draft.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const previewTheme = useMemo(() => themeSurfaceStyle(draft.theme), [draft.theme]);
+  const coverBadgeStyle = useMemo(() => themeCoverBadgeStyle(draft.theme), [draft.theme]);
+  const EditingMethodIcon = editing ? methodMeta[editing.type].Icon : PlusIcon;
+  const addedMethodTypes = new Set(draft.methods.map((method) => method.type));
+  const stepCompletion = [
+    Boolean(draft.name.trim() && draft.role.trim() && draft.theme),
+    draft.methods.length > 0,
+    saved,
+  ];
+
+  function persistDraft(next: CardDraft) {
+    if (!hydrated) return;
+    upsertLibraryCard(localStorage, next);
+    setActiveCardId(localStorage, next.id);
+    localStorage.setItem("aftermeet-card-v2", JSON.stringify(next));
+    localStorage.setItem("aftermeet-profile-v1", JSON.stringify({
+      name: next.name, role: next.role, company: next.company, bio: next.bio,
+      email: next.methods.find((item) => item.type === "email")?.value || "",
+      website: next.methods.find((item) => item.type === "website")?.value || "",
+    }));
+    if (next.photo) localStorage.setItem("aftermeet-profile-photo-v1", next.photo);
+    else localStorage.removeItem("aftermeet-profile-photo-v1");
+    queueCardSync(next);
+  }
+
+  const update = <K extends keyof CardDraft>(key: K, value: CardDraft[K]) => {
+    setSaved(false);
+    setDraft((current) => {
+      const next = { ...current, [key]: value };
+      persistDraft(next);
+      return next;
+    });
+  };
+
+  async function save() {
+    persistDraft(draft);
+    setPublishing(true);
+    setSaveError("");
+    try {
+      const response = await fetch("/api/cards/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "We couldn’t publish this card.");
+      setSaved(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "We couldn’t publish this card.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  function selectPhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    selectImage("photo", event);
+  }
+
+  function selectImage(key: "photo" | "companyLogo" | "coverPhoto", event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/") || file.size > 8 * 1024 * 1024) return;
+    const reader = new FileReader();
+    reader.onload = () => update(key, String(reader.result));
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
+
+  function openMethod(type: MethodType) {
+    if (addedMethodTypes.has(type)) return;
+    setMethodError("");
+    setEditing({ id: crypto.randomUUID(), type, value: "", label: methodMeta[type].label });
+  }
+
+  function saveMethod() {
+    if (!editing) return;
+    const value = editing.value.trim();
+    if (!value) return setMethodError("Enter a value before saving.");
+    if (editing.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return setMethodError("Enter a valid email address.");
+    if (["website", "link", "calendly"].includes(editing.type)) {
+      try { new URL(value); } catch { return setMethodError("Include the full address, beginning with https://"); }
+    }
+    const exists = draft.methods.some((item) => item.id === editing.id);
+    update("methods", exists
+      ? draft.methods.map((item) => item.id === editing.id ? editing : item)
+      : [...draft.methods, editing]);
+    setEditing(null);
+  }
+
+  function moveMethod(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= draft.methods.length) return;
+    const methods = [...draft.methods];
+    [methods[index], methods[nextIndex]] = [methods[nextIndex], methods[index]];
+    update("methods", methods);
+  }
+
+  function goToStep(nextStep: number) {
+    setStep(nextStep);
+    localStorage.setItem("aftermeet-card-step-v2", String(nextStep));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function continueFlow() {
+    if (step === 2) { void save(); return; }
+    goToStep(step + 1);
+  }
+
+  return (
+    <BusinessShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
+      actions={<Button size="small" loading={publishing} onClick={save}>{publishing ? "Publishing…" : saved ? <><CheckCircleIcon weight="fill" /> Published</> : "Save and publish"}</Button>}>
+      <section className="card-creator">
+        <nav className="creator-steps" aria-label="Card creation progress">
+          {steps.map(({ label, Icon }, index) => (
+            <button key={label} aria-current={index === step ? "step" : undefined} className={index === step ? "active" : stepCompletion[index] ? "complete" : ""} onClick={() => goToStep(index)}>
+              <span>{stepCompletion[index] && index !== step ? <CheckCircleIcon weight="fill" /> : <Icon weight="bold" />}</span>
+              <small>Step {index + 1}</small><strong>{label}</strong>
+            </button>
+          ))}
+        </nav>
+
+        <div className="creator-layout">
+          <section className="creator-workspace">
+            {step === 0 && (
+              <div className="creator-section">
+                <header><span>01 · Design card</span><h1>Make your card recognisable and ready to share.</h1><p>Add your identity, images and visual style in one place.</p></header>
+                <div className="image-panel">
+                  <div className="image-panel-heading"><div><h2>Card images</h2><p>Add a company logo, profile picture and cover photo.</p></div></div>
+                  <input ref={photoInput} className="sr-only" type="file" accept="image/*" onChange={selectPhoto} />
+                  <input ref={logoInput} className="sr-only" type="file" accept="image/*" onChange={(event) => selectImage("companyLogo", event)} />
+                  <input ref={coverInput} className="sr-only" type="file" accept="image/*" onChange={(event) => selectImage("coverPhoto", event)} />
+                  <div className="image-options">
+                    <div className={draft.companyLogo ? "has-image" : ""}>
+                      <button type="button" onClick={() => logoInput.current?.click()}>
+                        {draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : <PlusIcon />}
+                        <span>{draft.companyLogo ? "Change logo" : "Company logo"}</span>
+                      </button>
+                      {draft.companyLogo && <button type="button" className="remove-image" onClick={() => update("companyLogo", "")}>Remove</button>}
+                    </div>
+                    <div className={draft.photo ? "has-image" : ""}>
+                      <button type="button" onClick={() => photoInput.current?.click()}>
+                        {draft.photo ? <img src={draft.photo} alt="" /> : <PlusIcon />}
+                        <span>{draft.photo ? "Change picture" : "Profile picture"}</span>
+                      </button>
+                      {draft.photo && <button type="button" className="remove-image" onClick={() => update("photo", "")}>Remove</button>}
+                    </div>
+                    <div className={draft.coverPhoto ? "has-image" : ""}>
+                      <button type="button" onClick={() => coverInput.current?.click()}>
+                        {draft.coverPhoto ? <img src={draft.coverPhoto} alt="" /> : <PlusIcon />}
+                        <span>{draft.coverPhoto ? "Change cover" : "Cover photo"}</span>
+                      </button>
+                      {draft.coverPhoto && <button type="button" className="remove-image" onClick={() => update("coverPhoto", "")}>Remove</button>}
+                    </div>
+                  </div>
+                </div>
+                <TextField label="Card label" hint="Private" value={draft.label} onChange={(e) => update("label", e.target.value)} />
+                <div className="field-row two">
+                  <TextField label="Full name" value={draft.name} onChange={(e) => update("name", e.target.value)} />
+                  <TextField label="Job title" value={draft.role} onChange={(e) => update("role", e.target.value)} />
+                </div>
+                <TextField label="Company" value={draft.company} onChange={(e) => update("company", e.target.value)} />
+                <TextAreaField label="Short introduction" hint={`${draft.bio.length}/180`} maxLength={180} rows={4} value={draft.bio} onChange={(e) => update("bio", e.target.value)} />
+                <div className="theme-panel"><h2>Card colour</h2><p>Used for the cover and primary actions.</p>
+                  <div className="theme-swatches">{themes.map((theme) => (
+                    <button
+                      key={theme}
+                      aria-label={`Use ${theme}`}
+                      className={draft.theme === theme ? "selected" : ""}
+                      style={{ background: themeGradientCss(theme) }}
+                      onClick={() => update("theme", theme)}>
+                      {draft.theme === theme ? <CheckIcon size={16} weight="bold" color={themeForegroundColor(theme)} /> : null}
+                    </button>
+                  ))}</div>
+                </div>
+                <div className="layout-choice selected"><div><strong>Focused</strong><p>Photo, identity, introduction, then contact methods.</p></div><CheckCircleIcon size={24} weight="fill" /></div>
+                <div className="creator-note"><PaletteIcon weight="bold" /><p>More layouts can come later. The MVP uses one responsive layout that remains readable on every phone.</p></div>
+              </div>
+            )}
+
+            {step === 1 && (
+              <div className="creator-section">
+                <header><span>02 · Contact methods</span><h1>Add only the ways you want people to respond.</h1><p>Each method can have a useful label and can be reordered.</p></header>
+                <div className="method-list">
+                  {draft.methods.map((method, index) => {
+                    const meta = methodMeta[method.type];
+                    return <article className="method-row" key={method.id}>
+                      <span><meta.Icon size={21} weight="bold" /></span>
+                      <button className="method-copy" onClick={() => { setMethodError(""); setEditing(method); }}><strong>{meta.name}</strong><p>{method.value}</p><small>{method.label}</small></button>
+                      <div><IconButton aria-label={`Move ${meta.name} up`} disabled={index === 0} onClick={() => moveMethod(index, -1)}><CaretUpIcon /></IconButton>
+                        <IconButton aria-label={`Move ${meta.name} down`} disabled={index === draft.methods.length - 1} onClick={() => moveMethod(index, 1)}><CaretDownIcon /></IconButton>
+                        <IconButton aria-label={`Remove ${meta.name}`} onClick={() => update("methods", draft.methods.filter((item) => item.id !== method.id))}><TrashIcon /></IconButton></div>
+                    </article>;
+                  })}
+                </div>
+                {editing && <section className="method-inline-editor" aria-labelledby="method-title">
+                  <header>
+                    <div><span><EditingMethodIcon weight="bold" /></span><div><small>{draft.methods.some((item) => item.id === editing.id) ? "Edit method" : "New method"}</small><h2 id="method-title">{methodMeta[editing.type].name}</h2></div></div>
+                    <IconButton aria-label="Close editor" onClick={() => setEditing(null)}><XIcon /></IconButton>
+                  </header>
+                  <div className="method-inline-fields">
+                    {editing.type === "phone" || editing.type === "whatsapp" ? (
+                      <PhoneField
+                        label={fieldLabel(editing.type)}
+                        value={editing.value}
+                        onChange={(value) => { setMethodError(""); setEditing({ ...editing, value }); }}
+                        error={methodError}
+                      />
+                    ) : (
+                      <TextField autoFocus label={fieldLabel(editing.type)} placeholder={methodMeta[editing.type].placeholder} value={editing.value} onChange={(e) => { setMethodError(""); setEditing({ ...editing, value: e.target.value }); }} error={methodError} />
+                    )}
+                    <TextField label="Display label" hint="Optional" value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} />
+                    <div><p>Suggested labels</p><div className="label-suggestions">{suggestionsFor(editing.type).map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={editing.label === label}
+                        className={editing.label === label ? "selected" : ""}
+                        onClick={() => setEditing({ ...editing, label })}
+                      >
+                        {label}
+                      </button>
+                    ))}</div></div>
+                  </div>
+                  <footer><Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button><Button onClick={saveMethod}>Save method</Button></footer>
+                </section>}
+                <div className="method-library"><h2>Add a contact method</h2>
+                  {methodCategories.map((category) => {
+                    const availableTypes = (Object.keys(methodMeta) as MethodType[]).filter(
+                      (type) => methodMeta[type].category === category && !addedMethodTypes.has(type),
+                    );
+                    if (availableTypes.length === 0) return null;
+                    return <section className="method-category" key={category}>
+                    <h3>{category}</h3><div>
+                      {availableTypes.map((type) => {
+                        const meta = methodMeta[type];
+                        return <button key={type} onClick={() => openMethod(type)}><meta.Icon size={24} weight="bold" /><span>{meta.name}</span><PlusIcon /></button>;
+                      })}
+                    </div>
+                  </section>;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="creator-section review-section">
+                <header><span>03 · Review</span><h1>Your card is ready to share.</h1><p>Check the preview, save it, then open the QR sharing screen.</p></header>
+                <div className="review-list">
+                  <div><CheckCircleIcon weight="fill" /><span><strong>Identity</strong><small>{draft.name || "Name needed"} · {draft.role || "Job title needed"}{draft.company ? ` · ${draft.company}` : ""}</small></span><button onClick={() => goToStep(0)}>Edit</button></div>
+                  <div><CheckCircleIcon weight="fill" /><span><strong>Images and style</strong><small>{[draft.photo && "profile", draft.companyLogo && "logo", draft.coverPhoto && "cover"].filter(Boolean).join(", ") || "No images"} · {draft.theme} · Focused layout</small></span><button onClick={() => goToStep(0)}>Edit</button></div>
+                  <div><CheckCircleIcon weight="fill" /><span><strong>Contact methods</strong><small>{draft.methods.length} added · {draft.methods.map((method) => methodMeta[method.type].name).join(", ") || "None"}</small></span><button onClick={() => goToStep(1)}>Edit</button></div>
+                </div>
+                <LinkButton fullWidth variant="secondary" href="/business/cards"><QrCodeIcon weight="bold" /> Open card and QR</LinkButton>
+              </div>
+            )}
+
+            <footer className="creator-actions">
+              {saveError ? <p className="creator-save-error" role="alert">{saveError}</p> : null}
+              <Button variant="ghost" disabled={step === 0} onClick={() => goToStep(step - 1)}><ArrowLeftIcon /> Back</Button>
+              <Button loading={publishing} onClick={continueFlow}>{step === 2 ? publishing ? "Publishing…" : "Save and publish" : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
+            </footer>
+          </section>
+
+          <aside className="creator-preview">
+            <div className="creator-preview-head"><span>Live preview</span><small>Updates instantly</small></div>
+            <article className="public-card">
+              <div
+                className={`card-cover ${draft.coverPhoto ? "has-cover-photo" : ""}`}
+                style={draft.coverPhoto
+                  ? { backgroundImage: `linear-gradient(rgba(22,51,0,.18), rgba(22,51,0,.18)), url(${draft.coverPhoto})`, color: "#FFFFFF" }
+                  : { background: previewTheme.backgroundGradient, color: previewTheme.color }}>
+                <div className="card-logo" style={draft.coverPhoto ? undefined : coverBadgeStyle}>
+                  {draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : draft.company[0] || "A"}
+                </div>
+                <span style={draft.coverPhoto ? undefined : { color: previewTheme.color }}>{draft.company || "Your company"}</span>
+              </div>
+              <div className="card-body">
+                <div className="card-avatar">{draft.photo ? <img src={draft.photo} alt="" /> : initials}</div>
+                <h2>{draft.name || "Your name"}</h2><p className="card-role">{draft.role || "Your role"}{draft.company && ` · ${draft.company}`}</p>
+                <p className="card-bio">{draft.bio || "Your introduction will appear here."}</p>
+                <div className="card-actions"><Button fullWidth style={{ background: previewTheme.backgroundGradient }}>Save contact</Button><Button fullWidth variant="secondary">Share details</Button></div>
+                <div className="preview-methods">{draft.methods.map((method) => {
+                  const meta = methodMeta[method.type];
+                  const href = contactMethodHref(method);
+                  const content = (
+                    <>
+                      <span style={{ background: previewTheme.backgroundGradient, color: previewTheme.color }}>
+                        <meta.Icon weight="bold" color={previewTheme.color} />
+                      </span>
+                      <p><strong>{method.label}</strong><small>{method.value}</small></p>
+                    </>
+                  );
+                  return href
+                    ? <a key={method.id} href={href} target={contactMethodOpensNewTab(href) ? "_blank" : undefined} rel={contactMethodOpensNewTab(href) ? "noreferrer" : undefined} aria-label={`${method.label}: ${meta.name}`}>{content}</a>
+                    : <div key={method.id}>{content}</div>;
+                })}</div>
+              </div>
+            </article>
+          </aside>
+        </div>
+      </section>
+
+    </BusinessShell>
+  );
+}

@@ -5,7 +5,6 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { AppShell } from "../components/AppShell";
@@ -13,39 +12,63 @@ import { LinkButton } from "../components/Button";
 import "./product.css";
 import "./flow.css";
 
-type Contact = { firstName: string; lastName: string; company: string; nextAction?: string };
+type FollowUpNudge = { openCount: number };
 
 export default function HomeDashboard() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [nudge, setNudge] = useState<FollowUpNudge>({ openCount: 0 });
+
   useEffect(() => {
-    try { setContacts(JSON.parse(localStorage.getItem("aftermeet-contacts-v1") || "[]")); } catch {}
+    void fetch("/api/follow-ups")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = await response.json() as { followUps?: Array<{ status?: string }> };
+        const openCount = (payload.followUps ?? []).filter((item) => item.status !== "done").length;
+        setNudge({ openCount });
+      })
+      .catch(() => undefined);
   }, []);
-  const latest = contacts[0];
 
   return (
     <AppShell
       active="home"
       title="Home"
-      subtitle="Your relationship workspace"
-      actions={<LinkButton size="small" href="/app/encounters/new"><MicrophoneIcon size={16} weight="fill" />Capture encounter</LinkButton>}
+      subtitle="Share your card. Capture the meeting. Follow up after."
+      actions={<LinkButton size="small" href="/app/encounters/new"><MicrophoneIcon size={16} weight="fill" />Capture</LinkButton>}
     >
       <div className="flow-page">
         <section className="dashboard-hero">
-          <div><span className="step-pill"><b aria-hidden="true">👋</b> Welcome back</span><h1>What needs your attention today?</h1><p>Share your card, capture the meeting, and finish the follow-up while the conversation is still fresh.</p></div>
-          <div className="dashboard-score"><strong>{contacts.length}</strong><span>people captured</span><small>{contacts.length ? "Your relationship workspace is growing." : "Add your first meeting to begin."}</small></div>
+          <div>
+            <span className="step-pill">Consumer</span>
+            <h1>Share your card in seconds</h1>
+            <p>Same loop as mobile: show QR first, capture what mattered, then finish the follow-up.</p>
+          </div>
+          <div className="dashboard-score">
+            <strong>{nudge.openCount}</strong>
+            <span>open follow-ups</span>
+            <small>{nudge.openCount ? "Finish what’s waiting." : "You’re clear — share or capture next."}</small>
+          </div>
         </section>
 
         <section className="journey-panel">
-          <header><div><span>Core journey</span><h2>From introduction to action.</h2></div><small>Four connected steps</small></header>
+          <header>
+            <div>
+              <span>Core journey</span>
+              <h2>From introduction to action.</h2>
+            </div>
+            <small>Matches mobile</small>
+          </header>
           <div className="journey-grid">
             {[
-              ["01", IdentificationCardIcon, "Create your card", "Set your public identity.", "/app/cards"],
-              ["02", QrCodeIcon, "Share and scan", "Open your card and QR together.", "/app/cards#share"],
-              ["03", MicrophoneIcon, "Capture context", "Record with consent and remember what mattered.", "/app/encounters/new"],
-              ["04", PaperPlaneTiltIcon, "Complete follow-up", "Finish the next promised action.", "/app/followups"],
+              ["01", QrCodeIcon, "Show my QR", "Open your card and share instantly.", "/app/cards#share"],
+              ["02", MicrophoneIcon, "Capture context", "Record with consent while the meeting is fresh.", "/app/encounters/new"],
+              ["03", UsersThreeIcon, "Connections", "People who shared with you and cards you saved.", "/app/people"],
+              ["04", PaperPlaneTiltIcon, "Follow-ups", "Finish the next promised action.", "/app/followups"],
             ].map(([number, Icon, title, text, href]) => (
               <a className="journey-step" href={String(href)} key={String(number)}>
-                <span>{String(number)}</span><Icon size={23} weight="bold" /><div><h3>{String(title)}</h3><p>{String(text)}</p></div><ArrowRightIcon size={17} weight="bold" />
+                <span>{String(number)}</span>
+                <Icon size={23} weight="bold" />
+                <div><h3>{String(title)}</h3><p>{String(text)}</p></div>
+                <ArrowRightIcon size={17} weight="bold" />
               </a>
             ))}
           </div>
@@ -53,13 +76,25 @@ export default function HomeDashboard() {
 
         <div className="dashboard-grid">
           <article className="dashboard-card dashboard-card-primary">
-            <span>Quick capture</span><MicrophoneIcon size={30} weight="fill" /><h2>Start an encounter</h2><p>Record with consent, keep private notes, and review every shared next step.</p><LinkButton href="/app/encounters/new">Start capture <ArrowRightIcon size={16} weight="bold" /></LinkButton>
+            <span>01 · Share</span>
+            <IdentificationCardIcon size={30} weight="bold" />
+            <h2>Ready to share</h2>
+            <p>Your card, QR, wallet, and NFC tools live here — the same share surface as mobile.</p>
+            <LinkButton href="/app/cards#share">Show my QR <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
           <article className="dashboard-card">
-            <span>My card</span><IdentificationCardIcon size={30} weight="bold" /><h2>Ready to share</h2><p>Your card and scannable QR now live in one focused workspace.</p><LinkButton variant="secondary" href="/app/cards">Open my card <ArrowRightIcon size={16} weight="bold" /></LinkButton>
+            <span>02 · Capture</span>
+            <MicrophoneIcon size={30} weight="fill" />
+            <h2>Start an encounter</h2>
+            <p>Record with consent, keep private notes, and review every shared next step.</p>
+            <LinkButton variant="secondary" href="/app/encounters/new">Start capture <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
           <article className="dashboard-card">
-            <span>Latest contact</span><UsersThreeIcon size={30} weight="bold" /><h2>{latest ? `${latest.firstName} ${latest.lastName}` : "No contacts yet"}</h2><p>{latest ? `${latest.company || "New connection"}${latest.nextAction ? ` · ${latest.nextAction}` : ""}` : "Capture the next person you meet and the context that matters."}</p><LinkButton variant="secondary" href={latest ? "/app/contacts" : "/app/contacts/new"}>{latest ? "View contacts" : "Add first contact"} <ArrowRightIcon size={16} weight="bold" /></LinkButton>
+            <span>03 · Connections</span>
+            <UsersThreeIcon size={30} weight="bold" />
+            <h2>People you’ve met</h2>
+            <p>Exchanges and saved cards — not the business CRM directory.</p>
+            <LinkButton variant="secondary" href="/app/people">Open connections <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
         </div>
       </div>

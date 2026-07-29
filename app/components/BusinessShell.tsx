@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { ChartLineUpIcon } from "@phosphor-icons/react/dist/csr/ChartLineUp";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
-import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
-import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
+import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { IconButton } from "./Button";
 import { useAppUser } from "./AppUserContext";
 import { BrandMark } from "./BrandMark";
@@ -16,24 +15,25 @@ import { hydrateContactsFromServer } from "../../lib/contacts-sync";
 import { hydrateEncountersFromServer } from "../../lib/encounters-sync";
 import { hydrateCardLibraryFromServer } from "../../lib/card-library-sync";
 
-export type AppShellActive = "home" | "people" | "cards" | "followups";
+export type BusinessShellActive = "home" | "cards" | "contacts" | "activate" | "outbound";
 
-type AppShellProps = {
-  active: AppShellActive;
+type BusinessShellProps = {
+  active: BusinessShellActive;
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
 };
 
-const consumerNav = [
-  ["home", "/app", HouseIcon, "Home"],
-  ["cards", "/app/cards", IdentificationCardIcon, "My card"],
-  ["people", "/app/people", UsersThreeIcon, "Connections"],
-  ["followups", "/app/followups", PaperPlaneTiltIcon, "Follow-ups"],
+const nav = [
+  ["home", "/business", HouseIcon, "Home"],
+  ["cards", "/business/cards", IdentificationCardIcon, "My card"],
+  ["contacts", "/business/contacts", UsersThreeIcon, "Contacts CRM"],
+  ["activate", "/business/activate", ChartLineUpIcon, "Activate"],
+  ["outbound", "/business/outbound", PaperPlaneTiltIcon, "Outbound"],
 ] as const;
 
-export function AppShell({ active, title, subtitle, actions, children }: AppShellProps) {
+export function BusinessShell({ active, title, subtitle, actions, children }: BusinessShellProps) {
   const user = useAppUser();
   const [mobileNav, setMobileNav] = useState(false);
   useEffect(() => {
@@ -47,21 +47,20 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
   return (
     <main className="product-shell">
       <aside className={`product-sidebar ${mobileNav ? "open" : ""}`}>
-        <a className="product-logo" href="/app"><BrandMark size={38} /><strong>AfterMeet</strong></a>
-        <nav aria-label="Consumer navigation">
-          {consumerNav.map(([key, href, Icon, itemLabel]) => (
+        <a className="product-logo" href="/business">
+          <BrandMark size={38} />
+          <strong>AfterMeet Business</strong>
+        </a>
+        <nav aria-label="Business navigation">
+          <p className="nav-group-label">Business</p>
+          {nav.map(([key, href, Icon, itemLabel]) => (
             <a className={active === key ? "active" : ""} href={href} key={key}>
               <Icon size={20} weight="bold" /> {itemLabel}
             </a>
           ))}
-          <a className="capture-nav" href="/app/encounters/new">
-            <MicrophoneIcon size={20} weight="fill" /> Capture
-          </a>
-          <a href="/app/scan">
-            <QrCodeIcon size={20} weight="bold" /> Scan
-          </a>
         </nav>
         <div className="sidebar-bottom">
+          <a href="/app">Consumer app</a>
           <div className="workspace-card">
             <span>{initials || "AM"}</span>
             <div>{label}<small>{user.email}</small></div>
@@ -78,7 +77,7 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
             <ListIcon size={25} weight="bold" />
           </IconButton>
           <div>
-            <span className="mobile-logo">AfterMeet</span>
+            <span className="mobile-logo">AfterMeet Business</span>
             <strong className="header-title">{title}</strong>
             {subtitle && <p>{subtitle}</p>}
           </div>

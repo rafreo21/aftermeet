@@ -234,11 +234,11 @@ export default function ScanPage() {
 
   return (
     <AppShell
-      active="contacts"
+      active="home"
       title="Scan badge"
       subtitle="Point your camera at a badge QR, AfterMeet card, or LinkedIn code."
       actions={
-        <LinkButton size="small" variant="ghost" href="/app/contacts">
+        <LinkButton size="small" variant="ghost" href="/business/contacts">
           <ArrowLeftIcon size={16} />Contacts
         </LinkButton>
       }
@@ -298,7 +298,7 @@ export default function ScanPage() {
               {mode === "camera" && cameraState !== "unsupported" ? (
                 <div className="scan-secondary-actions">
                   <Button variant="ghost" onClick={() => setMode("manual")}>Paste instead</Button>
-                  <LinkButton variant="ghost" href="/app/contacts/linkedin"><LinkedinLogoIcon size={16} weight="bold" />Add from LinkedIn</LinkButton>
+                  <LinkButton variant="ghost" href="/business/contacts/linkedin"><LinkedinLogoIcon size={16} weight="bold" />Add from LinkedIn</LinkButton>
                 </div>
               ) : null}
             </div>
@@ -321,7 +321,7 @@ export default function ScanPage() {
                 </Button>
               ) : null}
               {savedContactId ? (
-                <LinkButton variant="secondary" href={`/app/contacts/${savedContactId}`}>Open contact</LinkButton>
+                <LinkButton variant="secondary" href={`/business/contacts/${savedContactId}`}>Open contact</LinkButton>
               ) : null}
               {draftContact ? (
                 <LinkButton variant="secondary" href={`/app/encounters/new?contact=${encodeURIComponent(draftContact.id)}`}>
@@ -338,7 +338,7 @@ export default function ScanPage() {
                 <LinkButton variant="ghost" href={target.url} target="_blank" rel="noreferrer">Open link</LinkButton>
               ) : null}
               {target.type === "linkedin" ? (
-                <LinkButton href={`/app/contacts/linkedin?url=${encodeURIComponent(target.url)}`}>Review LinkedIn import</LinkButton>
+                <LinkButton href={`/business/contacts/linkedin?url=${encodeURIComponent(target.url)}`}>Review LinkedIn import</LinkButton>
               ) : null}
             </div>
             <div className="form-actions">

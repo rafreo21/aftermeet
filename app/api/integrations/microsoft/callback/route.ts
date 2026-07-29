@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
   const oauthError = request.nextUrl.searchParams.get("error");
   const successTarget = flow?.returnTo
     ? appendIntegrationParam(flow.returnTo, "microsoft-connected")
-    : new URL("/app/activate?integration=microsoft-connected", request.url).toString();
+    : new URL("/business/activate?integration=microsoft-connected", request.url).toString();
   const errorTarget = flow?.returnTo
     ? appendIntegrationParam(flow.returnTo, "microsoft-error")
-    : new URL("/app/activate?integration=microsoft-error", request.url).toString();
+    : new URL("/business/activate?integration=microsoft-error", request.url).toString();
 
   if (!user || oauthError || !code || !readIntegrationState(request, "microsoft")) {
     const response = NextResponse.redirect(errorTarget);

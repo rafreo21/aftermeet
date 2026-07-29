@@ -17,14 +17,14 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/auth", request.url));
   }
   if (user.id === "local-development-preview") {
-    return NextResponse.redirect(new URL("/app/activate?integration=preview", request.url));
+    return NextResponse.redirect(new URL("/business/activate?integration=preview", request.url));
   }
   if (!googleIntegrationConfigured()) {
     if (returnTo) {
       const { appendIntegrationParam } = await import("../../_shared");
       return NextResponse.redirect(appendIntegrationParam(returnTo, "google-unconfigured"));
     }
-    return NextResponse.redirect(new URL("/app/activate?integration=google-unconfigured", request.url));
+    return NextResponse.redirect(new URL("/business/activate?integration=google-unconfigured", request.url));
   }
 
   const state = createIntegrationState("google");
