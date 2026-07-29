@@ -147,7 +147,7 @@ type ButtonProps = {
   variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 };
 
 function flattenButtonChildren(children: ReactNode): ReactNode[] {

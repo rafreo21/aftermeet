@@ -188,8 +188,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.x4,
     borderRadius: radius.medium,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
   },
   heroScanOverlayPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
   heroScanOverlayText: { color: colors.white, fontSize: 14, fontWeight: '800' },

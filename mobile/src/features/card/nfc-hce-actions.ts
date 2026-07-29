@@ -55,12 +55,13 @@ export async function startTapToShare(cardUrl: string) {
   });
 
   const session = await HCESession.getInstance();
-  await session.setApplication(tag);
-  await session.setEnabled(true);
 
   readListenerCleanup = session.on(HCESession.Events.HCE_STATE_READ, () => {
     onReadCallback?.();
   });
+
+  await session.setApplication(tag);
+  await session.setEnabled(true);
 
   activeSession = session;
 }

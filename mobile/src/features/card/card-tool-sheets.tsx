@@ -176,7 +176,7 @@ export function NfcToolSheetContent({
         <Button
           variant={tapActive ? 'secondary' : 'primary'}
           loading={busy === 'nfc-tap'}
-          disabled={!tapNativeReady && !tapActive}
+          disabled={!publicUrl}
           onPress={() => void run('nfc-tap', async () => {
             if (tapActive || isTapToShareActive()) {
               await stopTapToShare();

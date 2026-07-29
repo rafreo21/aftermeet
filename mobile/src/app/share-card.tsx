@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, Share, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandedQrCode } from '@/components/branded-qr-code';
+import { GoogleWalletIcon } from '@/components/google-wallet-icon';
 import { BackButton, Body, Button, Eyebrow, ScreenFrame } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
@@ -37,6 +38,7 @@ export default function ShareCardScreen() {
   const tapSupported = isTapToShareSupported();
   const tapNativeReady = isTapToShareNativeReady();
   const [tapActive, setTapActive] = useState(false);
+  const [tapBusy, setTapBusy] = useState(false);
   const [tapMessage, setTapMessage] = useState(tapNativeReady ? '' : TAP_TO_SHARE_REBUILD_MESSAGE);
   const [walletAvailable, setWalletAvailable] = useState<boolean | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
@@ -74,24 +76,32 @@ export default function ShareCardScreen() {
   const toggleTapToShare = useCallback(async () => {
     if (!tapSupported) return;
 
-    setTapMessage('');
-    if (tapActive || isTapToShareActive()) {
-      await stopTapToShare();
-      setTapActive(false);
-      setTapMessage('Tap to share turned off.');
+    if (!publicUrl) {
+      setTapMessage('Publish your card first so we have a link to share.');
       return;
     }
 
+    setTapBusy(true);
+    setTapMessage('');
     try {
-      await startTapToShare(publicUrl);
-      setTapActive(true);
-      setTapMessage('Ready. Ask them to hold their phone against yours.');
+      if (tapActive || isTapToShareActive()) {
+        await stopTapToShare();
+        setTapActive(false);
+        setTapMessage('Tap to share turned off.');
+        return;
+      }
+
       setTapToShareReadListener(() => {
         setTapMessage('Card link shared by tap.');
       });
+      await startTapToShare(publicUrl);
+      setTapActive(true);
+      setTapMessage('Ready. Ask them to hold their phone against yours.');
     } catch (error) {
       setTapActive(false);
       setTapMessage(error instanceof Error ? error.message : 'Could not start tap to share.');
+    } finally {
+      setTapBusy(false);
     }
   }, [publicUrl, tapActive, tapSupported]);
 
@@ -179,9 +189,10 @@ export default function ShareCardScreen() {
       <View style={styles.actions}>
         {tapSupported ? (
           <Button
-            style={styles.actionButton}
-            variant={tapActive ? 'secondary' : 'primary'}
-            disabled={!tapNativeReady && !tapActive}
+            style={[styles.actionButton, styles.whiteActionButton]}
+            variant="secondary"
+            loading={tapBusy}
+            disabled={!publicUrl}
             onPress={() => void toggleTapToShare()}>
             <ContactlessPayment size={18} color={colors.ink} weight="bold" />
             {tapActive ? 'Stop tap to share' : 'Tap to share'}
@@ -189,11 +200,15 @@ export default function ShareCardScreen() {
         ) : null}
         {walletAvailable ? (
           <Button
-            style={styles.actionButton}
+            style={[styles.actionButton, styles.whiteActionButton]}
             variant="secondary"
             loading={walletBusy}
             onPress={() => void addToWallet()}>
-            <Wallet size={18} color={colors.ink} weight="bold" />
+            {Platform.OS === 'android' ? (
+              <GoogleWalletIcon size={18} />
+            ) : (
+              <Wallet size={18} color={colors.ink} weight="bold" />
+            )}
             {walletLabel}
           </Button>
         ) : walletNote ? (
@@ -275,5 +290,6 @@ const styles = StyleSheet.create({
   walletNote: { color: colors.muted, fontSize: 12, textAlign: 'center', lineHeight: 17 },
   actions: { gap: spacing.x2 },
   actionButton: { alignSelf: 'stretch' },
+  whiteActionButton: { backgroundColor: colors.white },
   helper: { color: colors.muted, fontSize: 11, textAlign: 'center' },
 });
