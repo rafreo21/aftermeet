@@ -1,7 +1,7 @@
 import { cardWithCompanyVisibility, showsCompanyDetails } from '@/features/card/company-display';
 import type { ContactMethod, MobileCard } from '@/features/card/types';
-import { publicCardImageUrl } from '../../../lib/card-assets';
-import { appendVcardImages, type VcardImageFields } from '../../../lib/vcard-export';
+import { publicCardImageUrl } from '@/lib/card-assets-client';
+import { appendVcardImages, type VcardImageFields } from '@/lib/vcard-images';
 import { contactMethodHref } from '@/lib/contact-methods';
 
 const METHOD_LABELS: Record<string, string> = {

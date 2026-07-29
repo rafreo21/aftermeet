@@ -5,6 +5,13 @@ export function isRemoteImageUrl(url: string) {
   return /^https?:\/\//i.test(trimmed) || trimmed.startsWith("/api/");
 }
 
+export function publicCardImageUrl(url: string | null | undefined) {
+  const trimmed = typeof url === "string" ? url.trim() : "";
+  if (!trimmed) return null;
+  if (trimmed.startsWith("file://") || trimmed.startsWith("content://")) return null;
+  return trimmed;
+}
+
 export function guessImageFileName(uri: string, field: CardAssetField) {
   const lower = uri.toLowerCase();
   if (lower.includes(".png")) return `${field}.png`;
