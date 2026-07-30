@@ -15,6 +15,9 @@ import "../../app/flow.css";
 
 export default function GuestEncounterPage() {
   const [encounter, setEncounter] = useState<Encounter | null | undefined>(undefined);
+  const [followUpNote, setFollowUpNote] = useState("");
+  const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
+  const [followUpError, setFollowUpError] = useState("");
 
   useEffect(() => {
     const token = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
@@ -40,6 +43,29 @@ export default function GuestEncounterPage() {
 
   if (encounter === undefined) return null;
   if (!encounter) return <main className="guest-page"><section className="guest-panel"><LockKeyIcon size={32} weight="bold" /><h1>This meeting record is not available.</h1><p>Ask the person who shared it to approve the record or send a new secure link.</p></section></main>;
+
+  async function commitFollowUp() {
+    if (!encounter || followUpSubmitting) return;
+    setFollowUpSubmitting(true);
+    setFollowUpError("");
+    try {
+      const response = await fetch(`/api/encounters/share/${encodeURIComponent(encounter.shareToken)}/follow-up`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: followUpNote }),
+      });
+      const payload = await response.json() as { guestFollowUp?: Encounter["guestFollowUp"]; error?: string };
+      if (!response.ok || !payload.guestFollowUp) {
+        setFollowUpError(payload.error || "Could not record your follow-up. Try again.");
+        return;
+      }
+      setEncounter({ ...encounter, guestFollowUp: payload.guestFollowUp });
+    } catch {
+      setFollowUpError("Could not record your follow-up. Check your connection and try again.");
+    } finally {
+      setFollowUpSubmitting(false);
+    }
+  }
 
   const guestActions = encounter.actions.filter((action) => action.owner === "guest");
   const sharedRecordingUrl = encounter.recording?.sharedAudioUrl
@@ -86,6 +112,34 @@ export default function GuestEncounterPage() {
         <section className="guest-actions">
           <h2>Your next steps</h2>
           {guestActions.length ? guestActions.map((action) => <article key={action.id}><CheckCircleIcon size={24} /><div><strong>{action.title}</strong><small>{action.dueAt ? `Due ${action.dueAt}` : "No due date"} · {action.channel}</small></div></article>) : <p>No actions have been assigned to you.</p>}
+        </section>
+        <section className="guest-actions">
+          <h2>Will you follow up too?</h2>
+          {encounter.guestFollowUp?.committedAt ? (
+            <article><CheckCircleIcon size={24} weight="fill" /><div><strong>You said you&apos;ll follow up.</strong>{encounter.guestFollowUp.note ? <small>{encounter.guestFollowUp.note}</small> : null}</div></article>
+          ) : (
+            <>
+              <p>Following up isn&apos;t just on them — let them know you&apos;re on it too.</p>
+              <textarea
+                value={followUpNote}
+                onChange={(event) => setFollowUpNote(event.target.value)}
+                placeholder="Optional note — what will you follow up on?"
+                rows={2}
+                maxLength={280}
+                style={{ width: "100%", marginTop: 8, padding: 10, borderRadius: 8, border: "1px solid var(--line)", font: "inherit", resize: "vertical" }}
+              />
+              {followUpError ? <small style={{ color: "#c0392b", display: "block", marginTop: 4 }}>{followUpError}</small> : null}
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={followUpSubmitting}
+                onClick={() => void commitFollowUp()}
+                style={{ marginTop: 8 }}
+              >
+                {followUpSubmitting ? "Saving…" : "I'll follow up too"}
+              </button>
+            </>
+          )}
         </section>
         <div className="guest-claim">
           <div><strong>Keep this relationship moving</strong><p>Create your private AfterMeet workspace to claim these actions, receive reminders, and add your own notes.</p></div>

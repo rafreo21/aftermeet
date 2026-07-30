@@ -38,6 +38,11 @@ export type EncounterAction = {
   groupId?: string;
 };
 
+export type GuestFollowUp = {
+  committedAt: string;
+  note?: string;
+};
+
 export type EncounterPayload = {
   id: string;
   title: string;
@@ -61,6 +66,7 @@ export type EncounterPayload = {
   status: 'draft' | 'reviewed' | 'shared' | 'archived';
   shareToken: string;
   recording?: LocalRecordingMetadata;
+  guestFollowUp?: GuestFollowUp;
 };
 
 export type InboundExchange = {

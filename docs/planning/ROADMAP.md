@@ -175,6 +175,8 @@ Shared recordings are a **temporary cloud bridge** (3 days). Hosts keep local au
 - [x] **1-hour** recording auto-stop
 - [x] Prefer durable on-device audio (no transcript-only primary path); keep local file after guest upload
 - [x] Guest sharing is its own card on review, separate from Follow-up plan; approve uploads local file first when needed
+- [x] Guest sharing toggle: turning it on kicks off recording upload in the background with visible progress; Approve is disabled until upload succeeds (no blocking popup)
+- [x] Guest-side lightweight follow-up: guest can mark "I'll follow up too" (+ optional note) from the shared link, visible to the host in the Follow-up plan panel
 
 ### Phase 2 — Real AI extraction (Loop 03 / Slice 8)
 
@@ -275,6 +277,24 @@ Shown for continuity. **Not consumer pilot scope.** Scope, packaging, and UX wil
 ## Current sprint focus (consumer)
 
 **Consumer phases 1–7 (build) largely complete.** Recommended next: **Phase 6 polish** (wallet env, NFC on device, app store links) and **pilot validation** (QR → save → share-back → follow-up on two phones). Business product planning is intentionally deferred.
+
+---
+
+## Known gaps — consumer pilot readiness (found in hands-on testing, 2026-07-30)
+
+Phases above are checked off as "built," but real device testing surfaced gaps the checklist doesn't capture. Tracking here until each is triaged into a phase.
+
+| Gap | What we saw | Why it matters |
+|---|---|---|
+| ~~**Guest sharing UX is conflated**~~ **RESOLVED 2026-07-30** | Was one linear card with a single button doing double duty (upload + approve) | Fixed: a toggle now enables sharing and starts upload in the background with visible progress; Approve is disabled until upload succeeds |
+| **Recording upload has been fragile across multiple sessions** | Hit "Unsupported FormDataPart implementation" (Expo SDK 57 fetch vs classic RN FormData shape — fixed) and a recurring "Could not upload recording" report after | Even after the FormData fix, there's no visible distinction between network failure / auth failure / size-limit failure in the UI — all collapse to the same generic error and Retry button |
+| ~~**Follow-up is one-directional**~~ **PARTIALLY RESOLVED 2026-07-30** | Only the recording owner used to set/own follow-up actions | Guest can now commit to their own lightweight "I'll follow up too" from the shared link (host sees it in Follow-up plan). Still one-directional in the sense that the guest can't set channels/due dates or edit the host's plan — full parity remains future work |
+| **Follow-up channel enum inconsistency (mobile vs web, now partially diverged)** | Mobile picker exposes 8 channels (missing `send`/`other`); web capture flow's dropdown exposes only 5 (missing whatsapp/instagram/x/tiktok/other); mobile now supports multi-select, web capture flow is still capped at 1 | Consumer web is supposed to mirror mobile exactly (two-web-builds rule) — this is a real, unresolved parity gap |
+| **Live transcript during recording is off** | `resolveSpeechCaptureMode` forced to `'none'` — deliberate, for reliability (see prior incident) | Users get no interim feedback that speech is being captured until Finish; worth a lighter-weight signal (e.g. a waveform/level meter) that doesn't require live STT |
+| **Transcription provider errors are opaque to the user** | Hit an OpenAI quota error mid-session with no in-app messaging beyond a generic failure | Worth surfacing a distinct "transcription temporarily unavailable" state instead of a raw provider error, especially since the provider is swappable server-side now |
+| **Crash visibility is unproven** | Logcat showed `CrashlyticsCore: ... Received null settings, skipping report submission!` during a hard app crash this session | If Crashlytics isn't actually receiving/reporting, a pilot user's crash may be invisible to the team — worth confirming Crashlytics is fully wired (DSN/project config) before pilot |
+| **Two-phone pilot loop unverified** | Roadmap's own "recommended next" — QR → save → share-back → follow-up hasn't been run end-to-end on two devices this session | Blocking item before pilot, independent of the above |
+| **Wallet / NFC on-device validation open** | Per Phase 6, env-dependent; not exercised this session | Same as roadmap note — carried forward, not new |
 
 ---
 

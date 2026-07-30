@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { CheckCircle, CloudArrowUp, EnvelopeSimple, ShareNetwork } from 'phosphor-react-native';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
@@ -47,6 +47,7 @@ export default function CaptureDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [guestSharingEnabled, setGuestSharingEnabled] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [approveHint, setApproveHint] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
@@ -136,6 +137,7 @@ export default function CaptureDetailScreen() {
         const nextEncounter = await getEncounter(session.access_token!, id);
         if (cancelled) return;
         setEncounter(nextEncounter);
+        setGuestSharingEnabled(nextEncounter.status === 'shared');
 
         const uri = await resolveEncounterRecordingUri(id, nextEncounter.recording);
         if (cancelled) return;
@@ -183,6 +185,38 @@ export default function CaptureDetailScreen() {
   );
   const hasTranscript = Boolean(encounter?.transcript.trim());
 
+  const needsUpload = Boolean(
+    recordingUri?.startsWith('file')
+    && !cloudReady
+    && uploadStatus !== 'uploaded',
+  );
+  const canApprove = guestSharingEnabled && uploadStatus !== 'uploading' && !needsUpload;
+
+  function toggleGuestSharing(next: boolean) {
+    setGuestSharingEnabled(next);
+    setApproveHint('');
+
+    if (next) {
+      if (needsUpload && recordingUri && session?.access_token && encounter) {
+        void syncUpload(session.access_token, encounter.id, recordingUri, encounter.recording?.mimeType);
+      }
+      return;
+    }
+
+    if (isShared && encounter && session?.access_token) {
+      const reverted = { ...encounter, status: 'reviewed' as const };
+      setApproving(true);
+      saveEncounter(session.access_token, reverted)
+        .then(() => setEncounter(reverted))
+        .catch((caught) => {
+          setErrorMessage(caught instanceof Error ? caught.message : 'Could not turn off guest sharing.');
+          setErrorSheetOpen(true);
+          setGuestSharingEnabled(true);
+        })
+        .finally(() => setApproving(false));
+    }
+  }
+
   async function persist(next: EncounterPayload) {
     if (!session?.access_token) return;
     setSaving(true);
@@ -209,30 +243,14 @@ export default function CaptureDetailScreen() {
       return;
     }
 
-    if (uploadStatus === 'uploading') {
-      setApproveHint('Recording is still uploading. Try again in a moment.');
+    if (!guestSharingEnabled) {
+      setApproveHint('Turn on guest sharing above, then approve.');
       return;
     }
 
-    const needsUpload = Boolean(
-      recordingUri?.startsWith('file')
-      && !cloudReady
-      && uploadStatus !== 'uploaded',
-    );
-
-    if (needsUpload && recordingUri) {
-      setApproving(true);
-      const uploaded = await syncUpload(
-        session.access_token,
-        encounter.id,
-        recordingUri,
-        encounter.recording?.mimeType,
-      );
-      setApproving(false);
-      if (!uploaded) {
-        setApproveHint('Could not upload the recording. Retry upload, or approve the written summary only after upload succeeds.');
-        return;
-      }
+    if (uploadStatus === 'uploading' || needsUpload) {
+      setApproveHint('Recording is still uploading. Approve unlocks once it finishes.');
+      return;
     }
 
     const next = { ...encounter, status: 'shared' as const };
@@ -403,10 +421,30 @@ export default function CaptureDetailScreen() {
         ) : (
           <Text style={styles.summaryCopy}>No follow-up details yet.</Text>
         )}
+        {encounter.guestFollowUp?.committedAt ? (
+          <View style={styles.statusRow}>
+            <CheckCircle size={18} color={colors.accent} weight="fill" />
+            <Text style={styles.summaryCopy}>
+              Your guest said they&apos;ll follow up too{encounter.guestFollowUp.note ? `: "${encounter.guestFollowUp.note}"` : '.'}
+            </Text>
+          </View>
+        ) : null}
       </Panel>
 
       <Panel style={styles.section}>
         <Text style={styles.sectionTitle}>Guest sharing</Text>
+        <View style={styles.statusRow}>
+          <Switch
+            accessibilityLabel="Enable guest sharing"
+            value={guestSharingEnabled}
+            onValueChange={toggleGuestSharing}
+            trackColor={{ false: colors.line, true: colors.accent }}
+            thumbColor={colors.white}
+          />
+          <Text style={styles.summaryCopy}>
+            {guestSharingEnabled ? 'Guest sharing is on.' : 'Guest sharing is off. Turn on to prepare the shared link.'}
+          </Text>
+        </View>
         <View style={styles.statusRow}>
           {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
           <Text style={styles.summaryCopy}>
@@ -451,9 +489,18 @@ export default function CaptureDetailScreen() {
         ) : null}
         {approveHint ? <Text style={styles.approveHint}>{approveHint}</Text> : null}
         {!isShared ? (
-          <Button loading={approving || uploadStatus === 'uploading'} onPress={() => void approveAndShare()}>
-            Approve guest view
-          </Button>
+          <>
+            <Button loading={approving} disabled={!canApprove} onPress={() => void approveAndShare()}>
+              Approve guest view
+            </Button>
+            {!canApprove ? (
+              <Text style={styles.helperCopy}>
+                {!guestSharingEnabled
+                  ? 'Turn on guest sharing above to enable this.'
+                  : 'Approve unlocks once the recording finishes uploading.'}
+              </Text>
+            ) : null}
+          </>
         ) : guestUrl ? (
           <Button variant="secondary" onPress={() => void shareGuestLink()}>
             <ShareNetwork size={18} color={colors.ink} />
