@@ -1,3 +1,5 @@
+import sharp from "sharp";
+
 import { buildWhenWeMetNote } from "./card-share-links.ts";
 import { contactMethodHref } from "./contact-methods.ts";
 import { splitFullName } from "./contacts.ts";
@@ -306,10 +308,10 @@ export function foldVcardLine(line: string) {
 
 function appendEmbeddedImage(lines: string[], property: string, image: VcardEmbeddedImage) {
   const type = vcardImageType(image.mimeType);
-  // iOS Contacts' vCard photo parser is inconsistent about the vCard 3.0 shorthand
-  // "ENCODING=b" — the spelled-out "BASE64" is the widely-documented fix for photos
-  // not appearing on iOS specifically, even though "b" is spec-valid.
-  lines.push(foldVcardLine(`${property};ENCODING=BASE64;TYPE=${type}:${image.base64}`));
+  // RFC 2426 defines only "b" (RFC 2047 shorthand) as a valid ENCODING value for
+  // vCard 3.0 — "ENCODING=BASE64" is not spec-valid syntax at all, which is why it
+  // silently failed to decode on iOS Contacts.
+  lines.push(foldVcardLine(`${property};ENCODING=b;TYPE=${type}:${image.base64}`));
 }
 
 function appendImageUri(lines: string[], property: string, url: string) {
@@ -347,11 +349,22 @@ export async function fetchVcardImage(url: string): Promise<VcardEmbeddedImage |
     if (!mimeType.startsWith("image/")) return null;
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > MAX_VCARD_IMAGE_BYTES) return null;
+    if (!buffer.length) return null;
+
+    // Re-encode through sharp: strips EXIF/ICC-profile metadata and any orientation
+    // flag, and forces a plain baseline sRGB JPEG. iOS Contacts' PHOTO decoder has been
+    // seen to silently drop images it can't handle (no error, just no photo shown) —
+    // camera-original files carry metadata a stricter embedded decoder may choke on.
+    const normalized = await sharp(buffer)
+      .rotate()
+      .resize(320, 320, { fit: "cover" })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer();
+    if (!normalized.length || normalized.length > MAX_VCARD_IMAGE_BYTES) return null;
 
     return {
-      base64: buffer.toString("base64"),
-      mimeType,
+      base64: normalized.toString("base64"),
+      mimeType: "image/jpeg",
     };
   } catch {
     return null;

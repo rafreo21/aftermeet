@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { MobileCard } from '@/features/card/types';
 import { BrandedQrPreview } from '@/components/branded-qr-preview';
+import { showsCompanyDetails } from '@/features/card/company-display';
 import { colors } from '@/theme/tokens';
 
 type VirtualBackgroundPanelPreviewProps = {
@@ -23,7 +24,7 @@ export function VirtualBackgroundPanelPreview({
   const nameFontSize = Math.max(12, Math.round(28 * scale));
   const subtitleFontSize = Math.max(10, Math.round(18 * scale));
   const scanFontSize = Math.max(9, Math.round(14 * scale));
-  const subtitle = [card.role, card.company].filter(Boolean).join(' · ');
+  const subtitle = [card.role, showsCompanyDetails(card) ? card.company : ''].filter(Boolean).join(' · ');
 
   return (
     <View style={[styles.panel, { width: panelWidth, minHeight: panelHeight, padding: pad }]}>
