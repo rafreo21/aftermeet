@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import type { MobileCard } from '@/features/card/types';
 import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
 
-export type OfflineQrTier = 'full' | 'compact' | 'minimal';
+export type OfflineQrTier = 'full' | 'lean' | 'methods' | 'minimal';
 export type QrErrorCorrection = 'L' | 'M' | 'Q' | 'H';
 
 export type OfflineQrPayload = {
@@ -12,7 +12,8 @@ export type OfflineQrPayload = {
   ecl: QrErrorCorrection;
 };
 
-const ECC_LEVELS: QrErrorCorrection[] = ['H', 'M', 'Q', 'L'];
+/** Prefer lower ECC so full contact fields fit; logo is omitted on offline QR. */
+const ECC_LEVELS: QrErrorCorrection[] = ['L', 'M', 'Q', 'H'];
 
 function fitsInQr(payload: string, ecl: QrErrorCorrection) {
   try {
@@ -30,12 +31,29 @@ function resolveEcl(payload: string): QrErrorCorrection {
   return 'L';
 }
 
-/** Pick the richest offline vCard that still fits in a scannable QR (with center logo). */
+/**
+ * Pick the richest offline vCard that still fits in a scannable QR.
+ * Never drop social/contact methods until the absolute last resort (minimal).
+ */
 export function buildOfflineQrPayload(card: MobileCard, cardUrl: string): OfflineQrPayload {
   const tiers: Array<{ tier: OfflineQrTier; build: () => string }> = [
     { tier: 'full', build: () => buildMobileContactQrPayload(card, cardUrl) },
-    { tier: 'compact', build: () => buildMobileContactQrPayload(card, cardUrl, { compact: true }) },
-    { tier: 'minimal', build: () => buildMobileContactQrPayload(card, cardUrl, { minimal: true }) },
+    {
+      tier: 'lean',
+      build: () => buildMobileContactQrPayload(card, cardUrl, { omitBioCover: true }),
+    },
+    {
+      tier: 'methods',
+      build: () => buildMobileContactQrPayload(card, cardUrl, {
+        omitBioCover: true,
+        omitImages: true,
+        lean: true,
+      }),
+    },
+    {
+      tier: 'minimal',
+      build: () => buildMobileContactQrPayload(card, cardUrl, { minimal: true }),
+    },
   ];
 
   for (const { tier, build } of tiers) {

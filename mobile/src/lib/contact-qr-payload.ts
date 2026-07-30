@@ -20,31 +20,28 @@ function splitFullName(fullName: string) {
 }
 
 export type MobileContactQrOptions = {
-  /** Drop bio, address, and extra social links so the vCard fits in a QR code. */
-  compact?: boolean;
-  /** Name, primary contact methods, and AfterMeet card URL only. */
+  /** Keep every contact method; drop bio / cover / photos to shrink QR. */
+  lean?: boolean;
+  /** Name, primary email/phone, and AfterMeet card URL only (last resort). */
   minimal?: boolean;
+  /** Omit photo/logo URI lines (methods stay complete). */
+  omitImages?: boolean;
+  /** Omit bio and cover photo URL. */
+  omitBioCover?: boolean;
 };
 
 function vcardImageFields(card: MobileCard, options: MobileContactQrOptions): VcardImageFields {
+  if (options.minimal || options.omitImages) return {};
+
   const showCompany = showsCompanyDetails(card);
   const profilePhotoUrl = publicCardImageUrl(card.photo);
   const companyLogoUrl = showCompany ? publicCardImageUrl(card.companyLogo) : null;
-  const coverPhotoUrl = publicCardImageUrl(card.coverPhoto);
+  const coverPhotoUrl = options.omitBioCover ? null : publicCardImageUrl(card.coverPhoto);
 
-  if (options.minimal) {
-    return profilePhotoUrl ? { profilePhotoUrl } : {};
-  }
-  if (options.compact) {
-    return {
-      ...(profilePhotoUrl ? { profilePhotoUrl } : {}),
-      ...(companyLogoUrl ? { companyLogoUrl, showCompanyDetails: true } : {}),
-    };
-  }
   return {
-    profilePhotoUrl,
-    companyLogoUrl,
-    coverPhotoUrl,
+    ...(profilePhotoUrl ? { profilePhotoUrl } : {}),
+    ...(companyLogoUrl ? { companyLogoUrl, showCompanyDetails: true } : {}),
+    ...(coverPhotoUrl ? { coverPhotoUrl } : {}),
     showCompanyDetails: showCompany,
   };
 }
@@ -73,7 +70,7 @@ export function buildMobileContactQrPayload(
 
   const { itemIndex, noteExtras } = appendMobileVcardMethods(lines, visible.methods, {
     showCompanyDetails: showCompany,
-    compact: options.compact,
+    lean: options.lean,
     minimal: options.minimal,
   });
 
@@ -89,20 +86,17 @@ export function buildMobileContactQrPayload(
   }
 
   const coverUrl = vcardImageFields(visible, options).coverPhotoUrl;
-  if (!options.minimal && !options.compact && coverUrl?.trim()) {
+  if (!options.minimal && !options.omitBioCover && coverUrl?.trim()) {
     lines.push(`item${nextItemIndex}.URL:${escapeVcard(coverUrl.trim())}`);
     lines.push(`item${nextItemIndex}.X-ABLabel:${escapeVcard('Cover photo')}`);
   }
 
   const noteParts: string[] = [];
-  if (!options.minimal && !options.compact && visible.bio.trim()) {
+  if (!options.minimal && !options.omitBioCover && visible.bio.trim()) {
     noteParts.push(visible.bio.trim());
   }
   if (noteExtras.length) {
     noteParts.push(...noteExtras);
-  }
-  if (!options.minimal && !options.compact && cardPage) {
-    noteParts.push(`AfterMeet card: ${cardPage}`);
   }
   if (noteParts.length) {
     lines.push(`NOTE:${escapeVcard(noteParts.join('\n\n'))}`);

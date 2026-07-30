@@ -1,5 +1,5 @@
 import type { ContactMethod } from '@/features/card/types';
-import { contactMethodHref } from '@/lib/contact-methods';
+import { contactMethodVcardHref } from '@/lib/contact-methods';
 
 const METHOD_LABELS: Record<string, string> = {
   website: 'Website',
@@ -80,15 +80,20 @@ function appendLabeledItemField(
 
 export type MobileVcardMethodOptions = {
   showCompanyDetails?: boolean;
+  /** Name + one email + one phone only (last-resort QR size). */
   minimal?: boolean;
-  compact?: boolean;
+  /**
+   * Lean export: keep every method, drop address only to shrink QR.
+   * Prefer this over dropping social fields.
+   */
+  lean?: boolean;
 };
 
 function shouldIncludeMethod(method: ContactMethod, options: MobileVcardMethodOptions) {
   if (options.minimal) {
     return method.type === 'email' || method.type === 'phone';
   }
-  if (options.compact && method.type === 'address') {
+  if (options.lean && method.type === 'address') {
     return false;
   }
   if (!(options.showCompanyDetails ?? true) && method.type === 'website') {
@@ -99,9 +104,6 @@ function shouldIncludeMethod(method: ContactMethod, options: MobileVcardMethodOp
 
 function shouldIncludeLabeledUrl(method: ContactMethod, options: MobileVcardMethodOptions) {
   if (options.minimal) return false;
-  if (options.compact) {
-    return method.type === 'linkedin' || method.type === 'website' || method.type === 'link';
-  }
   return true;
 }
 
@@ -123,7 +125,7 @@ export function appendMobileVcardMethods(
     if (!value || !shouldIncludeMethod(method, options)) continue;
 
     const label = methodLabel(method);
-    const href = contactMethodHref(method);
+    const href = contactMethodVcardHref(method);
     const customLabel = hasCustomMethodLabel(method);
 
     if (method.type === 'email') {
@@ -216,8 +218,7 @@ export function appendMobileVcardMethods(
     lines.push(`URL:${escapeVcard(primaryWebsite)}`);
   }
 
-  const urlsToWrite = options.compact ? labeledUrls.slice(0, 2) : labeledUrls;
-  for (const entry of urlsToWrite) {
+  for (const entry of labeledUrls) {
     if (primaryWebsite && entry.href === primaryWebsite) continue;
     appendLabeledUrl(lines, itemIndex, entry.label, entry.href);
     itemIndex += 1;

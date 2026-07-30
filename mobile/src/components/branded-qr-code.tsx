@@ -74,11 +74,13 @@ export function BrandedQrCode({
 
   const logoSize = Math.max(14, Math.round(size * 0.22));
   const badgeSize = logoSize + 8;
+  // Offline vCards need capacity for every contact field — skip the center logo.
+  const showLogo = mode !== 'offline';
 
   return (
     <View style={[styles.frame, { width: size, height: size }, style]}>
       <QRCode
-        key={`${resolved.payload}:${resolved.ecl}`}
+        key={`${resolved.payload}:${resolved.ecl}:${showLogo ? 'logo' : 'plain'}`}
         value={resolved.payload}
         size={size}
         color={color}
@@ -88,25 +90,27 @@ export function BrandedQrCode({
           setRenderError(error instanceof Error ? error.message : 'Could not render this QR code.');
         }}
       />
-      <View
-        pointerEvents="none"
-        style={[
-          styles.logoBadge,
-          {
-            width: badgeSize,
-            height: badgeSize,
-            borderRadius: Math.round(badgeSize * 0.22),
-            left: (size - badgeSize) / 2,
-            top: (size - badgeSize) / 2,
-          },
-        ]}>
-        <Image
-          source={QR_LOGO}
-          style={{ width: logoSize, height: logoSize }}
-          contentFit="contain"
-          accessibilityLabel="AfterMeet"
-        />
-      </View>
+      {showLogo ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.logoBadge,
+            {
+              width: badgeSize,
+              height: badgeSize,
+              borderRadius: Math.round(badgeSize * 0.22),
+              left: (size - badgeSize) / 2,
+              top: (size - badgeSize) / 2,
+            },
+          ]}>
+          <Image
+            source={QR_LOGO}
+            style={{ width: logoSize, height: logoSize }}
+            contentFit="contain"
+            accessibilityLabel="AfterMeet"
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
