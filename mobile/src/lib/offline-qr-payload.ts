@@ -1,9 +1,11 @@
 import QRCode from 'qrcode';
 
 import type { MobileCard } from '@/features/card/types';
+import { publicCardImageUrl } from '@/lib/card-assets-client';
 import { buildMobileContactQrPayload } from '@/lib/contact-qr-payload';
+import { buildVcardPhotoThumbnail } from '@/lib/vcard-photo-thumbnail';
 
-export type OfflineQrTier = 'full' | 'lean' | 'methods' | 'minimal';
+export type OfflineQrTier = 'photo' | 'full' | 'lean' | 'methods' | 'minimal';
 export type QrErrorCorrection = 'L' | 'M' | 'Q' | 'H';
 
 export type OfflineQrPayload = {
@@ -66,4 +68,33 @@ export function buildOfflineQrPayload(card: MobileCard, cardUrl: string): Offlin
 
   const payload = buildMobileContactQrPayload(card, cardUrl, { minimal: true });
   return { payload, tier: 'minimal', ecl: resolveEcl(payload) };
+}
+
+/**
+ * Best-effort enrichment: try embedding a tiny real thumbnail (instead of just a photo
+ * URL) alongside every contact method. Returns null if there's no photo, the download/
+ * resize fails, or the result doesn't fit — callers should fall back to `buildOfflineQrPayload`.
+ */
+export async function tryBuildOfflineQrPayloadWithPhoto(
+  card: MobileCard,
+  cardUrl: string,
+): Promise<OfflineQrPayload | null> {
+  const photoUrl = publicCardImageUrl(card.photo);
+  if (!photoUrl) {
+    if (__DEV__) console.warn('[offline-qr-payload] no photo URL on card, skipping embed tier');
+    return null;
+  }
+
+  const embeddedPhoto = await buildVcardPhotoThumbnail(photoUrl);
+  if (!embeddedPhoto) return null; // buildVcardPhotoThumbnail already logs its own failure
+
+  const payload = buildMobileContactQrPayload(card, cardUrl, { embeddedPhoto });
+  if (!fitsInQr(payload, 'L')) {
+    if (__DEV__) {
+      console.warn(`[offline-qr-payload] embedded-photo payload too large (${payload.length} bytes), falling back`);
+    }
+    return null;
+  }
+
+  return { payload, tier: 'photo', ecl: resolveEcl(payload) };
 }

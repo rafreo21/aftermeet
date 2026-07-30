@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import type { MobileCard } from '@/features/card/types';
-import { buildOfflineQrPayload } from '@/lib/offline-qr-payload';
+import { buildOfflineQrPayload, tryBuildOfflineQrPayloadWithPhoto, type OfflineQrPayload } from '@/lib/offline-qr-payload';
 import { QR_LOGO } from '@/lib/widget-qr';
 import { colors } from '@/theme/tokens';
 
@@ -51,12 +51,28 @@ export function BrandedQrCode({
     [value, card, cardUrl, mode],
   );
   const [renderError, setRenderError] = useState('');
+  const [enhanced, setEnhanced] = useState<{ key: string; result: OfflineQrPayload } | null>(null);
+  const enhanceKey = `${mode}:${card?.id ?? ''}:${cardUrl ?? ''}`;
 
   useEffect(() => {
     setRenderError('');
   }, [resolved?.payload, resolved?.ecl]);
 
-  if (!resolved?.payload) {
+  useEffect(() => {
+    if (mode !== 'offline' || !card || !cardUrl?.trim()) return;
+
+    let cancelled = false;
+    void tryBuildOfflineQrPayloadWithPhoto(card, cardUrl.trim()).then((result) => {
+      if (!cancelled && result) setEnhanced({ key: enhanceKey, result });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, card, cardUrl, enhanceKey]);
+
+  const active = (enhanced?.key === enhanceKey ? enhanced.result : null) ?? resolved;
+
+  if (!active?.payload) {
     return (
       <View style={[styles.frame, { width: size, height: size }, style]}>
         <Text style={styles.placeholder}>QR</Text>
@@ -80,12 +96,12 @@ export function BrandedQrCode({
   return (
     <View style={[styles.frame, { width: size, height: size }, style]}>
       <QRCode
-        key={`${resolved.payload}:${resolved.ecl}:${showLogo ? 'logo' : 'plain'}`}
-        value={resolved.payload}
+        key={`${active.payload}:${active.ecl}:${showLogo ? 'logo' : 'plain'}`}
+        value={active.payload}
         size={size}
         color={color}
         backgroundColor={backgroundColor}
-        ecl={resolved.ecl}
+        ecl={active.ecl}
         onError={(error) => {
           setRenderError(error instanceof Error ? error.message : 'Could not render this QR code.');
         }}

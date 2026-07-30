@@ -1,7 +1,7 @@
 import { cardWithCompanyVisibility, showsCompanyDetails } from '@/features/card/company-display';
 import type { MobileCard } from '@/features/card/types';
 import { publicCardImageUrl } from '@/lib/card-assets-client';
-import { appendVcardImages, type VcardImageFields } from '@/lib/vcard-images';
+import { appendVcardImages, type VcardEmbeddedImage, type VcardImageFields } from '@/lib/vcard-images';
 import { appendMobileVcardMethods } from '@/lib/vcard-methods';
 
 function escapeVcard(value: string) {
@@ -28,6 +28,8 @@ export type MobileContactQrOptions = {
   omitImages?: boolean;
   /** Omit bio and cover photo URL. */
   omitBioCover?: boolean;
+  /** Embed a pre-built tiny thumbnail instead of a profile photo URL, when it fits. */
+  embeddedPhoto?: VcardEmbeddedImage | null;
 };
 
 function vcardImageFields(card: MobileCard, options: MobileContactQrOptions): VcardImageFields {
@@ -39,7 +41,9 @@ function vcardImageFields(card: MobileCard, options: MobileContactQrOptions): Vc
   const coverPhotoUrl = options.omitBioCover ? null : publicCardImageUrl(card.coverPhoto);
 
   return {
-    ...(profilePhotoUrl ? { profilePhotoUrl } : {}),
+    ...(options.embeddedPhoto
+      ? { profilePhoto: options.embeddedPhoto }
+      : (profilePhotoUrl ? { profilePhotoUrl } : {})),
     ...(companyLogoUrl ? { companyLogoUrl, showCompanyDetails: true } : {}),
     ...(coverPhotoUrl ? { coverPhotoUrl } : {}),
     showCompanyDetails: showCompany,
@@ -94,6 +98,9 @@ export function buildMobileContactQrPayload(
   const noteParts: string[] = [];
   if (!options.minimal && !options.omitBioCover && visible.bio.trim()) {
     noteParts.push(visible.bio.trim());
+  }
+  if (!options.minimal && cardPage) {
+    noteParts.push(`AfterMeet card: ${cardPage}`);
   }
   if (noteExtras.length) {
     noteParts.push(...noteExtras);
