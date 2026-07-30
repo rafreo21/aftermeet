@@ -358,7 +358,7 @@ export async function fetchVcardImage(url: string): Promise<VcardEmbeddedImage |
     const normalized = await sharp(buffer)
       .rotate()
       .resize(320, 320, { fit: "cover" })
-      .jpeg({ quality: 82, mozjpeg: true })
+      .jpeg({ quality: 82, progressive: false, mozjpeg: false })
       .toBuffer();
     if (!normalized.length || normalized.length > MAX_VCARD_IMAGE_BYTES) return null;
 
