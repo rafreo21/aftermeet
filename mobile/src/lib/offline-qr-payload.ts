@@ -91,16 +91,20 @@ export async function tryBuildOfflineQrPayloadWithPhoto(
     return null;
   }
 
-  const embeddedPhoto = await buildVcardPhotoThumbnail(photoUrl);
-  if (!embeddedPhoto) return null; // buildVcardPhotoThumbnail already logs its own failure
-
-  const payload = buildMobileContactQrPayload(card, cardUrl, { embeddedPhoto });
-  if (!fitsInQr(payload, 'L')) {
-    if (__DEV__) {
-      console.warn(`[offline-qr-payload] embedded-photo payload too large (${payload.length} bytes), falling back`);
-    }
+  // Must fit at 'Q' or 'H', same invariant as the logo-bearing tiers above — a
+  // payload that only fits at 'L' would force the logo below its safe ECC budget.
+  // buildVcardPhotoThumbnail shrinks the thumbnail across attempts until this passes.
+  const embeddedPhoto = await buildVcardPhotoThumbnail(photoUrl, (candidate) => {
+    const candidatePayload = buildMobileContactQrPayload(card, cardUrl, { embeddedPhoto: candidate });
+    return ECC_LEVELS.some((level) => fitsInQr(candidatePayload, level));
+  });
+  if (!embeddedPhoto) {
+    if (__DEV__) console.warn('[offline-qr-payload] no embeddable thumbnail size fit at Q/H, falling back');
     return null;
   }
 
-  return { payload, tier: 'photo', ecl: resolveEcl(payload) };
+  const payload = buildMobileContactQrPayload(card, cardUrl, { embeddedPhoto });
+  const ecl = ECC_LEVELS.find((level) => fitsInQr(payload, level));
+  if (!ecl) return null; // unreachable given the accepts() check above, kept as a safety net
+  return { payload, tier: 'photo', ecl };
 }

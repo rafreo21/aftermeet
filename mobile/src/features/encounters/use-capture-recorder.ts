@@ -1,12 +1,14 @@
 import * as DocumentPicker from 'expo-document-picker';
 import {
-  RecordingPresets,
+  AudioQuality,
+  IOSOutputFormat,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioPlayer,
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
+import type { RecordingOptions } from 'expo-audio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useLiveTranscript, type LiveTranscriptStatus } from '@/features/encounters/live-transcript';
@@ -51,9 +53,33 @@ type UseCaptureRecorderOptions = {
   transcribeFromServer?: (uri: string, meta?: ImportRecordingMeta) => Promise<string | null>;
 };
 
-const RECORDING_OPTIONS = {
-  ...RecordingPresets.HIGH_QUALITY,
+/**
+ * Mono, 16kHz, 32kbps AAC — Whisper resamples everything to 16kHz mono anyway, so the
+ * stereo 44.1kHz/128kbps HIGH_QUALITY preset was spending ~4x the bytes for no
+ * transcription benefit. At this bitrate a full MAX_RECORDING_SECONDS (1hr) clip is
+ * ~14MB, comfortably under Whisper's 25MB upload limit (see audio-upload.ts).
+ */
+const RECORDING_OPTIONS: RecordingOptions = {
+  extension: '.m4a',
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  bitRate: 32000,
   isMeteringEnabled: true,
+  android: {
+    outputFormat: 'mpeg4',
+    audioEncoder: 'aac',
+  },
+  ios: {
+    outputFormat: IOSOutputFormat.MPEG4AAC,
+    audioQuality: AudioQuality.MEDIUM,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 32000,
+  },
 };
 
 /** Hard cap for on-device capture — auto Finish when reached. */
