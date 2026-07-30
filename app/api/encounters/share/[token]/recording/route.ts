@@ -6,7 +6,7 @@ import {
 } from "../../../../../../lib/recording-metadata";
 import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../../lib/supabase/service";
 
-export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
   if (!token?.trim()) {
     return NextResponse.json({ error: "A share token is required." }, { status: 400 });
@@ -46,11 +46,44 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
 
   const mimeType = recording?.mimeType || "audio/mp4";
   const buffer = Buffer.from(await download.data.arrayBuffer());
+  const totalLength = buffer.byteLength;
+  const filename = `aftermeet-recording.${mimeType.includes("wav") ? "wav" : "m4a"}`;
+
+  // <audio> elements issue Range requests (Safari probes with `bytes=0-1`
+  // before playback); without a 206 response here they surface a MediaError
+  // even though the file itself is fine on a plain full-GET download.
+  const rangeHeader = request.headers.get("range");
+  const rangeMatch = rangeHeader ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader) : null;
+  if (rangeMatch) {
+    const start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : totalLength - 1;
+    if (start > end || end >= totalLength) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${totalLength}` },
+      });
+    }
+    const chunk = buffer.subarray(start, end + 1);
+    return new NextResponse(chunk, {
+      status: 206,
+      headers: {
+        "Content-Type": mimeType,
+        "Content-Range": `bytes ${start}-${end}/${totalLength}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": String(chunk.byteLength),
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": `inline; filename="${filename}"`,
+      },
+    });
+  }
+
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": mimeType,
+      "Accept-Ranges": "bytes",
+      "Content-Length": String(totalLength),
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `inline; filename="aftermeet-recording.${mimeType.includes("wav") ? "wav" : "m4a"}"`,
+      "Content-Disposition": `inline; filename="${filename}"`,
     },
   });
 }
