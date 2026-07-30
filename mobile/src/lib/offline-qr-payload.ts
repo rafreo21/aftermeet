@@ -14,8 +14,14 @@ export type OfflineQrPayload = {
   ecl: QrErrorCorrection;
 };
 
-/** Prefer lower ECC so full contact fields fit; logo is omitted on offline QR. */
-const ECC_LEVELS: QrErrorCorrection[] = ['L', 'M', 'Q', 'H'];
+/**
+ * Offline QR still shows the center logo, so never drop below 'Q': at 'L'/'M' the
+ * logo's occlusion of the center modules can make the code unscannable. 'Q'/'H'
+ * tolerate 25-30% damage, which is safe for a centered logo badge. This does cost
+ * some capacity versus 'L' — the tier fallback below (full -> lean -> methods ->
+ * minimal) absorbs that by shrinking content, same as it always has.
+ */
+const ECC_LEVELS: QrErrorCorrection[] = ['Q', 'H'];
 
 function fitsInQr(payload: string, ecl: QrErrorCorrection) {
   try {

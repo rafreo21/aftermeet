@@ -90,8 +90,9 @@ export function BrandedQrCode({
 
   const logoSize = Math.max(14, Math.round(size * 0.22));
   const badgeSize = logoSize + 8;
-  // Offline vCards need capacity for every contact field — skip the center logo.
-  const showLogo = mode !== 'offline';
+  // Offline QR uses ECC 'Q'/'H' (see offline-qr-payload.ts) specifically so the
+  // logo's center occlusion stays safely within the error-correction budget.
+  const showLogo = true;
 
   return (
     <View style={[styles.frame, { width: size, height: size }, style]}>

@@ -44,7 +44,10 @@ export function foldVcardLine(line: string) {
 
 function appendEmbeddedImage(lines: string[], property: string, image: VcardEmbeddedImage) {
   const type = vcardImageType(image.mimeType);
-  lines.push(foldVcardLine(`${property};ENCODING=b;TYPE=${type}:${image.base64}`));
+  // iOS Contacts' vCard photo parser is inconsistent about the vCard 3.0 shorthand
+  // "ENCODING=b" — the spelled-out "BASE64" is the widely-documented fix for photos
+  // not appearing on iOS specifically, even though "b" is spec-valid.
+  lines.push(foldVcardLine(`${property};ENCODING=BASE64;TYPE=${type}:${image.base64}`));
 }
 
 function appendImageUri(lines: string[], property: string, url: string) {

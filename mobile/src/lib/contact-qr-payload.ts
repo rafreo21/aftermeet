@@ -19,6 +19,16 @@ function splitFullName(fullName: string) {
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
+/** Mirrors lib/card-share-links.ts's buildWhenWeMetNote (web) so both vCard exports match. */
+function buildWhenWeMetNote(cardUrl: string, scannedAt = new Date()) {
+  const date = scannedAt.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  return `When we met: ${date}\nSaved from AfterMeet\n${cardUrl}`;
+}
+
 export type MobileContactQrOptions = {
   /** Keep every contact method; drop bio / cover / photos to shrink QR. */
   lean?: boolean;
@@ -99,11 +109,11 @@ export function buildMobileContactQrPayload(
   if (!options.minimal && !options.omitBioCover && visible.bio.trim()) {
     noteParts.push(visible.bio.trim());
   }
-  if (!options.minimal && cardPage) {
-    noteParts.push(`AfterMeet card: ${cardPage}`);
-  }
   if (noteExtras.length) {
     noteParts.push(...noteExtras);
+  }
+  if (!options.minimal && cardPage) {
+    noteParts.push(buildWhenWeMetNote(cardPage));
   }
   if (noteParts.length) {
     lines.push(`NOTE:${escapeVcard(noteParts.join('\n\n'))}`);
