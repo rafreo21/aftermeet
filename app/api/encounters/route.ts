@@ -1,10 +1,61 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
-import { encounterFromApi } from "../../../lib/encounters";
+import { encounterFromApi, type EncounterParticipant } from "../../../lib/encounters";
+import { fetchParticipantsByEncounter } from "../../../lib/encounter-participants-server";
 import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
+
+function parseIncomingParticipants(input: unknown): EncounterParticipant[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      const record = item as Record<string, unknown>;
+      return {
+        id: typeof record.id === "string" && record.id.trim() ? record.id.trim() : crypto.randomUUID(),
+        name: typeof record.name === "string" ? record.name.trim().slice(0, 160) : "",
+        email: typeof record.email === "string" ? record.email.trim().slice(0, 320) : "",
+        phone: typeof record.phone === "string" ? record.phone.trim().slice(0, 60) : "",
+        linkedIn: typeof record.linkedIn === "string" ? record.linkedIn.trim().slice(0, 320) : "",
+        exchangeId: typeof record.exchangeId === "string" && record.exchangeId.trim() ? record.exchangeId.trim() : undefined,
+      } satisfies EncounterParticipant;
+    })
+    .filter((participant) => participant.name.length >= 2)
+    .slice(0, 10);
+}
+
+function primaryProjection(participants: EncounterParticipant[]) {
+  return {
+    personName: participants.map((participant) => participant.name).join(", "),
+    personEmail: participants.find((participant) => participant.email.includes("@"))?.email ?? "",
+  };
+}
+
+async function syncEncounterParticipants(
+  supabase: SupabaseClient,
+  encounterId: string,
+  workspaceId: string,
+  participants: EncounterParticipant[],
+) {
+  await supabase.from("encounter_participants").delete().eq("encounter_id", encounterId);
+  if (!participants.length) return;
+
+  const rows = participants.map((participant, index) => ({
+    id: participant.id,
+    encounter_id: encounterId,
+    workspace_id: workspaceId,
+    display_name: participant.name,
+    email: participant.email,
+    phone: participant.phone,
+    linkedin_url: participant.linkedIn,
+    exchange_id: participant.exchangeId ?? null,
+    is_primary: index === 0,
+    sort_order: index,
+  }));
+  await supabase.from("encounter_participants").insert(rows);
+}
 
 export async function GET(request: Request) {
   const user = await resolveApiUser(request);
@@ -31,7 +82,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "We couldn’t load your encounters." }, { status: 500 });
   }
 
-  let encounters = (data ?? []).map((row) => encounterFromApi(row));
+  const encounterIds = (data ?? []).map((row) => row.id as string);
+  const participantsByEncounter = await fetchParticipantsByEncounter(supabase, encounterIds);
+  let encounters = (data ?? []).map((row) => encounterFromApi({
+    ...row,
+    participants: participantsByEncounter.get(row.id as string) ?? [],
+  }));
   if (contactId || sourceId || exchangeId || email) {
     encounters = encounters.filter((encounter) => {
       if (contactId && encounter.contactId === contactId) return true;
@@ -77,13 +133,21 @@ export async function POST(request: Request) {
 
   const recordingMetadata = mergeRecordingMetadataForSave(recording, existingRecording);
 
+  const participants = parseIncomingParticipants(body.participants);
+  const projection = participants.length
+    ? primaryProjection(participants)
+    : {
+        personName: typeof body.personName === "string" ? body.personName.trim() : "",
+        personEmail: typeof body.personEmail === "string" ? body.personEmail.trim() : "",
+      };
+
   const { error } = await supabase.from("encounters").upsert({
     id: body.id,
     workspace_id: user.workspaceId,
     created_by_user_id: user.id,
     title: body.title.trim().slice(0, 160),
-    person_name: typeof body.personName === "string" ? body.personName.trim().slice(0, 160) : "",
-    person_email: typeof body.personEmail === "string" ? body.personEmail.trim().slice(0, 320) : "",
+    person_name: projection.personName.slice(0, 160),
+    person_email: projection.personEmail.slice(0, 320),
     contact_id: typeof body.contactId === "string" && body.contactId.trim() ? body.contactId.trim().slice(0, 120) : null,
     exchange_id: typeof body.exchangeId === "string" && body.exchangeId.trim() ? body.exchangeId.trim() : null,
     campaign_id: typeof body.campaignId === "string" && body.campaignId.trim() ? body.campaignId.trim().slice(0, 120) : null,
@@ -104,5 +168,10 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: "The encounter was saved on this device but could not sync." }, { status: 500 });
   }
+
+  if (participants.length) {
+    await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
+  }
+
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
 }

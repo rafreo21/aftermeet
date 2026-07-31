@@ -3,6 +3,7 @@ import type { FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
 
 export type FollowUpParticipant = {
   key: string;
+  id?: string;
   name: string;
   email: string;
 };
@@ -18,16 +19,36 @@ export function participantKey(name: string, email: string) {
   return name.trim().toLowerCase();
 }
 
+/**
+ * Prefers the canonical `encounter_participants` list (carried on each
+ * FollowUpItem since every action for an encounter embeds the same list).
+ * Falls back to reconstructing from open actions only for encounters
+ * captured before participants existed as a first-class table — that
+ * fallback loses a person once their last action completes, which the
+ * canonical path fixes.
+ */
 export function participantsForEncounter(items: FollowUpItem[], encounterId: string): FollowUpParticipant[] {
-  const seen = new Map<string, FollowUpParticipant>();
+  const encounterItems = items.filter((item) => item.encounterId === encounterId);
+  const canonical = encounterItems.find((item) => item.participants.length > 0)?.participants;
 
-  for (const item of items) {
-    if (item.encounterId !== encounterId) continue;
+  if (canonical?.length) {
+    return canonical
+      .filter((person) => person.name.trim())
+      .map((person) => ({
+        key: participantKey(person.name, person.email),
+        id: person.id,
+        name: person.name.trim(),
+        email: person.email.trim(),
+      }));
+  }
+
+  const seen = new Map<string, FollowUpParticipant>();
+  for (const item of encounterItems) {
     const name = item.personName.trim();
     const email = item.personEmail.trim();
     const key = participantKey(name, email);
     if (!key || seen.has(key)) continue;
-    seen.set(key, { key, name: name || 'Guest', email });
+    seen.set(key, { key, id: item.participantId, name: name || 'Guest', email });
   }
 
   return Array.from(seen.values());

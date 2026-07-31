@@ -1,4 +1,4 @@
-import { CaretRight, Check } from 'phosphor-react-native';
+import { CaretRight, Check, CheckCircle } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { channelLabel } from '@/features/follow-ups/action-links';
@@ -24,8 +24,9 @@ export function GroupedFollowUpCell({
   onComplete,
   completing,
 }: GroupedFollowUpCellProps) {
+  const isCompleted = group.items.every((item) => item.status === 'completed');
   const dueLabel = formatDueLabel(group.dueAt);
-  const tone = dueTone(group.dueAt);
+  const tone = isCompleted ? 'default' : dueTone(group.dueAt);
   const subtitle = group.items.length > 1
     ? channelSummary(group.items)
     : displayFollowUpTitle(
@@ -48,7 +49,9 @@ export function GroupedFollowUpCell({
             <Text style={styles.meta} numberOfLines={1}>{group.encounterTitle}</Text>
           ) : null}
         </View>
-        {dueLabel ? (
+        {isCompleted ? (
+          <Text style={styles.dueCompleted}>Completed</Text>
+        ) : dueLabel ? (
           <Text style={[
             styles.due,
             tone === 'overdue' && styles.dueOverdue,
@@ -62,14 +65,20 @@ export function GroupedFollowUpCell({
         ) : null}
       </Pressable>
       {group.items.length === 1 ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Mark follow-up done"
-          disabled={completing}
-          onPress={onComplete}
-          style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
-          <Check size={18} color={colors.muted} weight="bold" />
-        </Pressable>
+        isCompleted ? (
+          <View style={styles.check} accessibilityLabel="Follow-up completed">
+            <CheckCircle size={18} color={colors.ink} weight="fill" />
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mark follow-up done"
+            disabled={completing}
+            onPress={onComplete}
+            style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
+            <Check size={18} color={colors.muted} weight="bold" />
+          </Pressable>
+        )
       ) : null}
     </View>
   );
@@ -99,14 +108,20 @@ export function GroupedFollowUpActions({
               {displayFollowUpTitle(item.title, item.channel as FollowUpChannel)}
             </Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Mark follow-up done"
-            disabled={completingId === `${item.encounterId}-${item.actionId}`}
-            onPress={() => onCompleteItem(item.actionId)}
-            style={({ pressed }) => [actionStyles.check, pressed && actionStyles.pressed]}>
-            <Check size={18} color={colors.muted} weight="bold" />
-          </Pressable>
+          {item.status === 'completed' ? (
+            <View style={actionStyles.check} accessibilityLabel="Follow-up completed">
+              <CheckCircle size={18} color={colors.ink} weight="fill" />
+            </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Mark follow-up done"
+              disabled={completingId === `${item.encounterId}-${item.actionId}`}
+              onPress={() => onCompleteItem(item.actionId)}
+              style={({ pressed }) => [actionStyles.check, pressed && actionStyles.pressed]}>
+              <Check size={18} color={colors.muted} weight="bold" />
+            </Pressable>
+          )}
         </View>
       ))}
     </View>
@@ -138,6 +153,7 @@ const styles = StyleSheet.create({
   due: { color: colors.muted, fontSize: 11, fontWeight: '700' },
   dueOverdue: { color: colors.danger },
   dueToday: { color: colors.warning },
+  dueCompleted: { color: colors.muted, fontSize: 11, fontWeight: '700' },
   check: {
     width: 52,
     alignItems: 'center',

@@ -41,7 +41,7 @@ type UploadStatus = "idle" | "uploading" | "uploaded" | "failed";
 export default function EncounterReviewPage() {
   const [encounter, setEncounter] = useState<Encounter | null>(null);
   const [encounterId, setEncounterId] = useState("");
-  const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", dueAt: "", channel: "email" as EncounterAction["channel"] });
+  const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", participantId: "", dueAt: "", channel: "email" as EncounterAction["channel"] });
   const [message, setMessage] = useState("");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
@@ -194,9 +194,24 @@ export default function EncounterReviewPage() {
     if (!newAction.title.trim()) return;
     patch((current) => ({
       ...current,
-      actions: [...current.actions, { id: crypto.randomUUID(), title: newAction.title.trim(), owner: newAction.owner, dueAt: newAction.dueAt, channel: newAction.channel, status: "open" }],
+      actions: [...current.actions, {
+        id: crypto.randomUUID(),
+        title: newAction.title.trim(),
+        owner: newAction.owner,
+        participantId: newAction.owner === "guest" ? newAction.participantId || undefined : undefined,
+        dueAt: newAction.dueAt,
+        channel: newAction.channel,
+        status: "open",
+      }],
     }));
-    setNewAction({ title: "", owner: "me", dueAt: "", channel: "email" });
+    setNewAction({ title: "", owner: "me", participantId: "", dueAt: "", channel: "email" });
+  }
+
+  function participantName(participantId?: string) {
+    if (!participantId) return encounter?.personName || "Guest";
+    return encounter?.participants.find((person) => person.id === participantId)?.name
+      || encounter?.personName
+      || "Guest";
   }
 
   async function copyGuestLink() {
@@ -306,7 +321,7 @@ export default function EncounterReviewPage() {
                     onClick={() => patch((current) => ({ ...current, actions: current.actions.map((item) => item.id === action.id ? { ...item, status: item.status === "completed" ? "open" : "completed" } : item) }))}
                     aria-label={action.status === "completed" ? "Mark open" : "Mark complete"}
                   ><CheckCircleIcon size={22} weight={action.status === "completed" ? "fill" : "regular"} /></button>
-                  <div><strong>{action.title}</strong><small>{action.owner === "me" ? "You" : encounter.personName || "Guest"}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {channelLabel(action.channel)}</small></div>
+                  <div><strong>{action.title}</strong><small>{action.owner === "me" ? "You" : participantName(action.participantId)}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {channelLabel(action.channel)}</small></div>
                   {actionContext && <ActionDoButton action={action} context={actionContext} showSecondary />}
                   {actionContext && action.owner === "me" && supportsOutboundDraft(action.channel) ? (
                     <OutboundDraftPanel
@@ -327,9 +342,24 @@ export default function EncounterReviewPage() {
             </div>
             <div className="new-action">
               <TextField label="Action" value={newAction.title} onChange={(event) => setNewAction((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Send the introduction" />
-              <SelectField label="Owner" value={newAction.owner} onChange={(event) => setNewAction((current) => ({ ...current, owner: event.target.value as "me" | "guest" }))}>
+              <SelectField
+                label="Owner"
+                value={newAction.owner === "guest" ? newAction.participantId || "guest" : "me"}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setNewAction((current) => value === "me"
+                    ? { ...current, owner: "me", participantId: "" }
+                    : { ...current, owner: "guest", participantId: value === "guest" ? "" : value });
+                }}
+              >
                 <option value="me">Me</option>
-                <option value="guest">{encounter.personName || "Guest"}</option>
+                {encounter.participants.length > 1 ? (
+                  encounter.participants.map((person) => (
+                    <option key={person.id} value={person.id}>{person.name || "Guest"}</option>
+                  ))
+                ) : (
+                  <option value="guest">{encounter.personName || "Guest"}</option>
+                )}
               </SelectField>
               <SelectField label="Channel" value={newAction.channel} onChange={(event) => setNewAction((current) => ({ ...current, channel: event.target.value as EncounterAction["channel"] }))}>
                 <option value="email">Email</option>
@@ -348,7 +378,13 @@ export default function EncounterReviewPage() {
           <span>Participant access</span>
           <h2>Keep both people aligned.</h2>
           <p>Upload the recording, approve the shared record, then send the secure link yourself. Cloud copies stay online for {CLOUD_RECORDING_RETENTION_DAYS} days.</p>
-          <div className="guest-card"><strong>{encounter.personName || "Guest participant"}</strong><small>{encounter.personEmail || "No email added"}</small></div>
+          {encounter.participants.length > 1 ? (
+            encounter.participants.map((person) => (
+              <div className="guest-card" key={person.id}><strong>{person.name || "Guest participant"}</strong><small>{person.email || "No email added"}</small></div>
+            ))
+          ) : (
+            <div className="guest-card"><strong>{encounter.personName || "Guest participant"}</strong><small>{encounter.personEmail || "No email added"}</small></div>
+          )}
           {localAudioUrl ? (
             <article className="guest-summary">
               <span>Your recording</span>

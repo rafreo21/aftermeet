@@ -35,12 +35,22 @@ export type EncounterAction = {
   status: 'open' | 'completed' | 'snoozed';
   assigneeName?: string;
   assigneeEmail?: string;
+  participantId?: string;
   groupId?: string;
 };
 
 export type GuestFollowUp = {
   committedAt: string;
   note?: string;
+};
+
+export type EncounterParticipant = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  linkedIn: string;
+  exchangeId?: string;
 };
 
 export type EncounterPayload = {
@@ -63,6 +73,7 @@ export type EncounterPayload = {
   privateNotes: string;
   sharedSummary: string;
   actions: EncounterAction[];
+  participants: EncounterParticipant[];
   status: 'draft' | 'reviewed' | 'shared' | 'archived';
   shareToken: string;
   recording?: LocalRecordingMetadata;
@@ -176,7 +187,7 @@ export function buildEncounterPayload(input: {
   title: string;
   personName: string;
   personEmail?: string;
-  people?: Array<{ name: string; email?: string }>;
+  people?: Array<{ id?: string; name: string; email?: string; phone?: string; linkedIn?: string; exchangeId?: string }>;
   contactId?: string;
   exchangeId?: string;
   sharedSummary: string;
@@ -204,19 +215,30 @@ export function buildEncounterPayload(input: {
     : sanitizedFollowUpTitle || input.followUpType
       ? [input.followUpType ?? 'email'] as FollowUpChannel[]
       : []) as FollowUpChannel[];
-  const meetingPeople = (input.people ?? [])
+  const meetingPeople: EncounterParticipant[] = (input.people ?? [])
     .map((person) => ({
+      id: person.id || createId(),
       name: person.name.trim(),
       email: person.email?.trim() ?? '',
+      phone: person.phone?.trim() ?? '',
+      linkedIn: person.linkedIn?.trim() ?? '',
+      exchangeId: person.exchangeId || undefined,
     }))
     .filter((person) => person.name.length >= 2);
 
+  const assignees = meetingPeople.length >= 1
+    ? meetingPeople
+    : [{
+        id: createId(),
+        name: input.personName.trim(),
+        email: input.personEmail?.trim() ?? '',
+        phone: '',
+        linkedIn: '',
+        exchangeId: input.exchangeId || undefined,
+      }];
+
   const actions: EncounterAction[] = [];
   if (channels.length) {
-    const assignees = meetingPeople.length >= 1
-    ? meetingPeople
-    : [{ name: input.personName.trim(), email: input.personEmail?.trim() ?? '' }];
-
     for (const assignee of assignees) {
       if (!assignee.name.trim()) continue;
       const groupId = createId();
@@ -230,6 +252,7 @@ export function buildEncounterPayload(input: {
           status: 'open',
           assigneeName: assignee.name,
           assigneeEmail: assignee.email,
+          participantId: assignee.id,
           groupId: channels.length > 1 ? groupId : undefined,
         });
       }
@@ -257,6 +280,7 @@ export function buildEncounterPayload(input: {
     sharedSummary: input.sharedSummary.trim(),
     recording: input.recording,
     actions,
+    participants: assignees.filter((assignee) => assignee.name.trim().length >= 2),
     status: input.status || 'draft',
     shareToken: input.shareToken || createId().replace(/-/g, ''),
   };
@@ -276,6 +300,7 @@ export function applyEncounterFollowUpSettings(
     title: encounter.title,
     personName: encounter.personName,
     personEmail: encounter.personEmail,
+    people: encounter.participants,
     sharedSummary: encounter.sharedSummary,
     privateNotes: input.privateNotes,
     followUpChannels: input.followUpChannels,
@@ -292,6 +317,7 @@ export function applyEncounterFollowUpSettings(
     ...encounter,
     privateNotes: rebuilt.privateNotes,
     actions: rebuilt.actions,
+    participants: rebuilt.participants,
   };
 }
 
@@ -447,6 +473,7 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
       privateNotes: encounter.privateNotes,
       sharedSummary: encounter.sharedSummary,
       actions: encounter.actions,
+      participants: encounter.participants,
       status: encounter.status,
       shareToken: encounter.shareToken,
       recording: encounter.recording

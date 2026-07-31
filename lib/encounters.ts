@@ -9,8 +9,18 @@ export type EncounterAction = {
   status: "open" | "completed" | "snoozed";
   assigneeName?: string;
   assigneeEmail?: string;
+  participantId?: string;
   groupId?: string;
   outboundDraft?: OutboundDraft;
+};
+
+export type EncounterParticipant = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  linkedIn: string;
+  exchangeId?: string;
 };
 
 export type OutboundDraft = {
@@ -50,6 +60,7 @@ export type Encounter = {
   sharedSummary: string;
   recording?: LocalRecordingMetadata;
   actions: EncounterAction[];
+  participants: EncounterParticipant[];
   status: "draft" | "reviewed" | "shared" | "archived";
   shareToken: string;
   guestFollowUp?: GuestFollowUp;
@@ -105,6 +116,7 @@ type EncounterRow = {
   private_notes: string;
   shared_summary: string;
   actions: EncounterAction[];
+  participants?: EncounterParticipant[];
   recording_metadata: LocalRecordingMetadata | null;
   status: Encounter["status"];
   share_token: string;
@@ -130,6 +142,7 @@ export function encounterFromApi(row: EncounterRow | Record<string, unknown>): E
     sharedSummary: record.shared_summary ?? "",
     recording: record.recording_metadata ?? undefined,
     actions: Array.isArray(record.actions) ? record.actions : [],
+    participants: Array.isArray(record.participants) ? record.participants : [],
     status: record.status ?? "draft",
     shareToken: record.share_token,
     guestFollowUp: record.guest_follow_up ?? undefined,
@@ -172,6 +185,7 @@ export function encounterFromSharedPayload(payload: Record<string, unknown>): En
         }
       : undefined,
     actions: Array.isArray(payload.actions) ? payload.actions as EncounterAction[] : [],
+    participants: Array.isArray(payload.participants) ? payload.participants as EncounterParticipant[] : [],
     status: "shared",
     shareToken: String(payload.shareToken ?? ""),
     guestFollowUp: payload.guestFollowUp && typeof payload.guestFollowUp === "object"
@@ -197,6 +211,7 @@ export function encounterToApiBody(encounter: Encounter) {
     privateNotes: encounter.privateNotes,
     sharedSummary: encounter.sharedSummary,
     actions: encounter.actions,
+    participants: encounter.participants,
     recording: encounter.recording,
     status: encounter.status,
     shareToken: encounter.shareToken,

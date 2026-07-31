@@ -13,7 +13,8 @@ export type FollowUpGroup = {
 
 function groupKey(item: FollowUpItem) {
   if (item.groupId?.trim()) {
-    return `${item.encounterId}:${item.groupId.trim()}:${item.personName.trim().toLowerCase()}`;
+    const person = item.participantId?.trim() || item.personName.trim().toLowerCase();
+    return `${item.encounterId}:${item.groupId.trim()}:${person}`;
   }
   return `${item.encounterId}:${item.actionId}`;
 }

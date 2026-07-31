@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../../lib/encounters";
+import { fetchParticipantsByEncounter } from "../../../../lib/encounter-participants-server";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -23,7 +24,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Encounter not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ encounter: encounterFromApi(data) }, { headers: { "Cache-Control": "private, no-store" } });
+  const participantsByEncounter = await fetchParticipantsByEncounter(supabase, [id]);
+  const encounter = encounterFromApi({ ...data, participants: participantsByEncounter.get(id) ?? [] });
+
+  return NextResponse.json({ encounter }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {

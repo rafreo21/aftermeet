@@ -36,6 +36,9 @@ export async function POST(request: Request) {
     await supabase.rpc("link_people_connection_from_exchange", { p_exchange_id: intent.exchangeId });
   } else if (intent?.slug) {
     await supabase.rpc("link_people_connection_from_scan", { p_slug: intent.slug });
+  } else if (intent?.shareToken) {
+    await supabase.rpc("link_people_connection_from_share_token", { p_share_token: intent.shareToken });
+    await supabase.rpc("claim_guest_encounter_participants", { p_share_token: intent.shareToken });
   }
 
   await supabase.rpc("link_people_connections_for_email");

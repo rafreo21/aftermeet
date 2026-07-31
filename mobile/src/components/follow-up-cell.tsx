@@ -1,6 +1,7 @@
 import {
   CalendarBlank,
   Check,
+  CheckCircle,
   EnvelopeSimple,
   InstagramLogo,
   LinkedinLogo,
@@ -41,8 +42,9 @@ function channelIcon(channel: FollowUpItem['channel']): ReactNode {
 }
 
 export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUpCellProps) {
+  const isCompleted = item.status === 'completed';
   const dueLabel = formatDueLabel(item.dueAt);
-  const tone = dueTone(item.dueAt);
+  const tone = isCompleted ? 'default' : dueTone(item.dueAt);
 
   return (
     <View style={styles.row}>
@@ -63,7 +65,9 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
             </Text>
           ) : null}
         </View>
-        {dueLabel ? (
+        {isCompleted ? (
+          <Text style={styles.dueCompleted}>Completed</Text>
+        ) : dueLabel ? (
           <Text style={[
             styles.due,
             tone === 'overdue' && styles.dueOverdue,
@@ -73,14 +77,20 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
           </Text>
         ) : null}
       </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Mark follow-up done"
-        disabled={completing}
-        onPress={onComplete}
-        style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
-        <Check size={18} color={colors.muted} weight="bold" />
-      </Pressable>
+      {isCompleted ? (
+        <View style={styles.check} accessibilityLabel="Follow-up completed">
+          <CheckCircle size={18} color={colors.ink} weight="fill" />
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mark follow-up done"
+          disabled={completing}
+          onPress={onComplete}
+          style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
+          <Check size={18} color={colors.muted} weight="bold" />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -117,6 +127,7 @@ const styles = StyleSheet.create({
   due: { color: colors.muted, fontSize: 11, fontWeight: '700' },
   dueOverdue: { color: colors.danger },
   dueToday: { color: colors.warning },
+  dueCompleted: { color: colors.muted, fontSize: 11, fontWeight: '700' },
   check: {
     width: 52,
     alignItems: 'center',

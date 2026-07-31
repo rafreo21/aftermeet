@@ -1,4 +1,4 @@
-import type { Encounter, EncounterAction } from "./encounters";
+import type { Encounter, EncounterAction, EncounterParticipant } from "./encounters";
 
 export type FollowUpItem = {
   encounterId: string;
@@ -10,6 +10,8 @@ export type FollowUpItem = {
   status: EncounterAction["status"];
   personName: string;
   personEmail: string;
+  participantId?: string;
+  participants: EncounterParticipant[];
   contactId?: string;
   exchangeId?: string;
   encounterTitle: string;
@@ -33,6 +35,8 @@ export function flattenOpenFollowUps(encounters: Encounter[]): FollowUpItem[] {
         status: action.status,
         personName: action.assigneeName?.trim() || encounter.personName,
         personEmail: action.assigneeEmail?.trim() || encounter.personEmail,
+        participantId: action.participantId,
+        participants: encounter.participants,
         contactId: encounter.contactId,
         exchangeId: encounter.exchangeId,
         encounterTitle: encounter.title,

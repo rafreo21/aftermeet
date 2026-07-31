@@ -1,4 +1,4 @@
-import type { EncounterAction, EncounterPayload } from '@/features/encounters/encounter-api';
+import type { EncounterAction, EncounterParticipant, EncounterPayload } from '@/features/encounters/encounter-api';
 import { mobileFetch } from '@/lib/mobile-api';
 import { sortFollowUps } from '@/lib/due-date';
 
@@ -12,6 +12,8 @@ export type FollowUpItem = {
   status: EncounterAction['status'];
   personName: string;
   personEmail: string;
+  participantId?: string;
+  participants: EncounterParticipant[];
   contactId?: string;
   exchangeId?: string;
   encounterTitle: string;
@@ -34,6 +36,8 @@ export async function fetchFollowUps(accessToken: string) {
     status: row.status as FollowUpItem['status'],
     personName: String(row.personName ?? ''),
     personEmail: String(row.personEmail ?? ''),
+    participantId: typeof row.participantId === 'string' ? row.participantId : undefined,
+    participants: Array.isArray(row.participants) ? row.participants as EncounterParticipant[] : [],
     contactId: typeof row.contactId === 'string' ? row.contactId : undefined,
     exchangeId: typeof row.exchangeId === 'string' ? row.exchangeId : undefined,
     encounterTitle: String(row.encounterTitle ?? ''),
@@ -97,6 +101,7 @@ function mapEncounter(row: Record<string, unknown>): EncounterPayload {
     privateNotes: String(row.privateNotes ?? row.private_notes ?? ''),
     sharedSummary: String(row.sharedSummary ?? row.shared_summary ?? ''),
     actions: Array.isArray(row.actions) ? row.actions as EncounterAction[] : [],
+    participants: Array.isArray(row.participants) ? row.participants as EncounterPayload['participants'] : [],
     status: (row.status as EncounterPayload['status']) ?? 'draft',
     shareToken: String(row.shareToken ?? row.share_token ?? ''),
     recording: row.recording as EncounterPayload['recording'],

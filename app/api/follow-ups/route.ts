@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../lib/encounters";
+import { fetchParticipantsByEncounter } from "../../../lib/encounter-participants-server";
 import { flattenOpenFollowUps, sortFollowUps } from "../../../lib/follow-ups-server";
 
 export async function GET(request: Request) {
@@ -23,7 +24,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "We couldn’t load your follow-ups." }, { status: 500 });
   }
 
-  const encounters = (data ?? []).map((row) => encounterFromApi(row));
+  const encounterIds = (data ?? []).map((row) => row.id as string);
+  const participantsByEncounter = await fetchParticipantsByEncounter(supabase, encounterIds);
+  const encounters = (data ?? []).map((row) => encounterFromApi({
+    ...row,
+    participants: participantsByEncounter.get(row.id as string) ?? [],
+  }));
   const followUps = sortFollowUps(flattenOpenFollowUps(encounters));
 
   return NextResponse.json({ followUps }, { headers: { "Cache-Control": "private, no-store" } });

@@ -94,6 +94,11 @@ export default function FollowUpsScreen() {
 
   const hasFollowUps = scopedGroups.length > 0;
 
+  function changeScope(nextScope: FollowUpScope) {
+    setScope(nextScope);
+    setSort(nextScope === 'past' ? 'recent' : 'urgency');
+  }
+
   function runGroupFollowUp(group: FollowUpGroup) {
     if (group.items.length === 1) {
       runFollowUp(group.items[0]);
@@ -121,14 +126,14 @@ export default function FollowUpsScreen() {
             <Pressable
               accessibilityRole="tab"
               accessibilityState={{ selected: scope === 'current' }}
-              onPress={() => setScope('current')}
+              onPress={() => changeScope('current')}
               style={[styles.tab, scope === 'current' && styles.tabActive]}>
               <Text style={[styles.tabLabel, scope === 'current' && styles.tabLabelActive]}>Current</Text>
             </Pressable>
             <Pressable
               accessibilityRole="tab"
               accessibilityState={{ selected: scope === 'past' }}
-              onPress={() => setScope('past')}
+              onPress={() => changeScope('past')}
               style={[styles.tab, scope === 'past' && styles.tabActive]}>
               <Text style={[styles.tabLabel, scope === 'past' && styles.tabLabelActive]}>Past</Text>
             </Pressable>

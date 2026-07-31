@@ -666,6 +666,7 @@ export default function NewEncounterPage() {
       }
     }
     const personEmail = linkedContact?.email ?? "";
+    const participantId = crypto.randomUUID();
     let encounter: Encounter = {
       id,
       title: form.title.trim() || `Meeting with ${form.personName.trim()}`,
@@ -689,7 +690,16 @@ export default function NewEncounterPage() {
         owner: "me",
         dueAt: form.dueAt,
         status: "open",
+        participantId,
       }] : [],
+      participants: [{
+        id: participantId,
+        name: form.personName.trim(),
+        email: personEmail,
+        phone: "",
+        linkedIn: "",
+        exchangeId: exchangeId || undefined,
+      }],
       status: "draft",
       shareToken: crypto.randomUUID().replaceAll("-", ""),
     };

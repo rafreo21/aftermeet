@@ -8,7 +8,7 @@ import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
 import { encounterFromSharedPayload, readEncounters, type Encounter } from "../../../lib/encounters";
 import { buildAuthHref } from "../../../lib/auth/visitor-intent";
 import { CLOUD_RECORDING_RETENTION_DAYS, formatRecordingAvailableUntil } from "../../../lib/recording-metadata";
-import { LinkButton } from "../../components/Button";
+import { Button, LinkButton } from "../../components/Button";
 import { BrandMark } from "../../components/BrandMark";
 import "../../app/product.css";
 import "../../app/flow.css";
@@ -43,6 +43,13 @@ export default function GuestEncounterPage() {
 
   if (encounter === undefined) return null;
   if (!encounter) return <main className="guest-page"><section className="guest-panel"><LockKeyIcon size={32} weight="bold" /><h1>This meeting record is not available.</h1><p>Ask the person who shared it to approve the record or send a new secure link.</p></section></main>;
+
+  function downloadRecording(url: string, filename: string) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+  }
 
   async function commitFollowUp() {
     if (!encounter || followUpSubmitting) return;
@@ -84,31 +91,38 @@ export default function GuestEncounterPage() {
         <p className="guest-meta">A reviewed meeting record from {encounter.personName ? `your conversation with ${encounter.personName}` : "a recent conversation"}.</p>
         {sharedRecordingUrl ? (
           <article className="guest-summary">
-            <span>Meeting recording</span>
-            <audio controls preload="metadata" src={sharedRecordingUrl} style={{ width: "100%", marginTop: 12 }} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12, alignItems: "center" }}>
-              <a className="button secondary small" href={sharedRecordingUrl} download={`${encounter.title.replace(/[^\w\- ]+/g, "").trim() || "aftermeet"}-recording.m4a`}>
-                <DownloadSimpleIcon size={16} weight="bold" />
-                Save to my device
-              </a>
-              {recordingAvailableUntil ? (
-                <small style={{ color: "var(--muted)" }}>
-                  Available online until {recordingAvailableUntil}. Download now to keep a copy after that.
-                </small>
-              ) : (
-                <small style={{ color: "var(--muted)" }}>
-                  Shared recordings stay online for {CLOUD_RECORDING_RETENTION_DAYS} days. Download to keep a copy on your phone.
-                </small>
-              )}
+            <h2>Meeting recording</h2>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12, marginTop: 12 }}>
+              <audio controls preload="metadata" src={sharedRecordingUrl} style={{ width: "100%" }} />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="small"
+                  onClick={() => downloadRecording(sharedRecordingUrl, `${encounter.title.replace(/[^\w\- ]+/g, "").trim() || "aftermeet"}-recording.m4a`)}
+                >
+                  <DownloadSimpleIcon size={16} weight="bold" />
+                  Save to my device
+                </Button>
+                {recordingAvailableUntil ? (
+                  <small style={{ color: "var(--muted)" }}>
+                    Available online until {recordingAvailableUntil}. Download now to keep a copy after that.
+                  </small>
+                ) : (
+                  <small style={{ color: "var(--muted)" }}>
+                    Shared recordings stay online for {CLOUD_RECORDING_RETENTION_DAYS} days. Download to keep a copy on your phone.
+                  </small>
+                )}
+              </div>
             </div>
           </article>
         ) : (
           <article className="guest-summary">
-            <span>Meeting recording</span>
+            <h2>Meeting recording</h2>
             <p>The shared audio is no longer available online. The written summary below is still here for you.</p>
           </article>
         )}
-        <article className="guest-summary"><span>What you agreed</span><p>{encounter.sharedSummary || "The shared summary is still being prepared."}</p></article>
+        <article className="guest-summary"><h2>What you agreed</h2><p>{encounter.sharedSummary || "The shared summary is still being prepared."}</p></article>
         <section className="guest-actions">
           <h2>Your next steps</h2>
           {guestActions.length ? guestActions.map((action) => <article key={action.id}><CheckCircleIcon size={24} /><div><strong>{action.title}</strong><small>{action.dueAt ? `Due ${action.dueAt}` : "No due date"} · {action.channel}</small></div></article>) : <p>No actions have been assigned to you.</p>}
@@ -126,18 +140,18 @@ export default function GuestEncounterPage() {
                 placeholder="Optional note — what will you follow up on?"
                 rows={2}
                 maxLength={280}
-                style={{ width: "100%", marginTop: 8, padding: 10, borderRadius: 8, border: "1px solid var(--line)", font: "inherit", resize: "vertical" }}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid var(--line)", font: "inherit", resize: "vertical" }}
               />
-              {followUpError ? <small style={{ color: "#c0392b", display: "block", marginTop: 4 }}>{followUpError}</small> : null}
-              <button
+              {followUpError ? <small style={{ color: "#c0392b", display: "block" }}>{followUpError}</small> : null}
+              <Button
                 type="button"
-                className="button secondary small"
-                disabled={followUpSubmitting}
+                variant="secondary"
+                size="small"
+                loading={followUpSubmitting}
                 onClick={() => void commitFollowUp()}
-                style={{ marginTop: 8 }}
               >
                 {followUpSubmitting ? "Saving…" : "I'll follow up too"}
-              </button>
+              </Button>
             </>
           )}
         </section>
