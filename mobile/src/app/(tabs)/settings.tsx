@@ -1,13 +1,38 @@
 import { router } from 'expo-router';
 import { CaretRight, ListChecks } from 'phosphor-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
 import { SettingsSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
+import { getSupabase } from '@/lib/supabase';
 import { colors, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
   const { session, configured, signOut, loading } = useAuth();
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [remindersSaving, setRemindersSaving] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    const supabase = getSupabase();
+    void supabase?.rpc('get_my_reminder_preference').then(({ data }) => {
+      if (typeof data === 'boolean') setRemindersEnabled(data);
+    });
+  }, [session]);
+
+  async function toggleReminders(value: boolean) {
+    setRemindersEnabled(value);
+    setRemindersSaving(true);
+    try {
+      const supabase = getSupabase();
+      await supabase?.rpc('set_reminder_email_preference', { p_enabled: value });
+    } catch {
+      setRemindersEnabled(!value);
+    } finally {
+      setRemindersSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -50,6 +75,23 @@ export default function SettingsScreen() {
         <CaretRight size={18} color={colors.muted} weight="bold" />
       </Pressable>
 
+      {session ? (
+        <Panel style={styles.reminderRow}>
+          <View style={styles.linkCopy}>
+            <Text style={styles.label}>Follow-up reminders</Text>
+            <Text style={styles.linkHint}>Email me about overdue follow-ups</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Email me about overdue follow-ups"
+            value={remindersEnabled}
+            disabled={remindersSaving}
+            onValueChange={(value) => void toggleReminders(value)}
+            trackColor={{ false: colors.line, true: colors.accent }}
+            thumbColor={colors.white}
+          />
+        </Panel>
+      ) : null}
+
       <Panel>
         <Text style={styles.label}>Account</Text>
         <Text style={styles.value}>{session?.user.email || 'Preview mode'}</Text>
@@ -82,6 +124,7 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
   },
   linkPanelPressed: { opacity: 0.82 },
+  reminderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.x3 },
   linkCopy: { flex: 1, gap: 6 },
   linkTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   linkHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
