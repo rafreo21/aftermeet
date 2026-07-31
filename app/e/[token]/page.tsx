@@ -20,6 +20,8 @@ export default function GuestEncounterPage() {
   const [followUpNote, setFollowUpNote] = useState("");
   const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
   const [followUpError, setFollowUpError] = useState("");
+  const [recordingDownloading, setRecordingDownloading] = useState(false);
+  const [recordingDownloadError, setRecordingDownloadError] = useState("");
 
   useEffect(() => {
     const token = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
@@ -58,11 +60,32 @@ export default function GuestEncounterPage() {
   }
   if (!encounter) return <main className="guest-page"><section className="guest-panel guest-panel-empty"><span className="guest-empty-icon"><LockKeyIcon size={28} weight="bold" /></span><span className="guest-eyebrow">Private meeting record</span><h1>This link is no longer available.</h1><p>Ask the person who shared it to approve the record or send you a new secure link.</p><LinkButton href="/">Go to AfterMeet</LinkButton></section></main>;
 
-  function downloadRecording(url: string, filename: string) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
+  async function downloadRecording(url: string, filename: string) {
+    if (recordingDownloading) return;
+    setRecordingDownloading(true);
+    setRecordingDownloadError("");
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error("recording download failed");
+      const blob = await response.blob();
+      const extension = blob.type.includes("webm") ? "webm"
+        : blob.type.includes("ogg") ? "ogg"
+        : blob.type.includes("mpeg") || blob.type.includes("mp3") ? "mp3"
+        : blob.type.includes("wav") ? "wav"
+        : "m4a";
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `${filename}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+    } catch {
+      setRecordingDownloadError("Could not download the recording. Try again while it is still available online.");
+    } finally {
+      setRecordingDownloading(false);
+    }
   }
 
   async function commitFollowUp() {
@@ -115,16 +138,17 @@ export default function GuestEncounterPage() {
               <div><h2>Meeting recording</h2><p>Listen back or save a copy before it expires.</p></div>
             </header>
             <audio controls preload="metadata" src={sharedRecordingUrl} />
-            <footer>
+            <div className="guest-recording-actions">
               <div>
                 <Button
                   type="button"
                   variant="secondary"
                   size="small"
-                  onClick={() => downloadRecording(sharedRecordingUrl, `${encounter.title.replace(/[^\w\- ]+/g, "").trim() || "aftermeet"}-recording.m4a`)}
+                  loading={recordingDownloading}
+                  onClick={() => void downloadRecording(sharedRecordingUrl, `${encounter.title.replace(/[^\w\- ]+/g, "").trim() || "aftermeet"}-recording`)}
                 >
                   <DownloadSimpleIcon size={16} weight="bold" />
-                  Save to my device
+                  {recordingDownloading ? "Preparing…" : "Save to my device"}
                 </Button>
               </div>
               <p>
@@ -134,7 +158,8 @@ export default function GuestEncounterPage() {
                   <>Available online for {CLOUD_RECORDING_RETENTION_DAYS} days. Download it to keep a copy on your phone.</>
                 )}
               </p>
-            </footer>
+            </div>
+            {recordingDownloadError ? <small className="guest-form-error" role="alert">{recordingDownloadError}</small> : null}
           </article>
         ) : (
           <article className="guest-recording guest-recording-expired">
@@ -155,13 +180,18 @@ export default function GuestEncounterPage() {
           ) : (
             <>
               <p>Following up isn&apos;t just on them — let them know you&apos;re on it too.</p>
+              <label className="guest-follow-up-label" htmlFor="guest-follow-up-note">
+                What will you do? <span>Optional</span>
+              </label>
               <textarea
+                id="guest-follow-up-note"
                 value={followUpNote}
                 onChange={(event) => setFollowUpNote(event.target.value)}
-                placeholder="Optional note — what will you follow up on?"
+                placeholder="For example: I’ll send the proposal on Friday."
                 rows={2}
                 maxLength={280}
               />
+              <small className="guest-follow-up-help">This is shared with the meeting host and saved as your commitment. Leave it blank to confirm without adding details.</small>
               {followUpError ? <small className="guest-form-error">{followUpError}</small> : null}
               <Button
                 type="button"
@@ -170,7 +200,7 @@ export default function GuestEncounterPage() {
                 loading={followUpSubmitting}
                 onClick={() => void commitFollowUp()}
               >
-                {followUpSubmitting ? "Saving…" : "I'll follow up too"}
+                {followUpSubmitting ? "Saving…" : "Confirm my follow-up"}
               </Button>
             </>
           )}

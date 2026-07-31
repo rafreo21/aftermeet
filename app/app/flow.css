@@ -593,8 +593,8 @@
 .guest-recording h2 { font-size:18px; letter-spacing:-.025em; }
 .guest-recording header p { margin-top:3px; color:var(--p-muted); font-size:11px; }
 .guest-recording audio { width:100%; }
-.guest-recording footer { display:flex; align-items:center; justify-content:space-between; gap:18px; }
-.guest-recording footer p { max-width:460px; color:var(--p-muted); font-size:11px; line-height:1.5; text-align:right; }
+.guest-recording-actions { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.guest-recording-actions p { max-width:460px; color:var(--p-muted); font-size:11px; line-height:1.5; text-align:right; }
 .guest-recording-expired { border:1px solid var(--p-line); background:white; }
 .guest-content-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr); gap:16px; }
 .guest-summary { padding: 24px; border-radius: 10px; background: var(--p-sky); }
@@ -614,6 +614,9 @@
 .guest-follow-up textarea { width:100%; min-height:86px; padding:12px; border:1px solid var(--p-line); border-radius:7px; color:var(--p-navy); background:white; font:inherit; resize:vertical; }
 .guest-follow-up textarea:focus { outline:3px solid rgba(159,232,112,.42); border-color:var(--p-navy); }
 .guest-follow-up > button { justify-self:start; }
+.guest-follow-up-label { margin-bottom:-5px; display:flex; justify-content:space-between; gap:12px; font-size:12px; font-weight:800; }
+.guest-follow-up-label span { color:var(--p-muted); font-size:11px; font-weight:500; }
+.guest-follow-up-help { margin-top:-6px; color:var(--p-muted); font-size:11px; line-height:1.45; }
 .guest-follow-up article { padding:14px; display:flex; align-items:center; gap:10px; border-radius:8px; background:var(--p-sky); }
 .guest-follow-up article div { display:grid; gap:4px; }
 .guest-form-error { color:#b42318; font-weight:700; }
@@ -732,7 +735,7 @@
   .guest-panel { min-height:100vh; padding:22px 18px 32px; gap:24px; border-radius:0; box-shadow:none; }
   .guest-topbar { padding-bottom:16px; }
   .guest-secure { font-size:10px; }
-  .guest-recording footer { align-items:flex-start; flex-direction:column; }
-  .guest-recording footer p { text-align:left; }
+  .guest-recording-actions { align-items:flex-start; flex-direction:column; }
+  .guest-recording-actions p { text-align:left; }
   .guest-follow-up > button,.guest-claim > a { width:100%; }
 }
