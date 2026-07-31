@@ -258,7 +258,7 @@ export default function GuestEncounterPage() {
         </section>
         <div className="guest-claim">
           <div><span>Continue in AfterMeet</span><strong>Keep this relationship moving.</strong><p>Create your private workspace to claim actions, receive reminders, and add your own notes.</p></div>
-          <LinkButton href={buildAuthHref({ intent: "visitor", shareToken: encounter.shareToken })}>Create account <ArrowRightIcon size={16} weight="bold" /></LinkButton>
+          <LinkButton className="guest-create-account" href={buildAuthHref({ intent: "visitor", shareToken: encounter.shareToken })}>Create account <ArrowRightIcon size={16} weight="bold" /></LinkButton>
         </div>
         <small className="guest-privacy"><LockKeyIcon size={14} weight="bold" />Private notes and the full transcript stay with the host. This page shows the shared summary{sharedRecordingUrl ? " and meeting recording" : ""} only.</small>
       </section>

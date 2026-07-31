@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
@@ -15,6 +15,7 @@ import { BrandMark } from "./BrandMark";
 import { hydrateContactsFromServer } from "../../lib/contacts-sync";
 import { hydrateEncountersFromServer } from "../../lib/encounters-sync";
 import { hydrateCardLibraryFromServer } from "../../lib/card-library-sync";
+import { NotificationBell } from "./NotificationBell";
 
 export type AppShellActive = "home" | "people" | "cards" | "followups";
 
@@ -33,9 +34,11 @@ const consumerNav = [
   ["followups", "/app/followups", PaperPlaneTiltIcon, "Follow-ups"],
 ] as const;
 
-export function AppShell({ active, title, subtitle, actions, children }: AppShellProps) {
+export function AppShell({ active, actions, children }: AppShellProps) {
   const user = useAppUser();
   const [mobileNav, setMobileNav] = useState(false);
+  const [actionableCount, setActionableCount] = useState(0);
+  const updateActionableCount = useCallback((count: number) => setActionableCount(count), []);
   useEffect(() => {
     void hydrateContactsFromServer();
     void hydrateEncountersFromServer();
@@ -51,7 +54,8 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
         <nav aria-label="Consumer navigation">
           {consumerNav.map(([key, href, Icon, itemLabel]) => (
             <a className={active === key ? "active" : ""} href={href} key={key}>
-              <Icon size={20} weight="bold" /> {itemLabel}
+              <Icon size={20} weight="bold" /> <span>{itemLabel}</span>
+              {key === "followups" && actionableCount ? <b className="nav-count" aria-label={`${actionableCount} due follow-ups`}>{actionableCount > 99 ? "99+" : actionableCount}</b> : null}
             </a>
           ))}
           <a className="capture-nav" href="/app/encounters/new">
@@ -73,18 +77,17 @@ export function AppShell({ active, title, subtitle, actions, children }: AppShel
       </aside>
 
       <section className="product-main">
-        <header className="product-header">
+        <div className="consumer-global-bell"><NotificationBell onActionableCountChange={updateActionableCount} /></div>
+        <header className="product-mobile-header">
           <IconButton className="menu-button" aria-label="Toggle navigation" onClick={() => setMobileNav(!mobileNav)}>
             <ListIcon size={25} weight="bold" />
           </IconButton>
-          <div>
-            <span className="mobile-logo">AfterMeet</span>
-            <strong className="header-title">{title}</strong>
-            {subtitle && <p>{subtitle}</p>}
-          </div>
-          <div className="header-actions">{actions}</div>
+          <span className="mobile-logo">AfterMeet</span>
         </header>
-        <div className="product-content">{children}</div>
+        <div className="product-content">
+          {actions ? <div className="product-page-actions">{actions}</div> : null}
+          {children}
+        </div>
       </section>
     </main>
   );

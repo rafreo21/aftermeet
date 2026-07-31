@@ -843,7 +843,7 @@ export default function NewEncounterPage() {
       active="home"
       title="Capture encounter"
       subtitle="Record with consent, remember what mattered, then review before anything is shared."
-      actions={<LinkButton size="small" variant="ghost" href="/app"><ArrowLeftIcon size={16} />Close</LinkButton>}
+      actions={<LinkButton size="small" variant="ghost" href="/app"><ArrowLeftIcon size={16} weight="bold" />Back</LinkButton>}
     >
       <form className="encounter-layout" onSubmit={saveEncounter}>
         <section className="encounter-main" ref={mainRef}>

@@ -238,8 +238,8 @@ export default function ScanPage() {
       title="Scan badge"
       subtitle="Point your camera at a badge QR, AfterMeet card, or LinkedIn code."
       actions={
-        <LinkButton size="small" variant="ghost" href="/business/contacts">
-          <ArrowLeftIcon size={16} />Contacts
+        <LinkButton size="small" variant="ghost" href="/app/people">
+          <ArrowLeftIcon size={16} weight="bold" />Back
         </LinkButton>
       }
     >

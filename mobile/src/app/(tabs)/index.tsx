@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { CaretRight, QrCode, Scan } from 'phosphor-react-native';
+import { Bell, CaretRight, QrCode, Scan } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { summarizeFollowUpNudges } from '@/features/follow-ups/follow-up-nudges';
+import { unreadNotificationCount } from '@/features/notifications/notification-service';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const { card } = useCard();
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const loadFollowUps = useCallback(async () => {
     if (!session?.access_token) {
@@ -43,11 +45,12 @@ export default function HomeScreen() {
     } catch {
       setFollowUps([]);
     }
-  }, [session?.access_token]);
+  }, [session]);
 
   useFocusEffect(
     useCallback(() => {
       void loadFollowUps();
+      void unreadNotificationCount().then(setUnreadNotifications);
     }, [loadFollowUps]),
   );
 
@@ -60,6 +63,18 @@ export default function HomeScreen() {
           <BrandMark size={32} />
           <Eyebrow>AfterMeet</Eyebrow>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={unreadNotifications ? `${unreadNotifications} unread notifications` : 'Notifications'}
+          onPress={() => router.push('/notifications')}
+          style={({ pressed }) => [styles.bellButton, pressed && styles.bellButtonPressed]}>
+          <Bell size={21} color={colors.ink} weight="bold" />
+          {unreadNotifications ? (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{Math.min(unreadNotifications, 9)}</Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
 
       <ScrollView
@@ -150,8 +165,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
     zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  bellButton: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  bellButtonPressed: { backgroundColor: colors.surfaceMuted },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.canvas,
+  },
+  bellBadgeText: { color: colors.ink, fontSize: 10, fontWeight: '900' },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: spacing.x5,

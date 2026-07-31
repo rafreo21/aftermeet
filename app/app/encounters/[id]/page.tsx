@@ -268,7 +268,7 @@ export default function EncounterReviewPage() {
       active="home"
       title="Review encounter"
       subtitle="Decide what stays private, what is shared, and who owns each next step."
-      actions={<LinkButton size="small" variant="ghost" href="/app"><ArrowLeftIcon size={16} />Home</LinkButton>}
+      actions={<LinkButton size="small" variant="ghost" href="/app"><ArrowLeftIcon size={16} weight="bold" />Back</LinkButton>}
     >
       <div className="review-layout">
         <main className="review-main">

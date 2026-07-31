@@ -60,6 +60,14 @@
       "expo-router",
       "expo-dev-client",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#9FE870",
+          "defaultChannel": "follow-ups"
+        }
+      ],
+      [
         "expo-navigation-bar",
         {
           "style": "dark",

@@ -16,6 +16,10 @@ import { BackButton, Body, Eyebrow } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import {
+  deviceNotificationsEnabled,
+  syncFollowUpNotifications,
+} from '@/features/notifications/notification-service';
+import {
   buildFollowUpGroups,
   filterFollowUpGroups,
   sortFollowUpGroups,
@@ -29,6 +33,7 @@ import { colors, radius, spacing } from '@/theme/tokens';
 
 export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
   const { session } = useAuth();
+  const accessToken = session?.access_token;
   const insets = useAppInsets();
   const [scope, setScope] = useState<FollowUpScope>('current');
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
@@ -55,12 +60,12 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
     audienceParticipants,
     confirmAudience,
     closeAudience,
-  } = useFollowUpActions(session?.access_token, {
+  } = useFollowUpActions(accessToken, {
     allFollowUps: followUps,
   });
 
   const loadFollowUps = useCallback(async (background = false) => {
-    if (!session?.access_token) {
+    if (!accessToken) {
       setFollowUps([]);
       setError('');
       setLoading(false);
@@ -69,14 +74,18 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
     if (!background) setLoading(true);
     setError('');
     try {
-      setFollowUps(await fetchFollowUps(session.access_token));
+      const nextFollowUps = await fetchFollowUps(accessToken);
+      setFollowUps(nextFollowUps);
+      if (await deviceNotificationsEnabled()) {
+        await syncFollowUpNotifications(nextFollowUps);
+      }
     } catch (caught) {
       setFollowUps([]);
       setError(caught instanceof Error ? caught.message : 'Could not load follow-ups.');
     } finally {
       setLoading(false);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   useFocusEffect(
     useCallback(() => {

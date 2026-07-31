@@ -1,0 +1,58 @@
+import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
+import { useEffect } from 'react';
+import { AppState } from 'react-native';
+
+import { useAuth } from '@/features/auth/auth-context';
+import { fetchFollowUps } from '@/features/follow-ups/follow-up-api';
+import {
+  configureNotificationChannel,
+  deviceNotificationsEnabled,
+  recordNotification,
+  syncFollowUpNotifications,
+} from '@/features/notifications/notification-service';
+
+export function NotificationManager() {
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
+
+  useEffect(() => {
+    void configureNotificationChannel();
+
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      void recordNotification(notification);
+    });
+    const responded = Notifications.addNotificationResponseReceivedListener((response) => {
+      void recordNotification(response.notification);
+      const data = response.notification.request.content.data as { route?: unknown } | undefined;
+      if (typeof data?.route === 'string') router.push(data.route as '/settings/follow-ups');
+    });
+
+    return () => {
+      received.remove();
+      responded.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    async function sync() {
+      if (!await deviceNotificationsEnabled()) return;
+      const followUps = await fetchFollowUps(accessToken!);
+      await syncFollowUpNotifications(followUps);
+    }
+
+    void sync().catch(() => undefined);
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void sync().catch(() => undefined);
+    });
+    const interval = setInterval(() => void sync().catch(() => undefined), 15 * 60 * 1_000);
+    return () => {
+      appState.remove();
+      clearInterval(interval);
+    };
+  }, [accessToken]);
+
+  return null;
+}

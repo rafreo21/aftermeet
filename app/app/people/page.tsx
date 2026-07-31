@@ -109,8 +109,8 @@ export default function ConnectionsPage() {
       title="Connections"
       subtitle="People you’ve met — cards you saved and people who shared their details with you."
       actions={
-        <Button size="small" variant="secondary" onClick={() => setAddOpen(true)} aria-label="Add connection">
-          <PlusIcon size={16} weight="bold" /> Add
+        <Button onClick={() => setAddOpen(true)} aria-label="Add connection">
+          <PlusIcon size={18} weight="bold" /> Add connection
         </Button>
       }
     >

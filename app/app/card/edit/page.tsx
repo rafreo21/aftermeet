@@ -247,6 +247,10 @@ export default function CardEditor() {
   const coverBadgeStyle = useMemo(() => themeCoverBadgeStyle(draft.theme), [draft.theme]);
   const EditingMethodIcon = editing ? methodMeta[editing.type].Icon : PlusIcon;
   const addedMethodTypes = new Set(draft.methods.map((method) => method.type));
+  const showCompanyDetails = draft.showCompanyDetails !== false;
+  const visibleMethods = showCompanyDetails
+    ? draft.methods
+    : draft.methods.filter((method) => method.type !== "website");
   const stepCompletion = [
     Boolean(draft.name.trim() && draft.role.trim() && draft.theme),
     draft.methods.length > 0,
@@ -372,7 +376,7 @@ export default function CardEditor() {
 
   return (
     <AppShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
-      actions={<Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button>}>
+      actions={<div className="app-shell-action-group"><LinkButton size="small" variant="ghost" href="/app/cards"><ArrowLeftIcon size={16} weight="bold" />Back</LinkButton><Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button></div>}>
       <section className="card-creator">
         {hydrated && (
           <div className={`creator-publish-state ${hasUnpublishedChanges ? "is-dirty" : "is-published"}`} role="status">
@@ -428,7 +432,6 @@ export default function CardEditor() {
                   <TextField label="Job title" value={draft.role} onChange={(e) => update("role", e.target.value)} />
                 </div>
                 <TextField label="Company" value={draft.company} onChange={(e) => update("company", e.target.value)} />
-                <label><input type="checkbox" checked={draft.showCompanyDetails !== false} onChange={(event) => update("showCompanyDetails", event.target.checked)} /> Show company details on my card</label>
                 <TextAreaField label="Short introduction" hint={`${draft.bio.length}/180`} maxLength={180} rows={4} value={draft.bio} onChange={(e) => update("bio", e.target.value)} />
                 <div className="theme-panel"><h2>Card colour</h2><p>Used for the cover and primary actions.</p>
                   <div className="theme-swatches">{themes.map((theme) => (
@@ -516,9 +519,25 @@ export default function CardEditor() {
               <div className="creator-section review-section">
                 <header><span>03 · Review</span><h1>Your card is ready to share.</h1><p>Check the preview, save it, then open the QR sharing screen.</p></header>
                 <div className="review-list">
-                  <div><CheckCircleIcon weight="fill" /><span><strong>Identity</strong><small>{draft.name || "Name needed"} · {draft.role || "Job title needed"}{draft.company ? ` · ${draft.company}` : ""}</small></span><button onClick={() => goToStep(0)}>Edit</button></div>
+                  <div><CheckCircleIcon weight="fill" /><span><strong>Identity</strong><small>{draft.name || "Name needed"} · {draft.role || "Job title needed"}{showCompanyDetails && draft.company ? ` · ${draft.company}` : ""}</small></span><button onClick={() => goToStep(0)}>Edit</button></div>
                   <div><CheckCircleIcon weight="fill" /><span><strong>Images and style</strong><small>{[draft.photo && "profile", draft.companyLogo && "logo", draft.coverPhoto && "cover"].filter(Boolean).join(", ") || "No images"} · {draft.theme} · Focused layout</small></span><button onClick={() => goToStep(0)}>Edit</button></div>
                   <div><CheckCircleIcon weight="fill" /><span><strong>Contact methods</strong><small>{draft.methods.length} added · {draft.methods.map((method) => methodMeta[method.type].name).join(", ") || "None"}</small></span><button onClick={() => goToStep(1)}>Edit</button></div>
+                </div>
+                <div className="company-visibility-option">
+                  <span>
+                    <strong>Company details</strong>
+                    <small>Show your logo, company name, and company website on the card</small>
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Show company details"
+                    aria-checked={showCompanyDetails}
+                    className={`company-switch ${showCompanyDetails ? "is-on" : ""}`}
+                    onClick={() => update("showCompanyDetails", !showCompanyDetails)}
+                  >
+                    <span />
+                  </button>
                 </div>
                 <LinkButton fullWidth variant="secondary" href="/app/cards"><QrCodeIcon weight="bold" /> Open card and QR</LinkButton>
               </div>
@@ -539,17 +558,19 @@ export default function CardEditor() {
                 style={draft.coverPhoto
                   ? { backgroundImage: `linear-gradient(rgba(22,51,0,.18), rgba(22,51,0,.18)), url(${draft.coverPhoto})`, color: "#FFFFFF" }
                   : { background: previewTheme.backgroundGradient, color: previewTheme.color }}>
-                <div className="card-logo" style={draft.coverPhoto ? undefined : coverBadgeStyle}>
-                  {draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : draft.company[0] || "A"}
-                </div>
-                <span style={draft.coverPhoto ? undefined : { color: previewTheme.color }}>{draft.company || "Your company"}</span>
+                {showCompanyDetails && (draft.companyLogo || draft.company) ? <>
+                  <div className="card-logo" style={draft.coverPhoto ? undefined : coverBadgeStyle}>
+                    {draft.companyLogo ? <img src={draft.companyLogo} alt="" /> : draft.company[0] || "A"}
+                  </div>
+                  {draft.company ? <span style={draft.coverPhoto ? undefined : { color: previewTheme.color }}>{draft.company}</span> : null}
+                </> : null}
               </div>
               <div className="card-body">
                 <div className="card-avatar">{draft.photo ? <img src={draft.photo} alt="" /> : initials}</div>
-                <h2>{draft.name || "Your name"}</h2><p className="card-role">{draft.role || "Your role"}{draft.company && ` · ${draft.company}`}</p>
+                <h2>{draft.name || "Your name"}</h2><p className="card-role">{draft.role || "Your role"}{showCompanyDetails && draft.company && ` · ${draft.company}`}</p>
                 <p className="card-bio">{draft.bio || "Your introduction will appear here."}</p>
                 <div className="card-actions"><Button fullWidth style={{ background: previewTheme.backgroundGradient }}>Save contact</Button><Button fullWidth variant="secondary">Share details</Button></div>
-                <div className="preview-methods">{draft.methods.map((method) => {
+                <div className="preview-methods">{visibleMethods.map((method) => {
                   const meta = methodMeta[method.type];
                   const href = contactMethodHref(method);
                   const content = (

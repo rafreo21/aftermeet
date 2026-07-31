@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/features/auth/auth-context';
 import { CardProvider } from '@/features/card/card-context';
+import { NotificationManager } from '@/features/notifications/notification-manager';
 import { colors } from '@/theme/tokens';
 
 function applyAndroidNavigationBar() {
@@ -56,6 +57,8 @@ function RootNavigator() {
       <Stack.Screen name="connections/[id]" />
       <Stack.Screen name="settings/connected-accounts" />
       <Stack.Screen name="settings/follow-ups" />
+      <Stack.Screen name="settings/notifications" />
+      <Stack.Screen name="notifications" />
       <Stack.Screen name="integrations/callback" options={{ presentation: 'modal', headerShown: false }} />
     </Stack>
   );
@@ -84,6 +87,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.canvas }}>
       <SafeAreaProvider>
         <AuthProvider>
+          <NotificationManager />
           <CardProvider>
             <StatusBar style="dark" />
             {Platform.OS === 'android' ? <NavigationBar style="dark" /> : null}
