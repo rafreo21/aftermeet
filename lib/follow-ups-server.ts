@@ -8,6 +8,7 @@ export type FollowUpItem = {
   channel: EncounterAction["channel"];
   dueAt: string;
   status: EncounterAction["status"];
+  owner: EncounterAction["owner"];
   personName: string;
   personEmail: string;
   participantId?: string;
@@ -18,12 +19,18 @@ export type FollowUpItem = {
   startedAt: string;
 };
 
+/**
+ * Includes both the host's own actions (owner "me") and actions assigned to
+ * the other party (owner "guest") so the host can track — and confirm — the
+ * whole meeting's follow-through in one place, not just their own half.
+ * Includes completed actions too (bounded by the 250-encounter query limit
+ * upstream) — the client buckets open vs. completed into the Current/Past
+ * tabs via filterFollowUpsByScope, so this must return both.
+ */
 export function flattenOpenFollowUps(encounters: Encounter[]): FollowUpItem[] {
   const items: FollowUpItem[] = [];
   for (const encounter of encounters) {
     for (const action of encounter.actions) {
-      if ((action.owner ?? "me") !== "me") continue;
-      if (action.status === "completed") continue;
       if (!action.title.trim()) continue;
       items.push({
         encounterId: encounter.id,
@@ -33,6 +40,7 @@ export function flattenOpenFollowUps(encounters: Encounter[]): FollowUpItem[] {
         channel: action.channel,
         dueAt: action.dueAt || "",
         status: action.status,
+        owner: action.owner ?? "me",
         personName: action.assigneeName?.trim() || encounter.personName,
         personEmail: action.assigneeEmail?.trim() || encounter.personEmail,
         participantId: action.participantId,

@@ -41,9 +41,12 @@ export function GroupedFollowUpCell({
         onPress={onPress}
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
         <View style={styles.copy}>
-          <Text style={styles.title} numberOfLines={1}>
-            {group.personName.trim() || 'Contact'}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {group.personName.trim() || 'Contact'}
+            </Text>
+            {group.owner === 'guest' ? <Text style={styles.ownerTag}>Their turn</Text> : null}
+          </View>
           <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
           {group.encounterTitle ? (
             <Text style={styles.meta} numberOfLines={1}>{group.encounterTitle}</Text>
@@ -147,7 +150,20 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.82 },
   copy: { flex: 1, gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   title: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  ownerTag: {
+    color: colors.ink,
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.round,
+    backgroundColor: colors.accent,
+    overflow: 'hidden',
+  },
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   meta: { color: colors.muted, fontSize: 11, lineHeight: 16 },
   due: { color: colors.muted, fontSize: 11, fontWeight: '700' },

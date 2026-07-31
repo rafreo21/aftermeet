@@ -10,6 +10,7 @@ export type FollowUpItem = {
   channel: EncounterAction['channel'];
   dueAt: string;
   status: EncounterAction['status'];
+  owner: EncounterAction['owner'];
   personName: string;
   personEmail: string;
   participantId?: string;
@@ -34,6 +35,7 @@ export async function fetchFollowUps(accessToken: string) {
     channel: row.channel as FollowUpItem['channel'],
     dueAt: String(row.dueAt ?? ''),
     status: row.status as FollowUpItem['status'],
+    owner: (row.owner as FollowUpItem['owner']) ?? 'me',
     personName: String(row.personName ?? ''),
     personEmail: String(row.personEmail ?? ''),
     participantId: typeof row.participantId === 'string' ? row.participantId : undefined,

@@ -10,6 +10,7 @@ import { FollowUpSortSheet } from '@/components/follow-up-sheets';
 import { GroupedFollowUpActions, GroupedFollowUpCell } from '@/components/grouped-follow-up-cell';
 import { GreenHeroCard } from '@/components/green-hero-card';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
 import { BackButton, Body, Eyebrow } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
@@ -37,6 +38,7 @@ export default function FollowUpsScreen() {
   const [sort, setSort] = useState<FollowUpSort>('urgency');
   const [sortOpen, setSortOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState<FollowUpGroup | null>(null);
+  const [completedMessage, setCompletedMessage] = useState('');
 
   const {
     runFollowUp,
@@ -99,6 +101,14 @@ export default function FollowUpsScreen() {
     setSort(nextScope === 'past' ? 'recent' : 'urgency');
   }
 
+  function completeAndConfirm(item: FollowUpItem) {
+    void markComplete(item, loadFollowUps).then(() => {
+      setCompletedMessage(item.owner === 'guest'
+        ? `Marked as done for ${item.personName.trim() || 'them'}.`
+        : 'Nice — marked as done.');
+    });
+  }
+
   function runGroupFollowUp(group: FollowUpGroup) {
     if (group.items.length === 1) {
       runFollowUp(group.items[0]);
@@ -117,8 +127,8 @@ export default function FollowUpsScreen() {
             <Text style={styles.title}>Stay on top of next steps</Text>
             <Body>
               {scope === 'current'
-                ? 'Open actions you still need to take.'
-                : 'Follow-ups you already checked off.'}
+                ? 'Everything left to do — yours and theirs.'
+                : 'Everything that has been checked off.'}
             </Body>
           </View>
 
@@ -193,7 +203,7 @@ export default function FollowUpsScreen() {
                   onPress={() => runGroupFollowUp(group)}
                   onComplete={() => {
                     const item = group.items[0];
-                    if (item) void markComplete(item, loadFollowUps);
+                    if (item) completeAndConfirm(item);
                   }}
                   completing={group.items.length === 1 && completingId === `${group.items[0]?.encounterId}-${group.items[0]?.actionId}`}
                 />
@@ -236,11 +246,21 @@ export default function FollowUpsScreen() {
             }}
             onCompleteItem={(actionId) => {
               const item = activeGroup.items.find((entry) => entry.actionId === actionId);
-              if (item) void markComplete(item, loadFollowUps);
+              // Close this sheet before opening the confirmation sheet — two
+              // RN <Modal> instances visible at once hangs on iOS.
+              setActiveGroup(null);
+              if (item) completeAndConfirm(item);
             }}
           />
         ) : null}
       </BottomSheet>
+
+      <OutcomeSuccessSheet
+        visible={Boolean(completedMessage)}
+        title="Follow-up done"
+        message={completedMessage}
+        onClose={() => setCompletedMessage('')}
+      />
 
       <FollowUpMissingSheet
         visible={missingOpen}

@@ -10,7 +10,7 @@ export type FollowUpNudgeSummary = {
 };
 
 function openFollowUps(items: FollowUpItem[]) {
-  return items.filter((item) => item.status !== 'completed');
+  return items.filter((item) => item.status !== 'completed' && item.owner === 'me');
 }
 
 export function summarizeFollowUpNudges(items: FollowUpItem[]): FollowUpNudgeSummary | null {

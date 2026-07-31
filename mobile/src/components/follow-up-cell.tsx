@@ -54,9 +54,12 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
         <View style={styles.iconWrap}>{channelIcon(item.channel)}</View>
         <View style={styles.copy}>
-          <Text style={styles.title} numberOfLines={1}>
-            {channelLabel(item.channel)} · {item.personName.trim() || 'Contact'}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {channelLabel(item.channel)} · {item.personName.trim() || 'Contact'}
+            </Text>
+            {item.owner === 'guest' ? <Text style={styles.ownerTag}>Their turn</Text> : null}
+          </View>
           {item.title ? (
             <Text style={styles.subtitle} numberOfLines={2}>
               {isFollowUpChannel(item.channel)
@@ -122,7 +125,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   copy: { flex: 1, gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   title: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  ownerTag: {
+    color: colors.ink,
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.round,
+    backgroundColor: colors.accent,
+    overflow: 'hidden',
+  },
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   due: { color: colors.muted, fontSize: 11, fontWeight: '700' },
   dueOverdue: { color: colors.danger },
