@@ -65,6 +65,7 @@ type CardDraft = {
   id: string; slug: string; createdAt: string; updatedAt: string;
   label: string; name: string; role: string; company: string; bio: string;
   theme: string; photo: string; companyLogo: string; coverPhoto: string; methods: ContactMethod[];
+  showCompanyDetails?: boolean;
 };
 
 const methodMeta = {
@@ -146,6 +147,7 @@ const initialDraft: CardDraft = {
   photo: "",
   companyLogo: "",
   coverPhoto: "",
+  showCompanyDetails: true,
   methods: [
     { id: "email", type: "email", value: "alex@example.com", label: "Work" },
     { id: "website", type: "website", value: "https://northstar.example", label: "Visit my website" },
@@ -387,6 +389,7 @@ export default function CardEditor() {
                   <TextField label="Job title" value={draft.role} onChange={(e) => update("role", e.target.value)} />
                 </div>
                 <TextField label="Company" value={draft.company} onChange={(e) => update("company", e.target.value)} />
+                <label><input type="checkbox" checked={draft.showCompanyDetails !== false} onChange={(event) => update("showCompanyDetails", event.target.checked)} /> Show company details on my card</label>
                 <TextAreaField label="Short introduction" hint={`${draft.bio.length}/180`} maxLength={180} rows={4} value={draft.bio} onChange={(e) => update("bio", e.target.value)} />
                 <div className="theme-panel"><h2>Card colour</h2><p>Used for the cover and primary actions.</p>
                   <div className="theme-swatches">{themes.map((theme) => (

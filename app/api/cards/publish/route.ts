@@ -22,16 +22,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This card has too many contact methods." }, { status: 400 });
   }
 
-  if (process.env.NODE_ENV === "development" && process.env.AFTERMEET_DEV_PREVIEW === "true") {
-    return NextResponse.json({ ok: true, preview: true, maxCards: MAX_CARDS });
-  }
-
-  const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) {
-    return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
-  }
-
   const safeMethods = methods.flatMap((method, sortOrder) => {
     if (!method || typeof method !== "object") return [];
     const item = method as Record<string, unknown>;
@@ -43,6 +33,20 @@ export async function POST(request: Request) {
       sortOrder,
     }];
   });
+
+  if (!safeMethods.length) {
+    return NextResponse.json({ error: "Add at least one contact method before publishing." }, { status: 400 });
+  }
+
+  if (process.env.NODE_ENV === "development" && process.env.AFTERMEET_DEV_PREVIEW === "true") {
+    return NextResponse.json({ ok: true, preview: true, maxCards: MAX_CARDS });
+  }
+
+  const supabase = await createClient();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) {
+    return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
+  }
 
   const cardId = typeof body?.id === "string" ? body.id.trim() : "";
   let photo = typeof body?.photo === "string" ? body.photo : "";

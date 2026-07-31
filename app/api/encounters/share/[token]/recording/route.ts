@@ -47,7 +47,12 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
   const mimeType = recording?.mimeType || "audio/mp4";
   const buffer = Buffer.from(await download.data.arrayBuffer());
   const totalLength = buffer.byteLength;
-  const filename = `aftermeet-recording.${mimeType.includes("wav") ? "wav" : "m4a"}`;
+  const extension = mimeType.includes("wav") ? "wav"
+    : mimeType.includes("webm") ? "webm"
+    : mimeType.includes("ogg") ? "ogg"
+    : mimeType.includes("mpeg") || mimeType.includes("mp3") ? "mp3"
+    : "m4a";
+  const filename = `aftermeet-recording.${extension}`;
 
   // <audio> elements issue Range requests (Safari probes with `bytes=0-1`
   // before playback); without a 206 response here they surface a MediaError

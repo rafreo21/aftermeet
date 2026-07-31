@@ -58,31 +58,18 @@ type SpeechRecognitionLike = {
   stop: () => void;
 };
 
-function wavBlob(chunks: Float32Array[], sampleRate: number) {
-  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
-  const buffer = new ArrayBuffer(44 + length * 2);
-  const view = new DataView(buffer);
-  const write = (offset: number, value: string) => [...value].forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
-  write(0, "RIFF");
-  view.setUint32(4, 36 + length * 2, true);
-  write(8, "WAVE");
-  write(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  write(36, "data");
-  view.setUint32(40, length * 2, true);
-  let offset = 44;
-  chunks.forEach((chunk) => chunk.forEach((sample) => {
-    const clamped = Math.max(-1, Math.min(1, sample));
-    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
-    offset += 2;
-  }));
-  return new Blob([buffer], { type: "audio/wav" });
+// Compressed formats only — raw PCM/WAV hits the shared 25MB Whisper cap
+// (lib/encounter-transcription-server.ts) after ~5 minutes of recording.
+const PREFERRED_RECORDING_MIME_TYPES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+];
+
+function pickRecordingMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  return PREFERRED_RECORDING_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
 
@@ -129,9 +116,10 @@ export default function NewEncounterPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const pcmChunksRef = useRef<Float32Array[]>([]);
-  const recordedFramesRef = useRef(0);
-  const sampleRateRef = useRef(44100);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingStartedAtRef = useRef(0);
+  const pausedElapsedMsRef = useRef(0);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptFeedbackRef = useRef<number | null>(null);
   const transcriptStatusRef = useRef<"idle" | "listening" | "receiving" | "unavailable" | "transcribing">("idle");
@@ -189,6 +177,10 @@ export default function NewEncounterPage() {
   );
 
   useEffect(() => () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
@@ -247,6 +239,10 @@ export default function NewEncounterPage() {
   }
 
   function releaseRecorderResources() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     processorRef.current?.disconnect();
@@ -510,7 +506,11 @@ export default function NewEncounterPage() {
       setError("Confirm that everyone agreed before recording.");
       return;
     }
-    if (!navigator.mediaDevices?.getUserMedia || !(window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)) {
+    if (
+      !navigator.mediaDevices?.getUserMedia
+      || !(window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
+      || typeof MediaRecorder === "undefined"
+    ) {
       setError("Audio recording is not supported in this browser. You can still add notes and a transcript.");
       return;
     }
@@ -520,22 +520,27 @@ export default function NewEncounterPage() {
       const context = new AudioContextConstructor();
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
+      const mimeType = pickRecordingMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       streamRef.current = stream;
       audioContextRef.current = context;
       sourceRef.current = source;
       processorRef.current = processor;
-      pcmChunksRef.current = [];
-      recordedFramesRef.current = 0;
-      sampleRateRef.current = context.sampleRate;
+      mediaRecorderRef.current = recorder;
+      recordedChunksRef.current = [];
+      pausedElapsedMsRef.current = 0;
+      recordingStartedAtRef.current = Date.now();
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+      };
+      recorder.start(1000);
       processor.onaudioprocess = (event) => {
         const samples = event.inputBuffer.getChannelData(0);
         const rms = Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
         setAudioLevel(Math.min(1, rms * 8));
         if (recordingStateRef.current !== "recording") return;
-        const copy = new Float32Array(samples);
-        pcmChunksRef.current.push(copy);
-        recordedFramesRef.current += copy.length;
-        setSeconds(Math.floor(recordedFramesRef.current / sampleRateRef.current));
+        const elapsedMs = pausedElapsedMsRef.current + (Date.now() - recordingStartedAtRef.current);
+        setSeconds(Math.floor(elapsedMs / 1000));
       };
       source.connect(processor);
       processor.connect(context.destination);
@@ -556,12 +561,16 @@ export default function NewEncounterPage() {
       finalizeTranscript();
       recordingStateRef.current = "paused";
       recognitionRef.current?.stop();
+      mediaRecorderRef.current?.pause();
+      pausedElapsedMsRef.current += Date.now() - recordingStartedAtRef.current;
       setRecordingState("paused");
       setAudioLevel(0);
     } else if (recordingState === "paused") {
       recordingStateRef.current = "recording";
       interimTranscriptRef.current = "";
       setInterimTranscript("");
+      recordingStartedAtRef.current = Date.now();
+      mediaRecorderRef.current?.resume();
       startTranscript();
       setRecordingState("recording");
     }
@@ -570,11 +579,25 @@ export default function NewEncounterPage() {
   async function stopRecording() {
     if (recordingStateRef.current === "stopped") return;
     recordingStateRef.current = "stopped";
-    const exactSeconds = recordedFramesRef.current / sampleRateRef.current;
-    setSeconds(Math.max(0, Math.round(exactSeconds)));
+    const finalElapsedMs = recordingState === "paused"
+      ? pausedElapsedMsRef.current
+      : pausedElapsedMsRef.current + (Date.now() - recordingStartedAtRef.current);
+    setSeconds(Math.max(0, Math.round(finalElapsedMs / 1000)));
     let cleanedTranscript = finalizeTranscript();
+
+    const mimeType = mediaRecorderRef.current?.mimeType || "audio/webm";
+    await new Promise<void>((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === "inactive") {
+        resolve();
+        return;
+      }
+      recorder.addEventListener("stop", () => resolve(), { once: true });
+      recorder.stop();
+    });
+
     releaseRecorderResources();
-    const blob = wavBlob(pcmChunksRef.current, sampleRateRef.current);
+    const blob = new Blob(recordedChunksRef.current, { type: mimeType });
     audioBlobRef.current = blob;
     setRecordingSource("recorded");
     replaceAudioUrl(URL.createObjectURL(blob));
@@ -849,7 +872,7 @@ export default function NewEncounterPage() {
                 <Button variant="secondary" onClick={pauseOrResume}>{recordingState === "paused" ? <PlayIcon size={18} weight="fill" /> : <PauseIcon size={18} weight="fill" />}{recordingState === "paused" ? "Resume" : "Pause"}</Button>
                 <Button onClick={stopRecording}><StopIcon size={18} weight="fill" />Finish</Button>
               </>}
-              {recordingState === "stopped" && <Button variant="secondary" onClick={() => { recordingStateRef.current = "idle"; recordedFramesRef.current = 0; pcmChunksRef.current = []; audioBlobRef.current = null; setRecordingState("idle"); setSeconds(0); replaceAudioUrl(""); setDraftMessage(""); setTranscriptStatus("idle"); }}>Record again</Button>}
+              {recordingState === "stopped" && <Button variant="secondary" onClick={() => { recordingStateRef.current = "idle"; pausedElapsedMsRef.current = 0; recordedChunksRef.current = []; audioBlobRef.current = null; setRecordingState("idle"); setSeconds(0); replaceAudioUrl(""); setDraftMessage(""); setTranscriptStatus("idle"); }}>Record again</Button>}
               <Button variant="ghost" size="small" onClick={() => setTranscriptOpen((value) => !value)}>
                 {transcriptOpen ? <CaretUpIcon size={15} weight="bold" /> : <CaretDownIcon size={15} weight="bold" />}
                 {transcriptOpen ? "Hide transcript" : "Show transcript"}

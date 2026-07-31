@@ -11,13 +11,22 @@ import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { buildActionLinkContext, channelLabel } from "../../../lib/action-links";
 import { findContactById } from "../../../lib/contacts";
-import { readEncounters, updateEncounter, type Encounter } from "../../../lib/encounters";
+import { readEncounters, updateEncounter, type Encounter, type EncounterAction } from "../../../lib/encounters";
 import { recordCompletedAction, supportsOutboundDraft } from "../../../lib/outbound-habit";
 import { OutboundDraftPanel } from "../../components/OutboundDraftPanel";
 import "../product.css";
 import "../flow.css";
 
 type Contact = { firstName: string; lastName: string; company: string; context: string; nextAction: string };
+type FollowUpScope = "current" | "past";
+
+function participantName(encounter: Encounter, action: EncounterAction) {
+  if (action.owner !== "guest") return "You";
+  const matched = action.participantId
+    ? encounter.participants?.find((person) => person.id === action.participantId)
+    : null;
+  return matched?.name.trim() || encounter.personName || "Guest";
+}
 
 export default function FollowupsPage() {
   const [contact, setContact] = useState<Contact | null>(null);
@@ -25,18 +34,28 @@ export default function FollowupsPage() {
   const [done, setDone] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [message, setMessage] = useState("");
+  const [scope, setScope] = useState<FollowUpScope>("current");
+
   useEffect(() => {
     try { const value = localStorage.getItem("aftermeet-last-contact-v1"); if (value) setContact(JSON.parse(value)); } catch {}
     setEncounters(readEncounters());
     setHydrated(true);
   }, []);
-  const openActions = useMemo(() => encounters.flatMap((encounter) => encounter.actions.filter((action) => action.owner === "me" && action.status !== "completed").map((action) => ({ encounter, action }))), [encounters]);
+
+  const allActions = useMemo(
+    () => encounters.flatMap((encounter) => encounter.actions.map((action) => ({ encounter, action }))),
+    [encounters],
+  );
+  const visibleActions = useMemo(
+    () => allActions.filter(({ action }) => (scope === "past" ? action.status === "completed" : action.status !== "completed")),
+    [allActions, scope],
+  );
 
   function completeAction(encounterId: string, actionId: string) {
     updateEncounter(encounterId, (encounter) => ({ ...encounter, actions: encounter.actions.map((action) => action.id === actionId ? { ...action, status: "completed" } : action) }));
     recordCompletedAction();
     setEncounters(readEncounters());
-    setMessage("Follow-up completed and moved out of your active Inbox.");
+    setMessage("Follow-up marked complete.");
   }
 
   function saveAction(encounterId: string, actionId: string, nextAction: Encounter["actions"][number]) {
@@ -48,31 +67,46 @@ export default function FollowupsPage() {
   }
 
   return (
-    <AppShell active="followups" title="Follow-ups" subtitle="Consumer inbox — reviewed actions from captures that need your attention.">
+    <AppShell active="followups" title="Follow-ups" subtitle="Everything left to do across your meetings — yours and theirs.">
       <div className="flow-page">
         <div className="flow-heading"><div><h1>Keep the promise.</h1><p>Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture</LinkButton></div></div>
         {message && <StatusMessage tone="success" action={<Button size="small" variant="ghost" onClick={() => setMessage("")}>Dismiss</Button>}>{message}</StatusMessage>}
-        {!hydrated ? <PageSkeleton rows={3} /> : openActions.length ? <div className="inbox-list">{openActions.map(({ encounter, action }) => {
-  const context = buildActionLinkContext(
-    encounter,
-    encounter.contactId ? findContactById(encounter.contactId) : null,
-  );
+        <div className="followups-tabs">
+          <button type="button" className={scope === "current" ? "active" : ""} onClick={() => setScope("current")}>Current</button>
+          <button type="button" className={scope === "past" ? "active" : ""} onClick={() => setScope("past")}>Past</button>
+        </div>
+        {!hydrated ? <PageSkeleton rows={3} /> : visibleActions.length ? <div className="inbox-list">{visibleActions.map(({ encounter, action }) => {
+          const context = buildActionLinkContext(
+            encounter,
+            encounter.contactId ? findContactById(encounter.contactId) : null,
+          );
+          const isPast = action.status === "completed";
           return (
             <article className="inbox-item-stack" key={action.id}>
               <div className="inbox-item">
                 <span className="inbox-channel">{channelLabel(action.channel)}</span>
                 <div>
                   <h2>{action.title}</h2>
-                  <p>{encounter.personName || encounter.title}</p>
-                  <small><ClockIcon size={14} weight="bold" />{action.dueAt ? `Due ${action.dueAt}` : "No due date"}</small>
+                  <p>
+                    {participantName(encounter, action)}
+                    {action.owner === "guest" ? <span className="owner-tag">Their turn</span> : null}
+                    {" · "}{encounter.title}
+                  </p>
+                  <small><ClockIcon size={14} weight="bold" />{isPast ? "Completed" : action.dueAt ? `Due ${action.dueAt}` : "No due date"}</small>
                 </div>
                 <div className="inbox-actions">
-                  <ActionDoButton action={action} context={context} showSecondary />
-                  <LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>Review context</LinkButton>
-                  <Button size="small" onClick={() => completeAction(encounter.id, action.id)}><CheckCircleIcon size={16} weight="bold" />Complete</Button>
+                  {isPast ? (
+                    <CheckCircleIcon size={22} weight="fill" />
+                  ) : (
+                    <>
+                      <ActionDoButton action={action} context={context} showSecondary />
+                      <LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>Review context</LinkButton>
+                      <Button size="small" onClick={() => completeAction(encounter.id, action.id)}><CheckCircleIcon size={16} weight="bold" />Complete</Button>
+                    </>
+                  )}
                 </div>
               </div>
-              {supportsOutboundDraft(action.channel) ? (
+              {!isPast && supportsOutboundDraft(action.channel) ? (
                 <OutboundDraftPanel
                   compact
                   encounter={encounter}
@@ -84,7 +118,7 @@ export default function FollowupsPage() {
               ) : null}
             </article>
           );
-        })}</div> : contact ? <div className="follow-list"><article className="follow-card"><div><span className="step-pill">{done ? "Completed" : "Legacy follow-up"}</span><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : <div className="empty-state"><div><span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span><h2>Your Inbox is clear</h2><p>Capture a conversation and assign a reviewed next action. It will appear here as a reminder.</p><LinkButton href="/app/encounters/new">Capture first encounter</LinkButton></div></div>}
+        })}</div> : scope === "current" && contact ? <div className="follow-list"><article className="follow-card"><div><span className="step-pill">{done ? "Completed" : "Legacy follow-up"}</span><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : <div className="empty-state"><div><span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span><h2>{scope === "current" ? "Your Inbox is clear" : "No past follow-ups yet"}</h2><p>{scope === "current" ? "Capture a conversation and assign a reviewed next action. It will appear here as a reminder." : "Completed follow-ups will appear here after you check them off."}</p>{scope === "current" ? <LinkButton href="/app/encounters/new">Capture first encounter</LinkButton> : null}</div></div>}
       </div>
     </AppShell>
   );
