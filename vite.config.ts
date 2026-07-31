@@ -43,6 +43,7 @@ export default defineConfig(async () => {
 
   const isVercel =
     process.env.VERCEL === "1" || process.env.NITRO_PRESET === "vercel";
+  const nativeServerPackages = ["@resvg/resvg-js", "sharp"];
 
   if (isVercel) {
     const { nitro } = await import("nitro/vite");
@@ -54,6 +55,7 @@ export default defineConfig(async () => {
           preset: "vercel",
         }),
       ],
+      build: { rolldownOptions: { external: nativeServerPackages } },
     };
   }
 
@@ -72,11 +74,12 @@ export default defineConfig(async () => {
       : undefined,
     optimizeDeps: {
       // Deep CSR icon imports churn often during development and can stale the dep cache.
-      exclude: ["@phosphor-icons/react", "@resvg/resvg-js", "sharp"],
+      exclude: ["@phosphor-icons/react", ...nativeServerPackages],
     },
     ssr: {
-      external: ["@resvg/resvg-js", "sharp"],
+      external: nativeServerPackages,
     },
+    build: { rolldownOptions: { external: nativeServerPackages } },
     plugins: [
       vinext(),
       sites(),

@@ -168,7 +168,6 @@ export function Button({ children, onPress, variant = 'primary', disabled, loadi
   return (
     <Pressable
       accessibilityRole="button"
-      delayPressIn={0}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [

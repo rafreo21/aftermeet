@@ -27,7 +27,7 @@ import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions'
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-export default function FollowUpsScreen() {
+export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
   const { session } = useAuth();
   const insets = useAppInsets();
   const [scope, setScope] = useState<FollowUpScope>('current');
@@ -59,14 +59,14 @@ export default function FollowUpsScreen() {
     allFollowUps: followUps,
   });
 
-  const loadFollowUps = useCallback(async () => {
+  const loadFollowUps = useCallback(async (background = false) => {
     if (!session?.access_token) {
       setFollowUps([]);
       setError('');
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!background) setLoading(true);
     setError('');
     try {
       setFollowUps(await fetchFollowUps(session.access_token));
@@ -81,6 +81,8 @@ export default function FollowUpsScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadFollowUps();
+      const interval = setInterval(() => void loadFollowUps(true), 30_000);
+      return () => clearInterval(interval);
     }, [loadFollowUps]),
   );
 
@@ -121,7 +123,7 @@ export default function FollowUpsScreen() {
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
       <View style={styles.page}>
         <View style={styles.header}>
-          <BackButton onPress={() => router.back()} />
+          {showBack ? <BackButton onPress={() => router.back()} /> : null}
           <View style={styles.headerCopy}>
             <Eyebrow>Follow-ups</Eyebrow>
             <Text style={styles.title}>Stay on top of next steps</Text>
@@ -281,6 +283,8 @@ export default function FollowUpsScreen() {
     </View>
   );
 }
+
+export default FollowUpsScreen;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },

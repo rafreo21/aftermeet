@@ -25,6 +25,8 @@ export type LibraryCard = {
   methods: LibraryMethod[];
   createdAt: string;
   updatedAt: string;
+  status?: "draft" | "published";
+  publishedAt?: string | null;
 };
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -54,6 +56,39 @@ export function createLibraryCard(seed: Partial<LibraryCard> = {}): LibraryCard 
     slug: seed.slug || identity.slug,
     createdAt: seed.createdAt || now,
     updatedAt: seed.updatedAt || now,
+    status: seed.status || "draft",
+    publishedAt: seed.publishedAt ?? null,
+  };
+}
+
+export function cardPublishFingerprint(card: LibraryCard) {
+  return JSON.stringify({
+    slug: card.slug.trim(),
+    label: card.label.trim(),
+    name: card.name.trim(),
+    role: card.role.trim(),
+    company: card.company.trim(),
+    bio: card.bio.trim(),
+    theme: card.theme.toLowerCase(),
+    photo: card.photo,
+    companyLogo: card.companyLogo,
+    coverPhoto: card.coverPhoto,
+    showCompanyDetails: card.showCompanyDetails !== false,
+    methods: card.methods.map((method) => ({
+      id: method.id,
+      type: method.type,
+      value: method.value.trim(),
+      label: method.label.trim(),
+    })),
+  });
+}
+
+export function preserveLocalCardImages(server: LibraryCard, local: LibraryCard) {
+  return {
+    ...server,
+    photo: server.photo || local.photo,
+    coverPhoto: server.coverPhoto || local.coverPhoto,
+    companyLogo: server.companyLogo || local.companyLogo,
   };
 }
 

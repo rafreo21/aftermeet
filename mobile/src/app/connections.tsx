@@ -61,7 +61,7 @@ function ConnectionRow({ connection, onPress }: { connection: ConnectionItem; on
   );
 }
 
-export default function ConnectionsScreen() {
+export function ConnectionsScreen({ showBack = true }: { showBack?: boolean }) {
   const { session } = useAuth();
   const insets = useAppInsets();
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
@@ -88,14 +88,14 @@ export default function ConnectionsScreen() {
     setSuccessSheetOpen(true);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     if (!session?.access_token) {
       setConnections([]);
       setLoading(false);
       setEnriching(false);
       return;
     }
-    setLoading(true);
+    if (!background) setLoading(true);
     setErrorSheetOpen(false);
     setErrorMessage('');
     try {
@@ -117,6 +117,8 @@ export default function ConnectionsScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      const interval = setInterval(() => void load(true), 30_000);
+      return () => clearInterval(interval);
     }, [load]),
   );
 
@@ -151,7 +153,7 @@ export default function ConnectionsScreen() {
       <View style={styles.page}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <BackButton onPress={() => router.back()} />
+            {showBack ? <BackButton onPress={() => router.back()} /> : <View />}
             {session ? (
               <Pressable
                 accessibilityRole="button"
@@ -281,6 +283,8 @@ export default function ConnectionsScreen() {
     </View>
   );
 }
+
+export default ConnectionsScreen;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },

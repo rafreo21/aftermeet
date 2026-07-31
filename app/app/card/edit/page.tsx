@@ -44,6 +44,7 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { contactMethodHref, contactMethodOpensNewTab } from "../../../../lib/contact-methods";
 import { themeCoverBadgeStyle, themeForegroundColor, themeGradientCss, themeSurfaceStyle } from "../../../../lib/theme-contrast";
 import {
+  cardPublishFingerprint,
   createLibraryCard,
   getActiveCardId,
   MAX_CARDS,
@@ -66,6 +67,8 @@ type CardDraft = {
   label: string; name: string; role: string; company: string; bio: string;
   theme: string; photo: string; companyLogo: string; coverPhoto: string; methods: ContactMethod[];
   showCompanyDetails?: boolean;
+  status?: "draft" | "published";
+  publishedAt?: string | null;
 };
 
 const methodMeta = {
@@ -208,6 +211,7 @@ export default function CardEditor() {
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [publishedFingerprint, setPublishedFingerprint] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [editing, setEditing] = useState<ContactMethod | null>(null);
@@ -218,12 +222,22 @@ export default function CardEditor() {
 
   useEffect(() => {
     void hydrateCardLibraryFromServer().then(() => {
-      setDraft(loadDraft());
+      const loaded = loadDraft();
+      setDraft(loaded);
+      if (loaded.status === "published") {
+        setPublishedFingerprint(cardPublishFingerprint(loaded));
+        setSaved(true);
+      }
       const storedStep = Number(localStorage.getItem("aftermeet-card-step-v2"));
       if (Number.isInteger(storedStep) && storedStep >= 0 && storedStep <= 2) setStep(storedStep);
       setHydrated(true);
     }).catch(() => {
-      setDraft(loadDraft());
+      const loaded = loadDraft();
+      setDraft(loaded);
+      if (loaded.status === "published") {
+        setPublishedFingerprint(cardPublishFingerprint(loaded));
+        setSaved(true);
+      }
       setHydrated(true);
     });
   }, []);
@@ -238,6 +252,23 @@ export default function CardEditor() {
     draft.methods.length > 0,
     saved,
   ];
+  const hasUnpublishedChanges = hydrated && cardPublishFingerprint(draft) !== publishedFingerprint;
+  const publishLabel = publishing
+    ? "Publishing…"
+    : !hasUnpublishedChanges && saved
+      ? "Published"
+      : saved
+        ? "Publish changes"
+        : "Save and publish";
+
+  useEffect(() => {
+    if (!hasUnpublishedChanges) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [hasUnpublishedChanges]);
 
   function persistDraft(next: CardDraft) {
     if (!hydrated) return;
@@ -255,7 +286,6 @@ export default function CardEditor() {
   }
 
   const update = <K extends keyof CardDraft>(key: K, value: CardDraft[K]) => {
-    setSaved(false);
     setDraft((current) => {
       const next = { ...current, [key]: value };
       persistDraft(next);
@@ -275,6 +305,10 @@ export default function CardEditor() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "We couldn’t publish this card.");
+      const published = { ...draft, status: "published" as const, publishedAt: new Date().toISOString() };
+      setDraft(published);
+      persistDraft(published);
+      setPublishedFingerprint(cardPublishFingerprint(published));
       setSaved(true);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "We couldn’t publish this card.");
@@ -338,8 +372,13 @@ export default function CardEditor() {
 
   return (
     <AppShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
-      actions={<Button size="small" loading={publishing} onClick={save}>{publishing ? "Publishing…" : saved ? <><CheckCircleIcon weight="fill" /> Published</> : "Save and publish"}</Button>}>
+      actions={<Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button>}>
       <section className="card-creator">
+        {hydrated && (
+          <div className={`creator-publish-state ${hasUnpublishedChanges ? "is-dirty" : "is-published"}`} role="status">
+            {hasUnpublishedChanges ? <><span>Unpublished changes</span><small>Your edits are saved as a draft on this device. Publish when they are ready to appear on your public card.</small></> : <><CheckCircleIcon size={18} weight="fill" /><span>Card is published</span><small>Your public card matches this editor.</small></>}
+          </div>
+        )}
         <nav className="creator-steps" aria-label="Card creation progress">
           {steps.map(({ label, Icon }, index) => (
             <button key={label} aria-current={index === step ? "step" : undefined} className={index === step ? "active" : stepCompletion[index] ? "complete" : ""} onClick={() => goToStep(index)}>
@@ -488,7 +527,7 @@ export default function CardEditor() {
             <footer className="creator-actions">
               {saveError ? <p className="creator-save-error" role="alert">{saveError}</p> : null}
               <Button variant="ghost" disabled={step === 0} onClick={() => goToStep(step - 1)}><ArrowLeftIcon /> Back</Button>
-              <Button loading={publishing} onClick={continueFlow}>{step === 2 ? publishing ? "Publishing…" : "Save and publish" : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
+              <Button loading={publishing} disabled={step === 2 && !hasUnpublishedChanges && saved} onClick={continueFlow}>{step === 2 ? publishLabel : "Continue"} {step < 2 && <ArrowRightIcon />}</Button>
             </footer>
           </section>
 

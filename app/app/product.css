@@ -94,6 +94,13 @@
 .privacy-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--p-navy); }
 .privacy-note p { max-width: 360px; margin: 0; font-size: 11px; line-height: 1.6; text-align: left; }
 .card-creator { display: grid; gap: 24px; }
+.creator-publish-state { min-height: 48px; padding: 11px 14px; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; border-radius: 9px; }
+.creator-publish-state span { font-size: 12px; font-weight: 850; }
+.creator-publish-state small { grid-column: 2; color: var(--p-muted); font-size: 11px; line-height: 1.4; }
+.creator-publish-state.is-dirty { background: #fff4da; color: #6f4700; }
+.creator-publish-state.is-dirty span::before { content: ""; width: 8px; height: 8px; margin-right: 8px; display: inline-block; border-radius: 50%; background: #e29a19; }
+.creator-publish-state.is-published { background: var(--p-sky); }
+.creator-publish-state.is-published svg { grid-row: 1 / 3; }
 .creator-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; padding: 8px; border-radius: 10px; background: white; box-shadow: 0 8px 25px rgba(22,51,0,.04); }
 .creator-steps button { min-height: 72px; padding: 10px 12px; display: grid; grid-template-columns: 38px 1fr; grid-template-rows: 1fr 1fr; column-gap: 10px; border: 0; border-radius: 7px; background: transparent; color: var(--p-muted); text-align: left; cursor: pointer; }
 .creator-steps button:hover { background: var(--p-ice); }

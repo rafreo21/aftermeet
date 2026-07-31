@@ -16,6 +16,8 @@ import { PlayIcon } from "@phosphor-icons/react/dist/csr/Play";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { StopIcon } from "@phosphor-icons/react/dist/csr/Stop";
 import { UploadSimpleIcon } from "@phosphor-icons/react/dist/csr/UploadSimple";
+import { UserPlusIcon } from "@phosphor-icons/react/dist/csr/UserPlus";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { AppShell } from "../../../components/AppShell";
 import { ActiveCampaignField, defaultCampaignId } from "../../../components/ActiveCampaignField";
@@ -39,10 +41,16 @@ import {
   type AudioRetention,
 } from "../../../../lib/local-recordings";
 import { uploadEncounterRecording } from "../../../../lib/recording-upload";
+import { isSupportedAudioFile } from "../../../../lib/audio-file";
 import "../../product.css";
 import "../../flow.css";
 
 type RecordingState = "idle" | "recording" | "paused" | "stopped";
+type AdditionalParticipant = {
+  id: string;
+  name: string;
+  email: string;
+};
 type SpeechRecognitionEventLike = {
   resultIndex: number;
   results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }>;
@@ -160,6 +168,7 @@ export default function NewEncounterPage() {
   const [campaignId, setCampaignId] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [inboundExchanges, setInboundExchanges] = useState<InboundExchange[]>([]);
+  const [additionalParticipants, setAdditionalParticipants] = useState<AdditionalParticipant[]>([]);
   const [form, setForm] = useState({
     title: "",
     personName: "",
@@ -175,6 +184,19 @@ export default function NewEncounterPage() {
     () => contacts.find((contact) => contact.id === contactId) ?? null,
     [contacts, contactId],
   );
+
+  const confirmedPeople = useMemo(() => [
+    {
+      name: form.personName.trim(),
+      email: linkedContact?.email?.trim() ?? "",
+      phone: linkedContact?.phone?.trim() ?? "",
+    },
+    ...additionalParticipants.map((person) => ({
+      name: person.name.trim(),
+      email: person.email.trim(),
+      phone: "",
+    })),
+  ].filter((person) => person.name.length >= 2), [additionalParticipants, form.personName, linkedContact]);
 
   useEffect(() => () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -310,7 +332,7 @@ export default function NewEncounterPage() {
         const response = await fetch("/api/encounters/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: clean, personName: form.personName }),
+          body: JSON.stringify({ transcript: clean, personName: form.personName, people: confirmedPeople }),
         });
         if (requestId !== extractionRequestRef.current) return;
 
@@ -382,6 +404,23 @@ export default function NewEncounterPage() {
     setExchangeId("");
   }
 
+  function addParticipant() {
+    setAdditionalParticipants((current) => current.length >= 9 ? current : [
+      ...current,
+      { id: crypto.randomUUID(), name: "", email: "" },
+    ]);
+  }
+
+  function updateParticipant(id: string, key: "name" | "email", value: string) {
+    setAdditionalParticipants((current) => current.map((person) => (
+      person.id === id ? { ...person, [key]: value } : person
+    )));
+  }
+
+  function removeParticipant(id: string) {
+    setAdditionalParticipants((current) => current.filter((person) => person.id !== id));
+  }
+
   function linkInboundExchange(exchange: InboundExchange) {
     const card = Array.isArray(exchange.cards) ? exchange.cards[0] : exchange.cards;
     const contact = resolveAndSaveContact({
@@ -431,6 +470,10 @@ export default function NewEncounterPage() {
     }
     if (!form.title.trim() && !form.sharedSummary.trim() && !form.privateNotes.trim()) {
       setError("Add a meeting title or a short note about what you discussed.");
+      return;
+    }
+    if (additionalParticipants.some((person) => person.name.trim().length < 2)) {
+      setError("Add a name for every attendee, or remove the empty attendee.");
       return;
     }
     goToCaptureStep(2);
@@ -619,7 +662,7 @@ export default function NewEncounterPage() {
       setError("Confirm that everyone agreed to the recording before importing it.");
       return;
     }
-    if (!file.type.startsWith("audio/")) {
+    if (!isSupportedAudioFile(file)) {
       setError("Choose an audio recording from Voice Memos, Files, or your device recorder.");
       return;
     }
@@ -689,11 +732,26 @@ export default function NewEncounterPage() {
       }
     }
     const personEmail = linkedContact?.email ?? "";
-    const participantId = crypto.randomUUID();
+    const primaryParticipantId = crypto.randomUUID();
+    const participants: Encounter["participants"] = [{
+      id: primaryParticipantId,
+      name: form.personName.trim(),
+      email: personEmail,
+      phone: linkedContact?.phone ?? "",
+      linkedIn: linkedContact?.linkedinUrl ?? "",
+      exchangeId: exchangeId || undefined,
+    }, ...additionalParticipants.map((person) => ({
+      id: person.id,
+      name: person.name.trim(),
+      email: person.email.trim(),
+      phone: "",
+      linkedIn: "",
+    }))];
+    const participantNames = participants.map((person) => person.name).join(", ");
     let encounter: Encounter = {
       id,
-      title: form.title.trim() || `Meeting with ${form.personName.trim()}`,
-      personName: form.personName.trim(),
+      title: form.title.trim() || `Meeting with ${participantNames}`,
+      personName: participantNames,
       personEmail,
       contactId: contactId || undefined,
       exchangeId: exchangeId || undefined,
@@ -706,23 +764,16 @@ export default function NewEncounterPage() {
       privateNotes: form.privateNotes.trim(),
       sharedSummary: form.sharedSummary.trim(),
       recording,
-      actions: followUpText ? [{
+      actions: followUpText ? participants.map((participant) => ({
         id: crypto.randomUUID(),
         title: followUpText,
         channel: form.followUpType,
-        owner: "me",
+        owner: "me" as const,
         dueAt: form.dueAt,
-        status: "open",
-        participantId,
-      }] : [],
-      participants: [{
-        id: participantId,
-        name: form.personName.trim(),
-        email: personEmail,
-        phone: "",
-        linkedIn: "",
-        exchangeId: exchangeId || undefined,
-      }],
+        status: "open" as const,
+        participantId: participant.id,
+      })) : [],
+      participants,
       status: "draft",
       shareToken: crypto.randomUUID().replaceAll("-", ""),
     };
@@ -988,6 +1039,46 @@ export default function NewEncounterPage() {
               autoComplete="name"
               autoFocus
             />
+            <div className="encounter-attendees" aria-label="Meeting attendees">
+              <div className="encounter-attendees-heading">
+                <div>
+                  <strong>Other attendees</strong>
+                  <small>Add everyone who should have their own relationship record and follow-up.</small>
+                </div>
+                <Button type="button" variant="secondary" size="small" onClick={addParticipant} disabled={additionalParticipants.length >= 9}>
+                  <UserPlusIcon size={15} weight="bold" /> Add person
+                </Button>
+              </div>
+              {additionalParticipants.length > 0 && (
+                <div className="encounter-attendee-list">
+                  {additionalParticipants.map((person, index) => (
+                    <div className="encounter-attendee-row" key={person.id}>
+                      <span className="encounter-attendee-number">{index + 2}</span>
+                      <TextField
+                        label={`Attendee ${index + 2} name`}
+                        value={person.name}
+                        onChange={(event) => updateParticipant(person.id, "name", event.target.value)}
+                        placeholder="e.g. James Okafor"
+                        autoComplete="off"
+                      />
+                      <TextField
+                        label="Email"
+                        hint="Optional"
+                        type="email"
+                        value={person.email}
+                        onChange={(event) => updateParticipant(person.id, "email", event.target.value)}
+                        placeholder="james@example.com"
+                        autoComplete="off"
+                      />
+                      <Button type="button" variant="ghost" size="small" aria-label={`Remove attendee ${index + 2}`} onClick={() => removeParticipant(person.id)}>
+                        <XIcon size={16} weight="bold" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {additionalParticipants.length === 0 && <p>No additional attendees.</p>}
+            </div>
             <ActiveCampaignField value={campaignId} onChange={setCampaignId} />
             <TextField label="Meeting title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Coffee after ProductCon" hint="Optional if the full name is enough" />
             <TextAreaField label="Private notes" hint="Only you — what they said that matters" rows={4} value={form.privateNotes} onChange={(event) => update("privateNotes", event.target.value)} placeholder="Key points from the other person: their priorities, constraints, commitments, and anything you'd want to remember later." />
@@ -1073,6 +1164,13 @@ export default function NewEncounterPage() {
           <section className="encounter-form-section encounter-followup-section">
             <header><h2>Follow-up</h2><p>Optional. Add one next step now, or save and handle it later from review.</p></header>
             <div className="follow-up-fields">
+              {confirmedPeople.length > 1 && (
+                <div className="encounter-followup-people">
+                  <strong>Applies to everyone</strong>
+                  <small>AfterMeet creates one reminder per person so each relationship stays separate.</small>
+                  <div>{confirmedPeople.map((person) => <span key={`${person.name}-${person.email}`}>{person.name}</span>)}</div>
+                </div>
+              )}
               <TextField label="What needs to be done?" value={form.followUp} onChange={(event) => update("followUp", event.target.value)} placeholder="e.g. Send Sarah the revised product draft" />
               <div className="follow-up-meta">
                 <SelectField label="Follow-up type" value={form.followUpType} onChange={(event) => setForm((current) => ({ ...current, followUpType: event.target.value as Encounter["actions"][number]["channel"] }))}>

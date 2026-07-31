@@ -103,7 +103,7 @@ export function BrandedQrCode({
         color={color}
         backgroundColor={backgroundColor}
         ecl={active.ecl}
-        onError={(error) => {
+        onError={(error: unknown) => {
           setRenderError(error instanceof Error ? error.message : 'Could not render this QR code.');
         }}
       />

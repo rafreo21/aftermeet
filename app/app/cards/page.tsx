@@ -138,20 +138,26 @@ export default function CardsPage() {
   }, []);
 
   useEffect(() => {
-    function refreshFromStorage() {
+    function refreshFromServer() {
       if (document.visibilityState === "hidden") return;
-      try {
-        applyLibrary(readCardLibrary(localStorage));
-      } catch {
-        // Ignore malformed local storage while editing elsewhere.
-      }
+      void hydrateCardLibraryFromServer()
+        .then((library) => applyLibrary(library))
+        .catch(() => {
+          try {
+            applyLibrary(readCardLibrary(localStorage));
+          } catch {
+            // Keep the current view if neither server nor cache can be read.
+          }
+        });
     }
 
-    window.addEventListener("focus", refreshFromStorage);
-    document.addEventListener("visibilitychange", refreshFromStorage);
+    window.addEventListener("focus", refreshFromServer);
+    document.addEventListener("visibilitychange", refreshFromServer);
+    const interval = window.setInterval(refreshFromServer, 30_000);
     return () => {
-      window.removeEventListener("focus", refreshFromStorage);
-      document.removeEventListener("visibilitychange", refreshFromStorage);
+      window.removeEventListener("focus", refreshFromServer);
+      document.removeEventListener("visibilitychange", refreshFromServer);
+      window.clearInterval(interval);
     };
   }, [activeId]);
 
@@ -474,7 +480,9 @@ export default function CardsPage() {
                 <div className="share-surface-overlay">
                   <strong>{profile.name}</strong>
                   <span>{profile.role}{profile.company ? ` · ${profile.company}` : ""}</span>
-                  <div className="share-surface-qr">QR</div>
+                  <div className="share-surface-qr">
+                    {qr ? <img src={qr} alt="" /> : <QrCodeIcon size={18} weight="bold" aria-hidden="true" />}
+                  </div>
                 </div>
               </div>
               <Button variant="secondary" onClick={() => void downloadShareAsset("virtual-background")}><DownloadSimpleIcon size={18} weight="bold" />Download background</Button>
@@ -483,7 +491,9 @@ export default function CardsPage() {
               <div className="inline-qr-head"><span><WatchIcon size={22} weight="bold" /></span><div><h2>Smart watch</h2><p>High-contrast QR for Apple Watch or Wear OS watch faces.</p></div></div>
               <div className="share-surface-preview watch-preview">
                 <span>Personal card</span>
-                <div className="watch-qr">QR</div>
+                <div className="watch-qr">
+                  {qr ? <img src={qr} alt={`QR code for ${profile.name}'s card`} /> : <QrCodeIcon size={30} weight="bold" aria-hidden="true" />}
+                </div>
               </div>
               <Button variant="secondary" onClick={() => void downloadShareAsset("watch-face")}><DownloadSimpleIcon size={18} weight="bold" />Download watch QR</Button>
             </section>
@@ -493,7 +503,9 @@ export default function CardsPage() {
                 <article className="widget-gallery-card">
                   <header><span>AfterMeet</span><strong>2 × 2</strong></header>
                   <div className="widget-gallery-preview widget-gallery-qr">
-                    <div className="widget-gallery-qr-frame">QR</div>
+                    <div className="widget-gallery-qr-frame">
+                      {qr ? <img src={qr} alt={`QR code for ${profile.name}'s card`} /> : <QrCodeIcon size={24} weight="bold" aria-hidden="true" />}
+                    </div>
                   </div>
                   <h4>QR Scan</h4>
                   <p>Large scannable QR for quick sharing.</p>
@@ -501,7 +513,9 @@ export default function CardsPage() {
                 <article className="widget-gallery-card">
                   <header><span>AfterMeet</span><strong>4 × 2</strong></header>
                   <div className="widget-gallery-preview widget-gallery-card-layout">
-                    <div className="widget-gallery-card-qr">QR</div>
+                    <div className="widget-gallery-card-qr">
+                      {qr ? <img src={qr} alt="" /> : <QrCodeIcon size={22} weight="bold" aria-hidden="true" />}
+                    </div>
                     <div>
                       <div className="widget-layout-avatar">{initials}</div>
                       <strong>{profile.name}</strong>

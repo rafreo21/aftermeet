@@ -5,6 +5,7 @@ export const MAX_CARDS = 5;
 export const CARDS_STORAGE_KEY = 'aftermeet.mobile.cards.v2';
 export const ACTIVE_CARD_KEY = 'aftermeet.mobile.active-card.v1';
 export const LEGACY_CARD_KEY = 'aftermeet.mobile.card.v1';
+export const DIRTY_CARDS_STORAGE_KEY = 'aftermeet.mobile.dirty-cards.v1';
 
 function createId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
@@ -84,6 +85,47 @@ export function remoteRowToMobileCard(remote: {
         value: method.value,
         label: method.label,
       })),
+  };
+}
+
+export function libraryPayloadToMobileCard(card: {
+  id: string;
+  slug: string;
+  label?: string;
+  name: string;
+  role?: string;
+  company?: string;
+  bio?: string;
+  theme?: string;
+  photo?: string;
+  companyLogo?: string;
+  coverPhoto?: string;
+  showCompanyDetails?: boolean;
+  status?: 'draft' | 'published';
+  methods?: MobileCard['methods'];
+}): MobileCard {
+  return normalizePayloadCard({
+    id: card.id,
+    slug: card.slug,
+    label: card.label || card.name || 'My card',
+    name: card.name,
+    role: card.role || '',
+    company: card.company || '',
+    bio: card.bio || '',
+    theme: card.theme || CARD_THEMES[0],
+    photo: card.photo || '',
+    companyLogo: card.companyLogo || '',
+    coverPhoto: card.coverPhoto || '',
+    showCompanyDetails: card.showCompanyDetails ?? true,
+    status: card.status || 'draft',
+    methods: card.methods || [],
+  });
+}
+
+function normalizePayloadCard(card: MobileCard): MobileCard {
+  return {
+    ...card,
+    theme: normalizeThemeColor(card.theme),
   };
 }
 

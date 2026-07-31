@@ -59,6 +59,8 @@ export function libraryCardFromRows(card: CardRow, methods: CardMethodRow[]): Li
       })),
     createdAt: card.created_at,
     updatedAt: card.updated_at,
+    status: card.status === "published" ? "published" : "draft",
+    publishedAt: card.published_at,
   };
 }
 

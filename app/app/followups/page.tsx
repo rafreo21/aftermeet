@@ -12,6 +12,7 @@ import { Button, LinkButton } from "../../components/Button";
 import { buildActionLinkContext, channelLabel } from "../../../lib/action-links";
 import { findContactById } from "../../../lib/contacts";
 import { readEncounters, updateEncounter, type Encounter, type EncounterAction } from "../../../lib/encounters";
+import { hydrateEncountersFromServer } from "../../../lib/encounters-sync";
 import { recordCompletedAction, supportsOutboundDraft } from "../../../lib/outbound-habit";
 import { OutboundDraftPanel } from "../../components/OutboundDraftPanel";
 import "../product.css";
@@ -36,10 +37,31 @@ export default function FollowupsPage() {
   const [message, setMessage] = useState("");
   const [scope, setScope] = useState<FollowUpScope>("current");
 
-  useEffect(() => {
+  async function loadEncounters() {
     try { const value = localStorage.getItem("aftermeet-last-contact-v1"); if (value) setContact(JSON.parse(value)); } catch {}
-    setEncounters(readEncounters());
-    setHydrated(true);
+    try {
+      setEncounters(await hydrateEncountersFromServer());
+    } finally {
+      setHydrated(true);
+    }
+  }
+
+  useEffect(() => {
+    void loadEncounters();
+  }, []);
+
+  useEffect(() => {
+    function refreshWhenVisible() {
+      if (document.visibilityState !== "hidden") void loadEncounters();
+    }
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(interval);
+    };
   }, []);
 
   const allActions = useMemo(
@@ -52,18 +74,33 @@ export default function FollowupsPage() {
   );
 
   function completeAction(encounterId: string, actionId: string) {
-    updateEncounter(encounterId, (encounter) => ({ ...encounter, actions: encounter.actions.map((action) => action.id === actionId ? { ...action, status: "completed" } : action) }));
+    const updated = updateEncounter(encounterId, (encounter) => ({ ...encounter, actions: encounter.actions.map((action) => action.id === actionId ? { ...action, status: "completed" } : action) }));
+    const action = updated?.actions.find((item) => item.id === actionId);
+    if (action) void patchAction(encounterId, action);
     recordCompletedAction();
     setEncounters(readEncounters());
     setMessage("Follow-up marked complete.");
   }
 
   function saveAction(encounterId: string, actionId: string, nextAction: Encounter["actions"][number]) {
-    updateEncounter(encounterId, (encounter) => ({
+    const updated = updateEncounter(encounterId, (encounter) => ({
       ...encounter,
       actions: encounter.actions.map((action) => action.id === actionId ? nextAction : action),
     }));
+    const action = updated?.actions.find((item) => item.id === actionId);
+    if (action) void patchAction(encounterId, action);
     setEncounters(readEncounters());
+  }
+
+  async function patchAction(encounterId: string, action: EncounterAction) {
+    const response = await fetch(`/api/encounters/${encodeURIComponent(encounterId)}/actions/${encodeURIComponent(action.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    if (!response.ok) {
+      setMessage("This change is saved locally but could not sync. Try again when you’re online.");
+    }
   }
 
   return (

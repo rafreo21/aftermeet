@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
+import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { encounterFromSharedPayload, readEncounters, type Encounter } from "../../../lib/encounters";
 import { buildAuthHref } from "../../../lib/auth/visitor-intent";
 import { CLOUD_RECORDING_RETENTION_DAYS, formatRecordingAvailableUntil } from "../../../lib/recording-metadata";
@@ -41,8 +43,20 @@ export default function GuestEncounterPage() {
       });
   }, []);
 
-  if (encounter === undefined) return null;
-  if (!encounter) return <main className="guest-page"><section className="guest-panel"><LockKeyIcon size={32} weight="bold" /><h1>This meeting record is not available.</h1><p>Ask the person who shared it to approve the record or send a new secure link.</p></section></main>;
+  if (encounter === undefined) {
+    return (
+      <main className="guest-page" aria-busy="true" aria-label="Loading shared meeting">
+        <section className="guest-panel guest-panel-loading">
+          <div className="guest-loading-line guest-loading-brand" />
+          <div className="guest-loading-line guest-loading-label" />
+          <div className="guest-loading-line guest-loading-title" />
+          <div className="guest-loading-line guest-loading-copy" />
+          <div className="guest-loading-block" />
+        </section>
+      </main>
+    );
+  }
+  if (!encounter) return <main className="guest-page"><section className="guest-panel guest-panel-empty"><span className="guest-empty-icon"><LockKeyIcon size={28} weight="bold" /></span><span className="guest-eyebrow">Private meeting record</span><h1>This link is no longer available.</h1><p>Ask the person who shared it to approve the record or send you a new secure link.</p><LinkButton href="/">Go to AfterMeet</LinkButton></section></main>;
 
   function downloadRecording(url: string, filename: string) {
     const link = document.createElement("a");
@@ -85,16 +99,24 @@ export default function GuestEncounterPage() {
   return (
     <main className="guest-page">
       <section className="guest-panel">
-        <a className="guest-brand" href="/"><BrandMark size={36} />AfterMeet</a>
-        <span className="step-pill">Shared with you</span>
-        <h1>{encounter.title}</h1>
-        <p className="guest-meta">A reviewed meeting record from {encounter.personName ? `your conversation with ${encounter.personName}` : "a recent conversation"}.</p>
+        <header className="guest-topbar">
+          <Link className="guest-brand" href="/"><BrandMark size={36} />AfterMeet</Link>
+          <span className="guest-secure"><LockKeyIcon size={14} weight="bold" />Private link</span>
+        </header>
+        <div className="guest-hero">
+          <span className="guest-eyebrow">Shared with you</span>
+          <h1>{encounter.title}</h1>
+          <p>A reviewed meeting record{encounter.personName ? ` from your conversation with ${encounter.personName}` : " from a recent conversation"}.</p>
+        </div>
         {sharedRecordingUrl ? (
-          <article className="guest-summary">
-            <h2>Meeting recording</h2>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12, marginTop: 12 }}>
-              <audio controls preload="metadata" src={sharedRecordingUrl} style={{ width: "100%" }} />
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+          <article className="guest-recording">
+            <header>
+              <span><MicrophoneIcon size={19} weight="bold" /></span>
+              <div><h2>Meeting recording</h2><p>Listen back or save a copy before it expires.</p></div>
+            </header>
+            <audio controls preload="metadata" src={sharedRecordingUrl} />
+            <footer>
+              <div>
                 <Button
                   type="button"
                   variant="secondary"
@@ -104,31 +126,30 @@ export default function GuestEncounterPage() {
                   <DownloadSimpleIcon size={16} weight="bold" />
                   Save to my device
                 </Button>
-                {recordingAvailableUntil ? (
-                  <small style={{ color: "var(--muted)" }}>
-                    Available online until {recordingAvailableUntil}. Download now to keep a copy after that.
-                  </small>
-                ) : (
-                  <small style={{ color: "var(--muted)" }}>
-                    Shared recordings stay online for {CLOUD_RECORDING_RETENTION_DAYS} days. Download to keep a copy on your phone.
-                  </small>
-                )}
               </div>
-            </div>
+              <p>
+                {recordingAvailableUntil ? (
+                  <>Available online until <strong>{recordingAvailableUntil}</strong>. Download it to keep a copy after that.</>
+                ) : (
+                  <>Available online for {CLOUD_RECORDING_RETENTION_DAYS} days. Download it to keep a copy on your phone.</>
+                )}
+              </p>
+            </footer>
           </article>
         ) : (
-          <article className="guest-summary">
-            <h2>Meeting recording</h2>
-            <p>The shared audio is no longer available online. The written summary below is still here for you.</p>
+          <article className="guest-recording guest-recording-expired">
+            <header><span><MicrophoneIcon size={19} weight="bold" /></span><div><h2>Recording expired</h2><p>The audio is no longer online, but the shared meeting record remains available below.</p></div></header>
           </article>
         )}
-        <article className="guest-summary"><h2>What you agreed</h2><p>{encounter.sharedSummary || "The shared summary is still being prepared."}</p></article>
-        <section className="guest-actions">
-          <h2>Your next steps</h2>
-          {guestActions.length ? guestActions.map((action) => <article key={action.id}><CheckCircleIcon size={24} /><div><strong>{action.title}</strong><small>{action.dueAt ? `Due ${action.dueAt}` : "No due date"} · {action.channel}</small></div></article>) : <p>No actions have been assigned to you.</p>}
-        </section>
-        <section className="guest-actions">
-          <h2>Will you follow up too?</h2>
+        <div className="guest-content-grid">
+          <article className="guest-summary"><span>Meeting summary</span><h2>What you agreed</h2><p>{encounter.sharedSummary || "The shared summary is still being prepared."}</p></article>
+          <section className="guest-actions">
+            <span>Assigned to you</span><h2>Your next steps</h2>
+            {guestActions.length ? guestActions.map((action) => <article key={action.id}><CheckCircleIcon size={22} weight="bold" /><div><strong>{action.title}</strong><small>{action.dueAt ? `Due ${action.dueAt}` : "No due date"} · {action.channel}</small></div></article>) : <div className="guest-actions-empty"><CheckCircleIcon size={20} /><p>No actions have been assigned to you.</p></div>}
+          </section>
+        </div>
+        <section className="guest-follow-up">
+          <span>Your commitment</span><h2>Will you follow up too?</h2>
           {encounter.guestFollowUp?.committedAt ? (
             <article><CheckCircleIcon size={24} weight="fill" /><div><strong>You said you&apos;ll follow up.</strong>{encounter.guestFollowUp.note ? <small>{encounter.guestFollowUp.note}</small> : null}</div></article>
           ) : (
@@ -140,13 +161,12 @@ export default function GuestEncounterPage() {
                 placeholder="Optional note — what will you follow up on?"
                 rows={2}
                 maxLength={280}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid var(--line)", font: "inherit", resize: "vertical" }}
               />
-              {followUpError ? <small style={{ color: "#c0392b", display: "block" }}>{followUpError}</small> : null}
+              {followUpError ? <small className="guest-form-error">{followUpError}</small> : null}
               <Button
                 type="button"
-                variant="secondary"
-                size="small"
+                variant="primary"
+                size="normal"
                 loading={followUpSubmitting}
                 onClick={() => void commitFollowUp()}
               >
@@ -156,7 +176,7 @@ export default function GuestEncounterPage() {
           )}
         </section>
         <div className="guest-claim">
-          <div><strong>Keep this relationship moving</strong><p>Create your private AfterMeet workspace to claim these actions, receive reminders, and add your own notes.</p></div>
+          <div><span>Continue in AfterMeet</span><strong>Keep this relationship moving.</strong><p>Create your private workspace to claim actions, receive reminders, and add your own notes.</p></div>
           <LinkButton href={buildAuthHref({ intent: "visitor", shareToken: encounter.shareToken })}>Create account <ArrowRightIcon size={16} weight="bold" /></LinkButton>
         </div>
         <small className="guest-privacy"><LockKeyIcon size={14} weight="bold" />Private notes and the full transcript stay with the host. This page shows the shared summary{sharedRecordingUrl ? " and meeting recording" : ""} only.</small>

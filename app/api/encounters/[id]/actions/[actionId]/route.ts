@@ -10,11 +10,17 @@ export async function PATCH(
   context: { params: Promise<{ id: string; actionId: string }> },
 ) {
   const { id, actionId } = await context.params;
-  const body = await request.json().catch(() => null) as { status?: string } | null;
+  const body = await request.json().catch(() => null) as { status?: string; action?: EncounterAction } | null;
   const status = body?.status?.trim();
 
-  if (!status || !allowedStatuses.has(status)) {
-    return NextResponse.json({ error: "A valid action status is required." }, { status: 400 });
+  if (!body) {
+    return NextResponse.json({ error: "A valid action update is required." }, { status: 400 });
+  }
+  if (!body?.action && (!status || !allowedStatuses.has(status))) {
+    return NextResponse.json({ error: "A valid action update is required." }, { status: 400 });
+  }
+  if (body.action && (body.action.id !== actionId || !allowedStatuses.has(body.action.status))) {
+    return NextResponse.json({ error: "The follow-up update is invalid." }, { status: 400 });
   }
 
   const user = await resolveApiUser(request);
@@ -42,7 +48,11 @@ export async function PATCH(
   }
 
   const nextActions = actions.map((action, actionIndex) => (
-    actionIndex === index ? { ...action, status } : action
+    actionIndex === index
+      ? body.action
+        ? { ...action, ...body.action, id: action.id }
+        : { ...action, status }
+      : action
   ));
 
   const { error: updateError } = await supabase

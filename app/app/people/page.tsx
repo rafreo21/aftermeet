@@ -42,8 +42,8 @@ export default function ConnectionsPage() {
   const [savingManual, setSavingManual] = useState(false);
   const [manual, setManual] = useState({ name: "", email: "", role: "", company: "" });
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     setError("");
     try {
       const merged = await fetchAllConnectionsMerged();
@@ -63,6 +63,20 @@ export default function ConnectionsPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    function refreshWhenVisible() {
+      if (document.visibilityState !== "hidden") void load(true);
+    }
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(interval);
+    };
   }, [load]);
 
   const visibleConnections = useMemo(

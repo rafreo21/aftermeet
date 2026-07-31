@@ -67,7 +67,7 @@ export async function programNfcTag(card: MobileCard, cardUrl: string) {
   try {
     const records = [
       Ndef.uriRecord(normalized),
-      Ndef.mimeMediaRecord('text/vcard', vcard),
+      Ndef.record(Ndef.TNF_MIME_MEDIA, 'text/vcard', [], vcard),
     ];
     const bytes = Ndef.encodeMessage(records);
     if (!bytes) throw new Error('Could not encode the NFC message.');

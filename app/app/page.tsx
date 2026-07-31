@@ -17,8 +17,8 @@ type FollowUpNudge = { openCount: number };
 export default function HomeDashboard() {
   const [nudge, setNudge] = useState<FollowUpNudge>({ openCount: 0 });
 
-  useEffect(() => {
-    void fetch("/api/follow-ups")
+  function loadNudge() {
+    return fetch("/api/follow-ups", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return;
         const payload = await response.json() as { followUps?: Array<{ status?: string }> };
@@ -26,6 +26,21 @@ export default function HomeDashboard() {
         setNudge({ openCount });
       })
       .catch(() => undefined);
+  }
+
+  useEffect(() => {
+    void loadNudge();
+    function refreshWhenVisible() {
+      if (document.visibilityState !== "hidden") void loadNudge();
+    }
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(interval);
+    };
   }, []);
 
   return (

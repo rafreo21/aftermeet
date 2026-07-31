@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { CheckCircle, CloudArrowUp, EnvelopeSimple, ShareNetwork } from 'phosphor-react-native';
+import { CheckCircle, CloudArrowUp, EnvelopeSimple, Plus, ShareNetwork, Trash } from 'phosphor-react-native';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
+import { FollowUpDuePicker } from '@/components/follow-up-due-picker';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { RecordingPlayback } from '@/components/recording-playback';
@@ -22,9 +23,8 @@ import {
   type EncounterPayload,
 } from '@/features/encounters/encounter-api';
 import {
-  followUpChannelsFromEncounter,
-  followUpDueFromEncounter,
   FOLLOW_UP_CHANNELS,
+  type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
 import { formatDueLabel } from '@/lib/due-date';
 import { openEmailCompose } from '@/lib/email-compose';
@@ -56,20 +56,10 @@ export default function CaptureDetailScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(true);
-
-  const followUpSummary = useMemo(() => {
-    if (!encounter) return null;
-    const channels = followUpChannelsFromEncounter(encounter.actions);
-    const dueAt = followUpDueFromEncounter(encounter.actions);
-    const channelLabels = channels.map(
-      (channel) => FOLLOW_UP_CHANNELS.find((entry) => entry.id === channel)?.label || channel,
-    );
-    return {
-      notes: encounter.privateNotes.trim(),
-      channelLabels,
-      dueLabel: formatDueLabel(dueAt),
-    };
-  }, [encounter]);
+  const [newActionTitle, setNewActionTitle] = useState('');
+  const [newActionChannel, setNewActionChannel] = useState<FollowUpChannel>('email');
+  const [newActionDueAt, setNewActionDueAt] = useState('');
+  const [newActionOwner, setNewActionOwner] = useState('me');
 
   const guestUrl = encounter && readEnv()
     ? `${readEnv()!.publicCardBaseUrl}/e/${encounter.shareToken}`
@@ -232,6 +222,42 @@ export default function CaptureDetailScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function addAction() {
+    if (!encounter || !newActionTitle.trim()) return;
+    const participant = encounter.participants.find((person) => person.id === newActionOwner);
+    setEncounter({
+      ...encounter,
+      actions: [...encounter.actions, {
+        id: `action-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        title: newActionTitle.trim(),
+        channel: newActionChannel,
+        owner: participant ? 'guest' : 'me',
+        dueAt: newActionDueAt,
+        status: 'open',
+        participantId: participant?.id,
+        assigneeName: participant?.name,
+        assigneeEmail: participant?.email,
+      }],
+    });
+    setNewActionTitle('');
+    setNewActionDueAt('');
+  }
+
+  function toggleAction(actionId: string) {
+    if (!encounter) return;
+    setEncounter({
+      ...encounter,
+      actions: encounter.actions.map((action) => action.id === actionId
+        ? { ...action, status: action.status === 'completed' ? 'open' : 'completed' }
+        : action),
+    });
+  }
+
+  function removeAction(actionId: string) {
+    if (!encounter) return;
+    setEncounter({ ...encounter, actions: encounter.actions.filter((action) => action.id !== actionId) });
   }
 
   async function approveAndShare() {
@@ -399,28 +425,88 @@ export default function CaptureDetailScreen() {
 
       <Panel style={styles.section}>
         <Text style={styles.sectionTitle}>Follow-up plan</Text>
-        {followUpSummary ? (
-          <>
-            <Text style={styles.label}>Private notes</Text>
-            <Text style={styles.summaryCopy}>
-              {followUpSummary.notes || 'No private notes added.'}
-            </Text>
-            <Text style={styles.label}>Channels</Text>
-            <Text style={styles.summaryCopy}>
-              {followUpSummary.channelLabels.length
-                ? followUpSummary.channelLabels.join(' · ')
-                : 'No follow-up channels selected.'}
-            </Text>
-            {followUpSummary.dueLabel ? (
-              <>
-                <Text style={styles.label}>Due</Text>
-                <Text style={styles.summaryCopy}>{followUpSummary.dueLabel}</Text>
-              </>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.summaryCopy}>No follow-up details yet.</Text>
-        )}
+        {encounter.participants.length ? (
+          <View style={styles.peopleWrap}>
+            <Text style={styles.label}>People in this meeting</Text>
+            <View style={styles.peopleRow}>
+              {encounter.participants.map((person) => (
+                <View key={person.id} style={styles.personChip}>
+                  <Text style={styles.personChipText}>{person.name || 'Guest'}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+        <Text style={styles.label}>Private notes</Text>
+        <TextInput
+          value={encounter.privateNotes}
+          onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
+          multiline
+          scrollEnabled
+          placeholder="Anything only you need to remember…"
+          placeholderTextColor={colors.muted}
+          style={[styles.input, styles.privateNotesField]}
+        />
+        <Text style={styles.label}>Next actions</Text>
+        {encounter.actions.length ? (
+          <View style={styles.actionList}>
+            {encounter.actions.map((action) => {
+              const participant = encounter.participants.find((person) => person.id === action.participantId);
+              const channelLabel = FOLLOW_UP_CHANNELS.find((channel) => channel.id === action.channel)?.label || action.channel;
+              return (
+                <View key={action.id} style={styles.actionRow}>
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: action.status === 'completed' }}
+                    accessibilityLabel={`${action.status === 'completed' ? 'Reopen' : 'Complete'} ${action.title}`}
+                    onPress={() => toggleAction(action.id)}>
+                    <CheckCircle size={22} color={action.status === 'completed' ? colors.accent : colors.muted} weight={action.status === 'completed' ? 'fill' : 'regular'} />
+                  </Pressable>
+                  <View style={styles.actionCopy}>
+                    <Text style={[styles.actionTitle, action.status === 'completed' && styles.actionTitleDone]}>{action.title}</Text>
+                    <Text style={styles.helperCopy}>{action.owner === 'me' ? 'You' : participant?.name || action.assigneeName || 'Guest'} · {channelLabel}{action.dueAt ? ` · ${formatDueLabel(action.dueAt)}` : ''}</Text>
+                  </View>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${action.title}`} onPress={() => removeAction(action.id)} hitSlop={8}>
+                    <Trash size={19} color={colors.muted} />
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        ) : <Text style={styles.helperCopy}>No next actions yet.</Text>}
+        <View style={styles.actionComposer}>
+          <TextInput
+            value={newActionTitle}
+            onChangeText={setNewActionTitle}
+            placeholder="e.g. Send the product draft"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+          />
+          <Text style={styles.label}>Owner</Text>
+          <View style={styles.choiceRow}>
+            <Pressable accessibilityRole="button" accessibilityState={{ selected: newActionOwner === 'me' }} onPress={() => setNewActionOwner('me')} style={[styles.choiceChip, newActionOwner === 'me' && styles.choiceChipActive]}>
+              <Text style={[styles.choiceChipText, newActionOwner === 'me' && styles.choiceChipTextActive]}>Me</Text>
+            </Pressable>
+            {encounter.participants.map((person) => (
+              <Pressable key={person.id} accessibilityRole="button" accessibilityState={{ selected: newActionOwner === person.id }} onPress={() => setNewActionOwner(person.id)} style={[styles.choiceChip, newActionOwner === person.id && styles.choiceChipActive]}>
+                <Text style={[styles.choiceChipText, newActionOwner === person.id && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>Channel</Text>
+          <View style={styles.choiceRow}>
+            {FOLLOW_UP_CHANNELS.map((channel) => (
+              <Pressable key={channel.id} accessibilityRole="button" accessibilityState={{ selected: newActionChannel === channel.id }} onPress={() => setNewActionChannel(channel.id)} style={[styles.choiceChip, newActionChannel === channel.id && styles.choiceChipActive]}>
+                <Text style={[styles.choiceChipText, newActionChannel === channel.id && styles.choiceChipTextActive]}>{channel.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <FollowUpDuePicker dueAt={newActionDueAt} onChange={setNewActionDueAt} />
+          <Button variant="secondary" disabled={!newActionTitle.trim()} onPress={addAction}>
+            <Plus size={18} color={colors.ink} weight="bold" />
+            Add action
+          </Button>
+        </View>
         {encounter.guestFollowUp?.committedAt ? (
           <View style={styles.statusRow}>
             <CheckCircle size={18} color={colors.accent} weight="fill" />
@@ -588,6 +674,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   notesField: { height: 140, maxHeight: 140, paddingTop: spacing.x3, textAlignVertical: 'top' },
+  privateNotesField: { height: 110, maxHeight: 110, paddingTop: spacing.x3, textAlignVertical: 'top' },
   summaryCopy: { color: colors.ink, fontSize: 15, lineHeight: 22, flex: 1 },
+  peopleWrap: { gap: spacing.x2 },
+  peopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
+  personChip: { paddingHorizontal: spacing.x3, paddingVertical: spacing.x2, borderRadius: radius.medium, backgroundColor: colors.canvas },
+  personChipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
+  actionList: { gap: spacing.x2 },
+  actionRow: { minHeight: 54, padding: spacing.x3, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderRadius: radius.medium, backgroundColor: colors.canvas },
+  actionCopy: { flex: 1, gap: 2 },
+  actionTitle: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  actionTitleDone: { color: colors.muted, textDecorationLine: 'line-through' },
+  actionComposer: { marginTop: spacing.x2, paddingTop: spacing.x4, gap: spacing.x3, borderTopWidth: 1, borderTopColor: colors.line },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
+  choiceChip: { minHeight: 36, paddingHorizontal: spacing.x3, justifyContent: 'center', borderRadius: radius.medium, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  choiceChipActive: { borderColor: colors.ink, backgroundColor: colors.ink },
+  choiceChipText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
+  choiceChipTextActive: { color: colors.white },
   actions: { gap: spacing.x2 },
 });

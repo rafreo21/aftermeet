@@ -1,13 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/auth-context';
 import {
   ACTIVE_CARD_KEY,
   CARDS_STORAGE_KEY,
   createMobileCard,
+  DIRTY_CARDS_STORAGE_KEY,
   getActiveCardId,
   LEGACY_CARD_KEY,
+  libraryPayloadToMobileCard,
   MAX_CARDS,
   mobileCardToLibraryPayload,
   remoteRowToMobileCard,
@@ -84,6 +87,7 @@ export function CardProvider({ children }: PropsWithChildren) {
 
   const cardsRef = useRef(cards);
   const activeCardIdRef = useRef(activeCardId);
+  const dirtyCardIdsRef = useRef(new Set<string>());
   cardsRef.current = cards;
   activeCardIdRef.current = activeCardId;
 
@@ -99,7 +103,8 @@ export function CardProvider({ children }: PropsWithChildren) {
       AsyncStorage.getItem(CARDS_STORAGE_KEY),
       AsyncStorage.getItem(LEGACY_CARD_KEY),
       AsyncStorage.getItem(ACTIVE_CARD_KEY),
-    ]).then(([storedCards, legacyCard, storedActiveId]) => {
+      AsyncStorage.getItem(DIRTY_CARDS_STORAGE_KEY),
+    ]).then(([storedCards, legacyCard, storedActiveId, storedDirtyIds]) => {
       let nextCards = withoutPreviewCards(mapStoredCards(storedCards ? JSON.parse(storedCards) : []));
       if (!nextCards.length && legacyCard) {
         try {
@@ -109,8 +114,23 @@ export function CardProvider({ children }: PropsWithChildren) {
       }
       setCards(nextCards);
       setActiveCardIdState(getActiveCardId(nextCards, storedActiveId));
+      try {
+        const dirtyIds = JSON.parse(storedDirtyIds || '[]');
+        dirtyCardIdsRef.current = new Set(Array.isArray(dirtyIds) ? dirtyIds.filter((id): id is string => typeof id === 'string') : []);
+      } catch {
+        dirtyCardIdsRef.current = new Set();
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
+  }, []);
+
+  const setCardDirty = useCallback(async (id: string, dirty: boolean, replacementId?: string) => {
+    const next = new Set(dirtyCardIdsRef.current);
+    next.delete(id);
+    if (replacementId) next.delete(replacementId);
+    if (dirty) next.add(replacementId || id);
+    dirtyCardIdsRef.current = next;
+    await AsyncStorage.setItem(DIRTY_CARDS_STORAGE_KEY, JSON.stringify([...next]));
   }, []);
 
   const persistCards = useCallback(async (nextCards: MobileCard[], nextActiveId?: string) => {
@@ -148,26 +168,28 @@ export function CardProvider({ children }: PropsWithChildren) {
         const responsePayload = await response.json().catch(() => null) as { error?: string } | null;
         throw new Error(responsePayload?.error || 'We couldn’t save this card.');
       }
-      return payload;
+      const responsePayload = await response.json().catch(() => null) as {
+        card?: Parameters<typeof libraryPayloadToMobileCard>[0];
+      } | null;
+      return responsePayload?.card ? libraryPayloadToMobileCard(responsePayload.card) : payload;
     }
 
     let payload = card;
-    await persistPayload(payload);
+    payload = await persistPayload(payload);
 
-    if (!card.id) return payload;
+    if (!payload.id) return payload;
 
     try {
-      const uploaded = await uploadCardImagesForPublish(session.access_token, card.id, {
-        photo: card.photo || '',
-        coverPhoto: card.coverPhoto || '',
-        companyLogo: card.showCompanyDetails !== false ? (card.companyLogo || '') : '',
+      const uploaded = await uploadCardImagesForPublish(session.access_token, payload.id, {
+        photo: payload.photo || '',
+        coverPhoto: payload.coverPhoto || '',
+        companyLogo: payload.showCompanyDetails !== false ? (payload.companyLogo || '') : '',
       });
       const imagesChanged = uploaded.photo !== payload.photo
         || uploaded.coverPhoto !== payload.coverPhoto
         || uploaded.companyLogo !== payload.companyLogo;
       if (imagesChanged) {
-        payload = { ...card, ...uploaded };
-        await persistPayload(payload);
+        payload = await persistPayload({ ...payload, ...uploaded });
       }
     } catch (error) {
       if (options?.strictImages) {
@@ -183,6 +205,23 @@ export function CardProvider({ children }: PropsWithChildren) {
     if (!supabase || !session) return;
     setSyncing(true);
     try {
+      if (session.access_token && dirtyCardIdsRef.current.size) {
+        const localCards = withoutPreviewCards(cardsRef.current);
+        let reconciledCards = localCards;
+        for (const local of localCards.filter((card) => card.id && dirtyCardIdsRef.current.has(card.id))) {
+          try {
+            const saved = await saveRemoteCard(local);
+            reconciledCards = reconciledCards.map((card) => card.id === local.id ? saved : card);
+            await setCardDirty(local.id!, false, saved.id);
+          } catch {
+            // Keep this local card dirty and retry on the next foreground sync.
+          }
+        }
+        if (cardsSnapshot(reconciledCards) !== cardsSnapshot(cardsRef.current)) {
+          await persistCards(reconciledCards, getActiveCardId(reconciledCards, activeCardIdRef.current));
+        }
+      }
+
       const { data: rawContext } = await supabase.rpc('get_my_app_context').single();
       const context = rawContext as { workspace_id?: string } | null;
       if (!context?.workspace_id) return;
@@ -194,7 +233,14 @@ export function CardProvider({ children }: PropsWithChildren) {
         .order('updated_at', { ascending: false })
         .limit(MAX_CARDS);
       if (remoteRows?.length) {
-        const remoteCards = remoteRows.map((row) => remoteRowToMobileCard(row));
+        const localCards = withoutPreviewCards(cardsRef.current);
+        const remoteCards = remoteRows.map((row) => {
+          const remote = remoteRowToMobileCard(row);
+          const dirtyLocal = localCards.find((local) => (
+            local.id === remote.id || local.slug === remote.slug
+          ) && local.id && dirtyCardIdsRef.current.has(local.id));
+          return dirtyLocal || remote;
+        });
         await Promise.all(
           remoteCards
             .filter((item) => item.status === 'published')
@@ -223,12 +269,26 @@ export function CardProvider({ children }: PropsWithChildren) {
     } finally {
       setSyncing(false);
     }
-  }, [persistCards, saveRemoteCard, session]);
+  }, [persistCards, saveRemoteCard, session, setCardDirty]);
 
   useEffect(() => {
     if (!session) return;
     const task = setTimeout(() => { void sync(); }, 0);
     return () => clearTimeout(task);
+  }, [session?.user?.id, sync]);
+
+  useEffect(() => {
+    if (!session) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void sync();
+    });
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') void sync();
+    }, 30_000);
+    return () => {
+      subscription.remove();
+      clearInterval(interval);
+    };
   }, [session?.user?.id, sync]);
 
   const setPrimaryCard = useCallback(async (id: string) => {
@@ -248,15 +308,20 @@ export function CardProvider({ children }: PropsWithChildren) {
     const card = createMobileCard({ theme: palette, ...seed });
     const nextCards = [...currentCards, card];
     await persistCards(nextCards, card.id!);
+    await setCardDirty(card.id!, true);
     if (session?.access_token) {
       try {
-        await saveRemoteCard(card);
+        const saved = await saveRemoteCard(card);
+        const syncedCards = nextCards.map((item) => (item.id === card.id ? saved : item));
+        await persistCards(syncedCards, saved.id);
+        await setCardDirty(card.id!, false, saved.id);
+        return saved;
       } catch {
         // Local card remains available even if sync fails.
       }
     }
     return card;
-  }, [persistCards, saveRemoteCard, session?.access_token]);
+  }, [persistCards, saveRemoteCard, session?.access_token, setCardDirty]);
 
   const updateCardById = useCallback(async (id: string, changes: Partial<MobileCard>) => {
     const current = cardsRef.current.find((item) => item.id === id);
@@ -264,15 +329,14 @@ export function CardProvider({ children }: PropsWithChildren) {
     const nextCard = normalizeCard({ ...current, ...changes, theme: normalizeThemeColor(changes.theme || current.theme) });
     const nextCards = cardsRef.current.map((item) => (item.id === id ? nextCard : item));
     await persistCards(nextCards);
+    await setCardDirty(id, true);
     if (session?.access_token) {
       try {
         const saved = await saveRemoteCard(nextCard);
         if (saved) {
-          const merged = { ...nextCard, photo: saved.photo, coverPhoto: saved.coverPhoto, companyLogo: saved.companyLogo };
-          if (merged.photo !== nextCard.photo || merged.coverPhoto !== nextCard.coverPhoto || merged.companyLogo !== nextCard.companyLogo) {
-            const syncedCards = cardsRef.current.map((item) => (item.id === id ? merged : item));
-            await persistCards(syncedCards);
-          }
+          const syncedCards = nextCards.map((item) => (item.id === id ? saved : item));
+          await persistCards(syncedCards, activeCardIdRef.current === id ? saved.id : undefined);
+          await setCardDirty(id, false, saved.id);
         }
       } catch {
         // Local edits remain available offline.
@@ -287,7 +351,7 @@ export function CardProvider({ children }: PropsWithChildren) {
         );
       }
     }
-  }, [persistCards, saveRemoteCard, session?.access_token]);
+  }, [persistCards, saveRemoteCard, session?.access_token, setCardDirty]);
 
   const cardPublicUrl = useCallback((target: MobileCard) => {
     const env = readEnv();
@@ -389,9 +453,10 @@ export function CardProvider({ children }: PropsWithChildren) {
       activeCardIdRef.current === id ? nextCards[0]?.id || '' : activeCardIdRef.current,
     );
     await persistCards(nextCards, nextActiveId);
+    await setCardDirty(id, false);
     void clearPublishedBaseline(id);
     return true;
-  }, [persistCards, session]);
+  }, [persistCards, session, setCardDirty]);
 
   const getCardById = useCallback(
     (cardId: string) => cards.find((item) => item.id === cardId),
