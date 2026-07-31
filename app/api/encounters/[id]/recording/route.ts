@@ -3,13 +3,7 @@ import { NextResponse } from "next/server";
 import { createApiSupabaseClient, resolveApiUser } from "../../../../../lib/auth/api-request";
 import { cloudExpiresAt } from "../../../../../lib/recording-metadata";
 import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../lib/supabase/service";
-
-function guessExtension(mimeType: string) {
-  if (mimeType.includes("wav")) return "wav";
-  if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
-  if (mimeType.includes("aac")) return "aac";
-  return "m4a";
-}
+import { audioFileExtension, detectAudioMimeType } from "../../../../../lib/audio-format";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -39,9 +33,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Shared recording storage is not configured yet." }, { status: 503 });
   }
 
-  const mimeType = audio.type || "audio/mp4";
-  const storagePath = `${user.workspaceId}/${id}.${guessExtension(mimeType)}`;
   const buffer = Buffer.from(await audio.arrayBuffer());
+  const mimeType = detectAudioMimeType(buffer, audio.type);
+  const storagePath = `${user.workspaceId}/${id}.${audioFileExtension(mimeType)}`;
   const upload = await service.storage
     .from(ENCOUNTER_RECORDINGS_BUCKET)
     .upload(storagePath, buffer, { contentType: mimeType, upsert: true });

@@ -15,6 +15,41 @@ import { BrandMark } from "../../components/BrandMark";
 import "../../app/product.css";
 import "../../app/flow.css";
 
+const LOCAL_PREVIEW_AUDIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+function buildLocalPreviewEncounter(): Encounter {
+  const now = new Date();
+  return {
+    id: "local-preview-encounter",
+    title: "Meeting with Alex Morgan",
+    personName: "Alex Morgan",
+    personEmail: "alex@example.com",
+    startedAt: now.toISOString(),
+    endedAt: now.toISOString(),
+    durationSeconds: 12,
+    consent: { confirmed: true, method: "verbal", confirmedAt: now.toISOString(), scriptVersion: "2026-07-26" },
+    transcript: "",
+    privateNotes: "",
+    sharedSummary: "We aligned on the proposal, timing, and the next conversation.",
+    recording: {
+      id: "local-preview-recording",
+      durationSeconds: 12,
+      fileSize: 0,
+      mimeType: "audio/wav",
+      source: "recorded",
+      retention: "never",
+      expiresAt: null,
+      createdAt: now.toISOString(),
+      sharedAudioUrl: LOCAL_PREVIEW_AUDIO,
+      cloudExpiresAt: new Date(now.getTime() + CLOUD_RECORDING_RETENTION_DAYS * 86_400_000).toISOString(),
+    },
+    actions: [{ id: "local-preview-action", title: "Review the proposal before Friday", channel: "email", owner: "guest", dueAt: "Friday", status: "open" }],
+    participants: [],
+    status: "shared",
+    shareToken: "preview",
+  };
+}
+
 export default function GuestEncounterPage() {
   const [encounter, setEncounter] = useState<Encounter | null | undefined>(undefined);
   const [followUpNote, setFollowUpNote] = useState("");
@@ -25,6 +60,10 @@ export default function GuestEncounterPage() {
 
   useEffect(() => {
     const token = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
+    if (token === "preview" && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+      void Promise.resolve().then(() => setEncounter(buildLocalPreviewEncounter()));
+      return;
+    }
     void fetch(`/api/encounters/share/${encodeURIComponent(token)}`)
       .then(async (response) => {
         if (response.ok) {
@@ -90,13 +129,23 @@ export default function GuestEncounterPage() {
 
   async function commitFollowUp() {
     if (!encounter || followUpSubmitting) return;
+    const note = followUpNote.trim();
+    if (note.length < 3) {
+      setFollowUpError("Add the next step you intend to take.");
+      return;
+    }
     setFollowUpSubmitting(true);
     setFollowUpError("");
+    if (encounter.shareToken === "preview" && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+      setEncounter({ ...encounter, guestFollowUp: { committedAt: new Date().toISOString(), note } });
+      setFollowUpSubmitting(false);
+      return;
+    }
     try {
       const response = await fetch(`/api/encounters/share/${encodeURIComponent(encounter.shareToken)}/follow-up`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: followUpNote }),
+        body: JSON.stringify({ note }),
       });
       const payload = await response.json() as { guestFollowUp?: Encounter["guestFollowUp"]; error?: string };
       if (!response.ok || !payload.guestFollowUp) {
@@ -113,7 +162,7 @@ export default function GuestEncounterPage() {
 
   const guestActions = encounter.actions.filter((action) => action.owner === "guest");
   const sharedRecordingUrl = encounter.recording?.sharedAudioUrl
-    ? (encounter.recording.sharedAudioUrl.startsWith("http")
+    ? (encounter.recording.sharedAudioUrl.startsWith("http") || encounter.recording.sharedAudioUrl.startsWith("data:")
       ? encounter.recording.sharedAudioUrl
       : `${window.location.origin}${encounter.recording.sharedAudioUrl}`)
     : null;
@@ -174,14 +223,14 @@ export default function GuestEncounterPage() {
           </section>
         </div>
         <section className="guest-follow-up">
-          <span>Your commitment</span><h2>Will you follow up too?</h2>
+          <span>Your next step</span><h2>What will you do after this meeting?</h2>
           {encounter.guestFollowUp?.committedAt ? (
-            <article><CheckCircleIcon size={24} weight="fill" /><div><strong>You said you&apos;ll follow up.</strong>{encounter.guestFollowUp.note ? <small>{encounter.guestFollowUp.note}</small> : null}</div></article>
+            <article><CheckCircleIcon size={24} weight="fill" /><div><strong>Your next step was shared with the meeting host.</strong>{encounter.guestFollowUp.note ? <small>{encounter.guestFollowUp.note}</small> : null}</div></article>
           ) : (
             <>
-              <p>Following up isn&apos;t just on them — let them know you&apos;re on it too.</p>
+              <p>Add the action you intend to take. It will appear in the host&apos;s AfterMeet follow-up view alongside this meeting.</p>
               <label className="guest-follow-up-label" htmlFor="guest-follow-up-note">
-                What will you do? <span>Optional</span>
+                What will you do?
               </label>
               <textarea
                 id="guest-follow-up-note"
@@ -190,17 +239,19 @@ export default function GuestEncounterPage() {
                 placeholder="For example: I’ll send the proposal on Friday."
                 rows={2}
                 maxLength={280}
+                required
               />
-              <small className="guest-follow-up-help">This is shared with the meeting host and saved as your commitment. Leave it blank to confirm without adding details.</small>
+              <small className="guest-follow-up-help">Be specific enough to remember later—for example, include what you will send, who you will contact, or when you will respond.</small>
               {followUpError ? <small className="guest-form-error">{followUpError}</small> : null}
               <Button
                 type="button"
                 variant="primary"
                 size="normal"
                 loading={followUpSubmitting}
+                disabled={followUpNote.trim().length < 3}
                 onClick={() => void commitFollowUp()}
               >
-                {followUpSubmitting ? "Saving…" : "Confirm my follow-up"}
+                {followUpSubmitting ? "Sharing…" : "Share my next step"}
               </Button>
             </>
           )}

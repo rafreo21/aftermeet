@@ -619,6 +619,16 @@
 .guest-follow-up-help { margin-top:-6px; color:var(--p-muted); font-size:11px; line-height:1.45; }
 .guest-follow-up article { padding:14px; display:flex; align-items:center; gap:10px; border-radius:8px; background:var(--p-sky); }
 .guest-follow-up article div { display:grid; gap:4px; }
+.guest-commitments { display:grid; gap:14px; }
+.guest-commitments > header { display:flex; align-items:end; justify-content:space-between; gap:20px; }
+.guest-commitments > header h2 { margin:8px 0 0; font-size:22px; letter-spacing:-.035em; }
+.guest-commitments > header small { color:var(--p-muted); }
+.guest-commitment-item > svg { color:var(--p-navy); flex:none; }
+.guest-response-list { margin-bottom:18px; padding:16px; display:grid; gap:10px; border-radius:8px; background:var(--p-sky); }
+.guest-response-list > article { display:flex; align-items:flex-start; gap:10px; }
+.guest-response-list > article > svg { flex:none; color:var(--p-navy); }
+.guest-response-list > article div { display:grid; gap:3px; }
+.guest-response-list > article small { color:var(--p-muted); }
 .guest-form-error { color:#b42318; font-weight:700; }
 .guest-claim { padding:24px; display:grid; grid-template-columns:1fr auto; gap:20px; align-items:center; border-radius:10px; background:var(--p-navy); color:white; }
 .guest-claim > div > span { color:var(--p-blue); }

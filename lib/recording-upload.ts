@@ -1,10 +1,8 @@
 import type { LocalRecordingMetadata } from "./local-recordings";
+import { audioFileExtension } from "./audio-format";
 
 function guessFileName(mimeType: string, encounterId: string) {
-  if (mimeType.includes("wav")) return `${encounterId}.wav`;
-  if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return `${encounterId}.mp3`;
-  if (mimeType.includes("aac")) return `${encounterId}.aac`;
-  return `${encounterId}.m4a`;
+  return `${encounterId}.${audioFileExtension(mimeType)}`;
 }
 
 export async function uploadEncounterRecording(

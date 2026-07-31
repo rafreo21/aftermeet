@@ -5,6 +5,7 @@ import {
   normalizeIncomingRecording,
 } from "../../../../../../lib/recording-metadata";
 import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../../lib/supabase/service";
+import { audioFileExtension, detectAudioMimeType } from "../../../../../../lib/audio-format";
 
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -44,14 +45,12 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     return NextResponse.json({ error: "Could not load this recording." }, { status: 404 });
   }
 
-  const mimeType = recording?.mimeType || "audio/mp4";
   const buffer = Buffer.from(await download.data.arrayBuffer());
+  // Trust the file signature over historical metadata. Some iOS recordings
+  // were uploaded as audio/mpeg even though the bytes are an MP4/M4A file.
+  const mimeType = detectAudioMimeType(buffer, recording?.mimeType || download.data.type);
   const totalLength = buffer.byteLength;
-  const extension = mimeType.includes("wav") ? "wav"
-    : mimeType.includes("webm") ? "webm"
-    : mimeType.includes("ogg") ? "ogg"
-    : mimeType.includes("mpeg") || mimeType.includes("mp3") ? "mp3"
-    : "m4a";
+  const extension = audioFileExtension(mimeType);
   const filename = `aftermeet-recording.${extension}`;
 
   // <audio> elements issue Range requests (Safari probes with `bytes=0-1`

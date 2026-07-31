@@ -34,6 +34,10 @@ export type OutboundDraft = {
 };
 
 export type GuestFollowUp = {
+  id?: string;
+  participantId?: string;
+  guestName?: string;
+  guestEmail?: string;
   committedAt: string;
   note?: string;
 };
@@ -64,6 +68,7 @@ export type Encounter = {
   status: "draft" | "reviewed" | "shared" | "archived";
   shareToken: string;
   guestFollowUp?: GuestFollowUp;
+  guestFollowUps?: GuestFollowUp[];
 };
 
 const STORAGE_KEY = "aftermeet-encounters-v1";
@@ -121,6 +126,7 @@ type EncounterRow = {
   status: Encounter["status"];
   share_token: string;
   guest_follow_up: GuestFollowUp | null;
+  guest_follow_ups?: GuestFollowUp[];
 };
 
 export function encounterFromApi(row: EncounterRow | Record<string, unknown>): Encounter {
@@ -146,6 +152,7 @@ export function encounterFromApi(row: EncounterRow | Record<string, unknown>): E
     status: record.status ?? "draft",
     shareToken: record.share_token,
     guestFollowUp: record.guest_follow_up ?? undefined,
+    guestFollowUps: Array.isArray(record.guest_follow_ups) ? record.guest_follow_ups : [],
   };
 }
 
@@ -191,6 +198,9 @@ export function encounterFromSharedPayload(payload: Record<string, unknown>): En
     guestFollowUp: payload.guestFollowUp && typeof payload.guestFollowUp === "object"
       ? payload.guestFollowUp as GuestFollowUp
       : undefined,
+    guestFollowUps: Array.isArray(payload.guestFollowUps)
+      ? payload.guestFollowUps as GuestFollowUp[]
+      : [],
   };
 }
 

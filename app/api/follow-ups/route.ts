@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../lib/encounters";
 import { fetchParticipantsByEncounter } from "../../../lib/encounter-participants-server";
+import { fetchGuestFollowUpsByEncounter } from "../../../lib/encounter-guest-follow-ups-server";
 import { flattenOpenFollowUps, sortFollowUps } from "../../../lib/follow-ups-server";
 
 export async function GET(request: Request) {
@@ -26,9 +27,11 @@ export async function GET(request: Request) {
 
   const encounterIds = (data ?? []).map((row) => row.id as string);
   const participantsByEncounter = await fetchParticipantsByEncounter(supabase, encounterIds);
+  const guestFollowUpsByEncounter = await fetchGuestFollowUpsByEncounter(supabase, encounterIds);
   const encounters = (data ?? []).map((row) => encounterFromApi({
     ...row,
     participants: participantsByEncounter.get(row.id as string) ?? [],
+    guest_follow_ups: guestFollowUpsByEncounter.get(row.id as string) ?? [],
   }));
   const followUps = sortFollowUps(flattenOpenFollowUps(encounters));
 

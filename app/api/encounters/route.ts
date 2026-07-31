@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
 import { encounterFromApi, type EncounterParticipant } from "../../../lib/encounters";
 import { fetchParticipantsByEncounter } from "../../../lib/encounter-participants-server";
+import { fetchGuestFollowUpsByEncounter } from "../../../lib/encounter-guest-follow-ups-server";
 import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
@@ -84,9 +85,11 @@ export async function GET(request: Request) {
 
   const encounterIds = (data ?? []).map((row) => row.id as string);
   const participantsByEncounter = await fetchParticipantsByEncounter(supabase, encounterIds);
+  const guestFollowUpsByEncounter = await fetchGuestFollowUpsByEncounter(supabase, encounterIds);
   let encounters = (data ?? []).map((row) => encounterFromApi({
     ...row,
     participants: participantsByEncounter.get(row.id as string) ?? [],
+    guest_follow_ups: guestFollowUpsByEncounter.get(row.id as string) ?? [],
   }));
   if (contactId || sourceId || exchangeId || email) {
     encounters = encounters.filter((encounter) => {

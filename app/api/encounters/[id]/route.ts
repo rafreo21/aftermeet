@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createApiSupabaseClient, resolveApiUser } from "../../../../lib/auth/api-request";
 import { encounterFromApi } from "../../../../lib/encounters";
 import { fetchParticipantsByEncounter } from "../../../../lib/encounter-participants-server";
+import { fetchGuestFollowUpsByEncounter } from "../../../../lib/encounter-guest-follow-ups-server";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -25,7 +26,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const participantsByEncounter = await fetchParticipantsByEncounter(supabase, [id]);
-  const encounter = encounterFromApi({ ...data, participants: participantsByEncounter.get(id) ?? [] });
+  const guestFollowUpsByEncounter = await fetchGuestFollowUpsByEncounter(supabase, [id]);
+  const encounter = encounterFromApi({
+    ...data,
+    participants: participantsByEncounter.get(id) ?? [],
+    guest_follow_ups: guestFollowUpsByEncounter.get(id) ?? [],
+  });
 
   return NextResponse.json({ encounter }, { headers: { "Cache-Control": "private, no-store" } });
 }

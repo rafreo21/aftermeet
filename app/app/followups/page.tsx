@@ -72,6 +72,20 @@ export default function FollowupsPage() {
     () => allActions.filter(({ action }) => (scope === "past" ? action.status === "completed" : action.status !== "completed")),
     [allActions, scope],
   );
+  const guestCommitments = useMemo(() => encounters.flatMap((encounter) => {
+    const rows = encounter.guestFollowUps?.length
+      ? encounter.guestFollowUps
+      : encounter.guestFollowUp
+        ? [encounter.guestFollowUp]
+        : [];
+    return rows
+      .filter((commitment) => commitment.note?.trim())
+      .map((commitment, index) => ({
+        encounter,
+        commitment,
+        key: commitment.id || `${encounter.id}-${commitment.committedAt}-${index}`,
+      }));
+  }), [encounters]);
 
   function completeAction(encounterId: string, actionId: string) {
     const updated = updateEncounter(encounterId, (encounter) => ({ ...encounter, actions: encounter.actions.map((action) => action.id === actionId ? { ...action, status: "completed" } : action) }));
@@ -112,6 +126,27 @@ export default function FollowupsPage() {
           <button type="button" className={scope === "current" ? "active" : ""} onClick={() => setScope("current")}>Current</button>
           <button type="button" className={scope === "past" ? "active" : ""} onClick={() => setScope("past")}>Past</button>
         </div>
+        {hydrated && scope === "current" && guestCommitments.length ? (
+          <section className="guest-commitments" aria-labelledby="guest-commitments-heading">
+            <header>
+              <div><span className="step-pill">Their commitments</span><h2 id="guest-commitments-heading">What others said they&apos;ll do</h2></div>
+              <small>These are confirmations, not tasks assigned to you.</small>
+            </header>
+            <div className="inbox-list">
+              {guestCommitments.map(({ encounter, commitment, key }) => (
+                <article className="inbox-item guest-commitment-item" key={key}>
+                  <CheckCircleIcon size={22} weight="fill" />
+                  <div>
+                    <h2>{commitment.note}</h2>
+                    <p>{commitment.guestName || encounter.personName || "Meeting participant"} <span className="owner-tag">Confirmed</span>{" · "}{encounter.title}</p>
+                    <small>Shared {new Date(commitment.committedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</small>
+                  </div>
+                  <div className="inbox-actions"><LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>Review context</LinkButton></div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {!hydrated ? <PageSkeleton rows={3} /> : visibleActions.length ? <div className="inbox-list">{visibleActions.map(({ encounter, action }) => {
           const context = buildActionLinkContext(
             encounter,

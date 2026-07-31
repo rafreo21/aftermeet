@@ -15,6 +15,9 @@ export async function POST(request: Request, context: { params: Promise<{ token:
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 280) : "";
+  if (note.length < 3) {
+    return NextResponse.json({ error: "Add the next step you intend to take." }, { status: 400 });
+  }
   const shareToken = token.trim();
 
   // Prefer the service client for this narrowly-scoped public write. This

@@ -245,6 +245,11 @@ export default function EncounterReviewPage() {
   }
 
   const guestUrl = `${window.location.origin}/e/${encounter.shareToken}`;
+  const guestCommitments = encounter.guestFollowUps?.length
+    ? encounter.guestFollowUps
+    : encounter.guestFollowUp
+      ? [encounter.guestFollowUp]
+      : [];
   const cloudExpired = isCloudRecordingExpired(encounter.recording);
   const cloudAvailableUntil = formatRecordingAvailableUntil(encounter.recording?.cloudExpiresAt);
   const recordingEmailHref = recordingShareMailtoHref({
@@ -313,6 +318,17 @@ export default function EncounterReviewPage() {
 
           <section className="review-section">
             <header><span><CheckCircleIcon size={20} weight="bold" /></span><div><h2>Next actions</h2><p>Assign each promise clearly. Every open action appears in the right person’s Inbox.</p></div></header>
+            {guestCommitments.length ? (
+              <div className="guest-response-list">
+                <span className="step-pill">Confirmed by participants</span>
+                {guestCommitments.map((commitment, index) => (
+                  <article key={commitment.id || `${commitment.committedAt}-${index}`}>
+                    <CheckCircleIcon size={20} weight="fill" />
+                    <div><strong>{commitment.note || "They confirmed they will follow up."}</strong><small>{commitment.guestName || participantName(commitment.participantId) || "Guest"} · shared {new Date(commitment.committedAt).toLocaleDateString()}</small></div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
             <div className="action-list">
               {encounter.actions.map((action) => (
                 <article key={action.id}>
