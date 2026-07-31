@@ -81,7 +81,7 @@ export function ShareCardModal({
               <strong>{cardName || "Your card"}</strong>
               <small>QR code</small>
               {qrDataUrl ? (
-                <LinkButton size="small" variant="secondary" href={qrDataUrl} download="aftermeet-qr.png">
+                <LinkButton size="small" variant="secondary" href={qrDataUrl} download={qrDataUrl.startsWith("data:image/svg+xml") ? "aftermeet-qr.svg" : "aftermeet-qr.png"}>
                   <DownloadSimpleIcon size={16} weight="bold" />Download
                 </LinkButton>
               ) : null}

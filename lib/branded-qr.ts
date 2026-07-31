@@ -80,9 +80,35 @@ export async function buildBrandedQrPngBuffer(payload: string, size = 1024) {
     .toBuffer();
 }
 
+/**
+ * Builds the branded QR as a self-contained SVG (QR modules + logo badge, all
+ * drawn with markup) instead of compositing raster layers with sharp. This is
+ * what every current caller actually needs — an `<img>`/`<image>`-embeddable
+ * data URI — and it works in every runtime, including the local dev sandbox
+ * where sharp's native/wasm bindings can't load at all.
+ */
 export async function buildBrandedQrDataUri(payload: string, size = 1024) {
-  const buffer = await buildBrandedQrPngBuffer(payload, size);
-  return `data:image/png;base64,${buffer.toString("base64")}`;
+  const [qrSvg, logoBuffer] = await Promise.all([
+    QRCode.toString(payload, { ...QR_OPTIONS, type: "svg", width: size }),
+    loadAfterMeetLogoBuffer(),
+  ]);
+  const qrDataUri = `data:image/svg+xml;base64,${Buffer.from(qrSvg).toString("base64")}`;
+
+  const logoSize = Math.round(size * 0.24);
+  const badgePadding = Math.max(5, Math.round(size * 0.014));
+  const badgeSize = logoSize + badgePadding * 2;
+  const left = Math.round((size - badgeSize) / 2);
+  const top = left;
+
+  const composed = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+    `<image href="${qrDataUri}" width="${size}" height="${size}"/>`,
+    `<rect x="${left}" y="${top}" width="${badgeSize}" height="${badgeSize}" fill="#FFFFFF"/>`,
+    `<image href="data:image/png;base64,${logoBuffer.toString("base64")}" x="${left + badgePadding}" y="${top + badgePadding}" width="${logoSize}" height="${logoSize}"/>`,
+    `</svg>`,
+  ].join("");
+
+  return `data:image/svg+xml;base64,${Buffer.from(composed).toString("base64")}`;
 }
 
 export async function buildBrandedContactQrPngBuffer(input: CardVcardInput, size = 1024) {
@@ -90,8 +116,7 @@ export async function buildBrandedContactQrPngBuffer(input: CardVcardInput, size
 }
 
 export async function buildBrandedContactQrDataUri(input: CardVcardInput, size = 1024) {
-  const buffer = await buildBrandedContactQrPngBuffer(input, size);
-  return `data:image/png;base64,${buffer.toString("base64")}`;
+  return buildBrandedQrDataUri(buildContactQrPayload(input), size);
 }
 
 export async function buildWalletLogoBuffers() {

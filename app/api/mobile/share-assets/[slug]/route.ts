@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-import {
-  buildVirtualBackgroundJpeg,
-  buildWatchFacePng,
-  shareAssetFilename,
-  shareAssetMimeType,
-  type ShareAssetProfile,
-} from "../../../../../lib/share-assets";
+import type { ShareAssetProfile } from "../../../../../lib/share-assets";
 import { buildBrandedQrDataUri } from "../../../../../lib/branded-qr.ts";
 import { resolveShareQrPayload } from "../../../../../lib/contact-qr.ts";
 import { getAppUserFromRequest } from "../../../../../lib/auth/mobile-api-auth";
@@ -90,8 +84,13 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
     }
     const size = Math.min(Math.max(Number(url.searchParams.get("size") || 512), 256), 1600);
-    const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), size);
-    return NextResponse.json({ dataUri });
+    try {
+      const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), size);
+      return NextResponse.json({ dataUri });
+    } catch (error) {
+      console.error("branded QR generation failed", error);
+      return NextResponse.json({ error: "We couldn’t generate this QR code. Try again in a moment." }, { status: 500 });
+    }
   }
 
   if (type !== "virtual-background" && type !== "watch-face") {
@@ -107,15 +106,13 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
   const profile = applyThemeOverride(loaded, request);
 
   try {
-    const asset = type === "virtual-background"
-      ? await buildVirtualBackgroundJpeg(profile)
-      : await buildWatchFacePng(profile);
-    const format = type === "virtual-background" ? "jpg" : "png";
+    const { renderVirtualBackgroundOrWatchFace } = await import("../../../../../lib/share-assets-handler");
+    const rendered = await renderVirtualBackgroundOrWatchFace(type, profile, normalized);
 
-    return new NextResponse(new Uint8Array(asset), {
+    return new NextResponse(rendered.body, {
       headers: {
-        "Content-Type": shareAssetMimeType(type),
-        "Content-Disposition": `attachment; filename="${shareAssetFilename(type, normalized, format)}"`,
+        "Content-Type": rendered.contentType,
+        "Content-Disposition": `attachment; filename="${rendered.filename}"`,
         "Cache-Control": "private, no-store",
       },
     });

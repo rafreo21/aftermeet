@@ -174,14 +174,15 @@ export default function CardsPage() {
     Promise.all([
       fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=900`)
         .then(async (response) => {
-          if (!response.ok) throw new Error("Branded QR unavailable");
+          if (!response.ok) return null;
           const payload = await response.json() as { dataUri?: string };
-          if (!payload.dataUri) throw new Error("Branded QR unavailable");
-          return payload.dataUri;
-        }),
+          return payload.dataUri || null;
+        })
+        .catch(() => null),
       QRCode.toString(shareUrl, { ...options, type: "svg" }),
     ]).then(([image, svg]) => {
-      setQr(image);
+      const svgDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      setQr(image || svgDataUri);
       setQrSvg(svg);
     }).catch(() => setQrError("We couldn’t generate this QR code. Check the card link and try again."));
   }, [profile.slug, shareUrl]);
@@ -441,7 +442,7 @@ export default function CardsPage() {
             <div className="inline-qr-url"><span>Public card link</span><strong>{shareUrl}</strong></div>
             <div className="inline-qr-actions">
               <Button onClick={copyLink}><CopyIcon size={18} weight="bold" />{copied ? "Link copied" : "Copy link"}</Button>
-              {qr && <LinkButton variant="secondary" href={qr} download="aftermeet-qr.png"><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
+              {qr && <LinkButton variant="secondary" href={qr} download={qr.startsWith("data:image/svg+xml") ? "aftermeet-qr.svg" : "aftermeet-qr.png"}><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
             </div>
             <Button fullWidth size="small" variant="ghost" disabled={!qrSvg} onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : qrSvg ? "Copy QR as SVG" : "Generating QR…"}</Button>
             <section className="signature-panel">
