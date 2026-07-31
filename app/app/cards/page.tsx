@@ -355,7 +355,7 @@ export default function CardsPage() {
                   <article key={card.id} className="card-overview-item">
                     <button onClick={() => openCard(card)} type="button">
                       <div className="card-overview-cover" style={{ background: themeSurfaceStyle(card.theme).backgroundGradient, color: themeSurfaceStyle(card.theme).color }}>
-                        <span style={themeCoverBadgeStyle(card.theme)}>{card.company[0] || card.name[0] || "A"}</span>
+                        <span style={themeCoverBadgeStyle(card.theme)}>{card.name[0] || "A"}</span>
                         <QrCodeIcon size={22} weight="bold" color={themeSurfaceStyle(card.theme).color} />
                       </div>
                       <div className="card-overview-copy"><small>Card {index + 1}</small><h3>{card.label || `Card ${index + 1}`}</h3><p>{card.name || "Finish setting up this card"}</p><strong>View card <ArrowSquareOutIcon size={15} weight="bold" /></strong></div>
