@@ -70,8 +70,13 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
     }
     const size = Math.min(Math.max(Number(url.searchParams.get("size") || 512), 256), 1600);
-    const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), size);
-    return NextResponse.json({ dataUri });
+    try {
+      const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), size);
+      return NextResponse.json({ dataUri });
+    } catch (error) {
+      console.error("branded QR generation failed", error);
+      return NextResponse.json({ error: "We couldn’t generate this QR code. Try again in a moment." }, { status: 500 });
+    }
   }
 
   if (type !== "virtual-background" && type !== "watch-face") {

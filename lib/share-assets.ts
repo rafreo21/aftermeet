@@ -1,7 +1,6 @@
-import sharp from "sharp";
-
 import { buildBrandedQrDataUri, buildBrandedQrPngBuffer } from "./branded-qr.ts";
 import { resolveShareQrPayload } from "./contact-qr.ts";
+import { loadSharp, sharpAvailable } from "./sharp-runtime.ts";
 import { loadShareAssetFontsBase64, shareAssetFontStyles } from "./share-asset-fonts.ts";
 import { normalizeThemeColor, themeGradientStops } from "./theme-contrast.ts";
 import { buildVirtualBackgroundGradientPng } from "./virtual-background-gradient.ts";
@@ -90,6 +89,10 @@ export async function buildVirtualBackgroundSvg(profile: ShareAssetProfile) {
 
 /** JPG export for Zoom, Google Meet, and Teams. */
 export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
+  if (!sharpAvailable()) {
+    throw new Error("Virtual backgrounds require sharp, which isn't available in this local dev sandbox. Test this against a Vercel preview instead.");
+  }
+  const sharp = await loadSharp();
   const panelLeft = virtualBackgroundPanelLeftForVideoApps();
 
   const [background, panelPngRaw] = await Promise.all([
@@ -110,6 +113,10 @@ export async function buildVirtualBackgroundJpeg(profile: ShareAssetProfile) {
 }
 
 export async function buildWatchFacePng(profile: ShareAssetProfile) {
+  if (!sharpAvailable()) {
+    throw new Error("Watch faces require sharp, which isn't available in this local dev sandbox. Test this against a Vercel preview instead.");
+  }
+  const sharp = await loadSharp();
   const name = escapeXml(profile.name.trim() || "My card");
   const size = 400;
   const qrDisplaySize = 240;

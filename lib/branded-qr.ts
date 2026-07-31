@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import QRCode from "qrcode";
-import sharp from "sharp";
 
 import { AFTERMEET_LOGO_PNG_BASE64 } from "./aftermeet-logo-base64.ts";
+import { loadSharp, sharpAvailable } from "./sharp-runtime.ts";
 
 import type { CardVcardInput } from "./vcard-export.ts";
 import { buildContactQrPayload } from "./contact-qr.ts";
@@ -41,14 +41,18 @@ async function loadAfterMeetLogoBuffer() {
 }
 
 export async function buildBrandedQrPngBuffer(payload: string, size = 1024) {
-  const [qrBuffer, logoBuffer] = await Promise.all([
-    QRCode.toBuffer(payload, {
-      ...QR_OPTIONS,
-      width: size,
-    }),
-    loadAfterMeetLogoBuffer(),
-  ]);
+  const qrBuffer = await QRCode.toBuffer(payload, {
+    ...QR_OPTIONS,
+    width: size,
+  });
 
+  // Cloudflare's local workerd dev sandbox can't load sharp's native/wasm bindings
+  // at all — attempting the import crashes the sandbox itself, not a catchable JS
+  // error — so we must skip the attempt entirely there and fall back to a plain QR.
+  if (!sharpAvailable()) return qrBuffer;
+  const sharp = await loadSharp();
+
+  const logoBuffer = await loadAfterMeetLogoBuffer();
   const logoSize = Math.round(size * 0.24);
   const badgePadding = Math.max(5, Math.round(size * 0.014));
   const badgeSize = logoSize + badgePadding * 2;
@@ -91,6 +95,10 @@ export async function buildBrandedContactQrDataUri(input: CardVcardInput, size =
 }
 
 export async function buildWalletLogoBuffers() {
+  if (!sharpAvailable()) {
+    throw new Error("Wallet pass images require sharp, which isn't available in this local dev sandbox. Test this against a Vercel preview instead.");
+  }
+  const sharp = await loadSharp();
   const logoBuffer = await loadAfterMeetLogoBuffer();
   const [icon, icon2x, logo, logo2x] = await Promise.all([
     sharp(logoBuffer).resize(29, 29, { fit: "contain", background: { r: 135, g: 234, b: 92, alpha: 1 } }).png().toBuffer(),

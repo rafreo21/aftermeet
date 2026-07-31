@@ -1,8 +1,7 @@
-import sharp from "sharp";
-
 import { buildWhenWeMetNote } from "./card-share-links.ts";
 import { contactMethodHref } from "./contact-methods.ts";
 import { splitFullName } from "./contacts.ts";
+import { loadSharp, sharpAvailable } from "./sharp-runtime.ts";
 
 export type CardVcardMethod = {
   method_type: string;
@@ -350,11 +349,13 @@ export async function fetchVcardImage(url: string): Promise<VcardEmbeddedImage |
 
     const buffer = Buffer.from(await response.arrayBuffer());
     if (!buffer.length) return null;
+    if (!sharpAvailable()) return null;
 
     // Re-encode through sharp: strips EXIF/ICC-profile metadata and any orientation
     // flag, and forces a plain baseline sRGB JPEG. iOS Contacts' PHOTO decoder has been
     // seen to silently drop images it can't handle (no error, just no photo shown) —
     // camera-original files carry metadata a stricter embedded decoder may choke on.
+    const sharp = await loadSharp();
     const normalized = await sharp(buffer)
       .rotate()
       .resize(320, 320, { fit: "cover" })

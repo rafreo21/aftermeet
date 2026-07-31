@@ -26,6 +26,9 @@ import { contactMethodHref, contactMethodOpensNewTab } from "../../../lib/contac
 import { buildHtmlSignature, buildPlainSignature } from "../../../lib/email-signature";
 import { WalletSharePanel } from "../../components/WalletSharePanel";
 import {
+  cardDisplayLabel,
+  cardInitials,
+  cardLeadDetail,
   createLibraryCard,
   getActiveCardId,
   type LibraryCard,
@@ -351,14 +354,24 @@ export default function CardsPage() {
             <section className="card-library-overview" aria-label="Your cards">
               <header><div><h2>Your cards</h2><p>{cards.length} of {MAX_CARDS} created</p></div></header>
               <div className="card-overview-grid">
-                {cards.map((card, index) => (
+                {cards.map((card) => (
                   <article key={card.id} className="card-overview-item">
                     <button onClick={() => openCard(card)} type="button">
-                      <div className="card-overview-cover" style={{ background: themeSurfaceStyle(card.theme).backgroundGradient, color: themeSurfaceStyle(card.theme).color }}>
-                        <span style={themeCoverBadgeStyle(card.theme)}>{card.name[0] || "A"}</span>
-                        <QrCodeIcon size={22} weight="bold" color={themeSurfaceStyle(card.theme).color} />
+                      <div className="card-overview-cover-wrap">
+                        {card.coverPhoto ? (
+                          <img src={card.coverPhoto} alt="" className="card-overview-cover-photo" />
+                        ) : (
+                          <div className="card-overview-cover-fallback" style={{ background: themeSurfaceStyle(card.theme).backgroundGradient }} />
+                        )}
+                        <div className="card-overview-avatar">
+                          {card.photo ? (
+                            <img src={card.photo} alt="" className="card-overview-avatar-photo" />
+                          ) : (
+                            <span className="card-overview-avatar-fallback">{cardInitials(card.name)}</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="card-overview-copy"><small>Card {index + 1}</small><h3>{card.label || `Card ${index + 1}`}</h3><p>{card.name || "Finish setting up this card"}</p><strong>View card <ArrowSquareOutIcon size={15} weight="bold" /></strong></div>
+                      <div className="card-overview-copy"><small>{cardDisplayLabel(card)}</small><h3>{card.name.trim() || "Add your full name"}</h3><p>{cardLeadDetail(card)}</p></div>
                     </button>
                   </article>
                 ))}

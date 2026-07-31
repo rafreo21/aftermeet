@@ -103,6 +103,22 @@ export function upsertLibraryCard(storage: StorageLike, card: LibraryCard) {
   return next;
 }
 
+export function cardDisplayLabel(card: LibraryCard) {
+  return card.label.trim() || "Untitled card";
+}
+
+export function cardLeadDetail(card: LibraryCard) {
+  const firstMethod = card.methods.find((method) => method.value.trim());
+  if (firstMethod?.value.trim()) return firstMethod.value.trim();
+  if (card.role.trim()) return card.role.trim();
+  if (card.company.trim()) return card.company.trim();
+  return "Add contact details";
+}
+
+export function cardInitials(name: string) {
+  return name.trim().split(/\s+/).map((part) => part[0] || "").join("").slice(0, 2).toUpperCase() || "AM";
+}
+
 export function removeLibraryCard(storage: StorageLike, id: string) {
   const next = readCardLibrary(storage).filter((card) => card.id !== id);
   writeCardLibrary(storage, next);

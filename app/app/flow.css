@@ -75,17 +75,18 @@
 .card-library-overview > header h2 { margin: 0 0 4px; font-size: 25px; }
 .card-library-overview > header p { margin: 0; color: var(--p-muted); font-size: 11px; }
 .card-overview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.card-overview-item { min-width: 0; overflow: hidden; border-radius: 10px; background: var(--p-ice); }
-.card-overview-item > button { width: 100%; min-height: 250px; padding: 0; display: flex; flex-direction: column; border: 0; background: transparent; color: var(--p-navy); font: inherit; text-align: left; cursor: pointer; }
-.card-overview-item > button:hover .card-overview-copy strong { gap: 10px; }
-.card-overview-cover { width: 100%; min-height: 105px; padding: 16px; display: flex; align-items: flex-start; justify-content: space-between; }
-.card-overview-cover > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 7px; background: var(--p-navy); color: white; font-weight: 900; }
-.card-overview-copy { padding: 18px; display: grid; align-content: start; gap: 5px; flex: 1; }
-.card-overview-copy small { color: var(--p-muted); font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.card-overview-copy h3 { margin: 0; font-size: 21px; letter-spacing: -.025em; }
-.card-overview-copy p { margin: 0; color: var(--p-muted); font-size: 12px; }
-.card-overview-copy strong { margin-top: auto; padding-top: 20px; display: flex; align-items: center; gap: 6px; font-size: 11px; transition: gap .18s ease; }
-.card-overview-add { min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--p-line); border-radius: 10px; background: transparent; color: var(--p-navy); font: inherit; cursor: pointer; }
+.card-overview-item { min-width: 0; overflow: hidden; border-radius: 10px; border: 1px solid var(--p-line); background: white; }
+.card-overview-item > button { width: 100%; padding: 0; display: flex; flex-direction: column; border: 0; background: transparent; color: var(--p-navy); font: inherit; text-align: left; cursor: pointer; }
+.card-overview-cover-wrap { position: relative; height: 96px; background: var(--p-ice); }
+.card-overview-cover-photo, .card-overview-cover-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.card-overview-avatar { position: absolute; left: 16px; bottom: -24px; width: 52px; height: 52px; border-radius: 26px; border: 3px solid white; overflow: hidden; background: var(--p-navy); }
+.card-overview-avatar-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-overview-avatar-fallback { width: 100%; height: 100%; display: grid; place-items: center; color: white; font-size: 16px; font-weight: 900; }
+.card-overview-copy { padding: 16px; padding-top: 28px; display: grid; align-content: start; gap: 2px; flex: 1; }
+.card-overview-copy small { color: var(--p-muted); font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.card-overview-copy h3 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.card-overview-copy p { margin: 0; color: var(--p-muted); font-size: 13px; }
+.card-overview-add { min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--p-line); border-radius: 10px; background: transparent; color: var(--p-navy); font: inherit; cursor: pointer; }
 .card-overview-add:hover { background: var(--p-sky); }
 .card-overview-add > span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 9px; background: var(--p-sky); }
 .card-overview-add small { color: var(--p-muted); }
