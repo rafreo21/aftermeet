@@ -6,6 +6,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { CalendarBlank, EnvelopeSimple, GoogleLogo, LinkedinLogo } from 'phosphor-react-native';
 
 import { Body, Button, PageHeader, Panel, Screen } from '@/components/ui';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { SettingsSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -190,9 +192,6 @@ export default function ConnectedAccountsScreen() {
         </Panel>
       ) : null}
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
       {session && !initialLoading ? (
       <View style={styles.list}>
         {PROVIDERS.map((provider) => {
@@ -265,6 +264,19 @@ export default function ConnectedAccountsScreen() {
         })}
       </View>
       ) : null}
+      <OutcomeSuccessSheet
+        visible={Boolean(message)}
+        title="Account updated"
+        message={message}
+        onClose={() => setMessage('')}
+      />
+      <OutcomeErrorSheet
+        visible={Boolean(error)}
+        title="Account connection failed"
+        message={error}
+        hint="Your existing AfterMeet data has not been changed."
+        onClose={() => setError('')}
+      />
     </Screen>
   );
 }
@@ -299,7 +311,5 @@ const styles = StyleSheet.create({
   connectedActions: { gap: spacing.x2 },
   panelTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   panelCopy: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 19 },
-  message: { color: colors.ink, fontSize: 13, lineHeight: 19 },
-  error: { color: colors.danger, fontSize: 13, lineHeight: 19 },
   soon: { color: colors.muted, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
 });

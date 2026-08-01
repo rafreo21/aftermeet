@@ -4,6 +4,8 @@ import { useMemo, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Body, Button, PageHeader } from '@/components/ui';
+import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { useAuth } from '@/features/auth/auth-context';
 import { buildEncounterPayload, saveEncounter } from '@/features/encounters/encounter-api';
 import {
@@ -38,7 +40,9 @@ export default function QuickFollowUpScreen() {
   const [channel, setChannel] = useState<FollowUpChannel>('email');
   const [duePreset, setDuePreset] = useState<Exclude<DuePreset, 'none' | 'custom'>>('tomorrow');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [validationError, setValidationError] = useState('');
+  const [outcomeError, setOutcomeError] = useState('');
+  const [successOpen, setSuccessOpen] = useState(false);
 
   const selectedTemplateId = useMemo(() => (
     FOLLOW_UP_TEMPLATES.find((template) => (
@@ -58,20 +62,21 @@ export default function QuickFollowUpScreen() {
     const cleanName = personName.trim();
     const cleanTitle = title.trim();
     if (!session?.access_token) {
-      setError('Sign in before adding a follow-up.');
+      setOutcomeError('Sign in before adding a follow-up.');
       return;
     }
     if (cleanName.length < 2) {
-      setError('Add the person this follow-up is for.');
+      setValidationError('Add the person this follow-up is for.');
       return;
     }
     if (cleanTitle.length < 2) {
-      setError('Describe the next step.');
+      setValidationError('Describe the next step.');
       return;
     }
 
     setSaving(true);
-    setError('');
+    setValidationError('');
+    setOutcomeError('');
     try {
       const encounter = buildEncounterPayload({
         transcript: '',
@@ -97,9 +102,10 @@ export default function QuickFollowUpScreen() {
         startedAt: new Date().toISOString(),
       });
       await saveEncounter(session.access_token, encounter);
-      router.replace('/settings/follow-ups');
+      setSaving(false);
+      setSuccessOpen(true);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not add this follow-up.');
+      setOutcomeError(caught instanceof Error ? caught.message : 'Could not add this follow-up.');
       setSaving(false);
     }
   }
@@ -120,7 +126,7 @@ export default function QuickFollowUpScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.x6 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
 
         <View style={styles.form}>
           <Field label="Person" value={personName} onChangeText={setPersonName} placeholder="e.g. Sarah Chen" />
@@ -198,6 +204,17 @@ export default function QuickFollowUpScreen() {
           <Body style={styles.noteCopy}>AfterMeet will place this in Follow-ups and remind you until it is complete.</Body>
         </View>
       </ScrollView>
+      <OutcomeErrorSheet
+        visible={Boolean(outcomeError)}
+        message={outcomeError}
+        onClose={() => setOutcomeError('')}
+      />
+      <OutcomeSuccessSheet
+        visible={successOpen}
+        title="Follow-up added"
+        message="It is now in Follow-ups and will stay there until you complete it."
+        onClose={() => router.replace('/settings/follow-ups')}
+      />
     </View>
   );
 }
