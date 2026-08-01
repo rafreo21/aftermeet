@@ -92,7 +92,7 @@ export default function CaptureDetailScreen() {
     setUploadError('');
     try {
       const uploaded = await uploadEncounterRecording(accessToken, encounterId, localUri);
-      await updateLocalRecordingSharedUrl(encounterId, uploaded.sharedAudioUrl ?? '');
+      await updateLocalRecordingSharedUrl(encounterId, uploaded.sharedAudioUrl ?? '', uploaded);
       setEncounter((current) => current ? {
         ...current,
         recording: {

@@ -942,7 +942,7 @@ export default function CaptureWizardScreen() {
             localUri: recording.localUri,
             audioLocation: 'server',
           };
-          await updateLocalRecordingSharedUrl(draft.encounterId, uploaded.sharedAudioUrl ?? '');
+          await updateLocalRecordingSharedUrl(draft.encounterId, uploaded.sharedAudioUrl ?? '', uploaded);
           await saveEncounter(token, { ...payload, recording });
         } catch (caught) {
           const shareError = caught instanceof Error

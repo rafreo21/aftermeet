@@ -75,6 +75,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .eq("workspace_id", user.workspaceId);
 
   if (updateError) {
+    // Do not strand an untracked object when the database write fails. A
+    // subsequent retry can then upload and finalize the recording cleanly.
+    await service.storage.from(ENCOUNTER_RECORDINGS_BUCKET).remove([storagePath]);
     return NextResponse.json({ error: "The recording uploaded, but sharing could not be finalized. Your local copy is safe—retry from the meeting.", code: "recording_metadata_failed", retryable: true }, { status: 500 });
   }
 

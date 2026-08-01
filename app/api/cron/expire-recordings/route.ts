@@ -32,6 +32,7 @@ export async function GET(request: Request) {
 
   let expired = 0;
   let deleted = 0;
+  let failed = 0;
   const now = Date.now();
 
   for (const row of (data ?? []) as EncounterRow[]) {
@@ -51,7 +52,13 @@ export async function GET(request: Request) {
     expired += 1;
 
     const removal = await service.storage.from(ENCOUNTER_RECORDINGS_BUCKET).remove([storagePath]);
-    if (!removal.error) deleted += 1;
+    if (removal.error) {
+      failed += 1;
+      // Keep the metadata intact so the next scheduled run can retry. The
+      // public route already refuses playback after cloudExpiresAt.
+      continue;
+    }
+    deleted += 1;
 
     const nextMetadata = {
       ...metadata,
@@ -72,5 +79,6 @@ export async function GET(request: Request) {
     scanned: data?.length ?? 0,
     expired,
     deleted,
+    failed,
   });
 }

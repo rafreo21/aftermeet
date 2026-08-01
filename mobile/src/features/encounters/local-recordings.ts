@@ -66,11 +66,16 @@ async function writeRecordingIndex(metadata: LocalRecordingMetadata) {
   await FileSystem.writeAsStringAsync(metaUri(metadata.id), JSON.stringify({
     id: metadata.id,
     audioFile: metadata.localUri,
+    createdAt: metadata.createdAt,
     expiresAt: metadata.expiresAt,
     durationSeconds: metadata.durationSeconds,
+    fileSize: metadata.fileSize,
     mimeType: metadata.mimeType,
+    source: metadata.source,
+    retention: metadata.retention,
     storagePath: metadata.storagePath,
     sharedAudioUrl: metadata.sharedAudioUrl,
+    cloudExpiresAt: metadata.cloudExpiresAt,
     audioLocation: metadata.audioLocation,
     driveFileId: metadata.driveFileId,
     driveWebViewUrl: metadata.driveWebViewUrl,
@@ -133,10 +138,15 @@ export async function readLocalRecordingMetadata(id: string): Promise<LocalRecor
       id?: string;
       audioFile?: string;
       durationSeconds?: number;
+      fileSize?: number;
       mimeType?: string;
+      source?: LocalRecordingMetadata['source'];
+      retention?: AudioRetention;
+      createdAt?: string;
       expiresAt?: string | null;
       storagePath?: string;
       sharedAudioUrl?: string;
+      cloudExpiresAt?: string | null;
       audioLocation?: LocalRecordingMetadata['audioLocation'];
       driveFileId?: string;
       driveWebViewUrl?: string;
@@ -156,14 +166,15 @@ export async function readLocalRecordingMetadata(id: string): Promise<LocalRecor
       id,
       localUri: audioFile,
       durationSeconds: parsed.durationSeconds ?? 0,
-      fileSize: info.exists && 'size' in info ? (info.size ?? 0) : 0,
+      fileSize: info.exists && 'size' in info ? (info.size ?? parsed.fileSize ?? 0) : (parsed.fileSize ?? 0),
       mimeType: parsed.mimeType || guessMimeType(audioFile),
-      source: 'recorded',
-      retention: '7_days',
+      source: parsed.source === 'imported' ? 'imported' : 'recorded',
+      retention: parsed.retention ?? '7_days',
       expiresAt: parsed.expiresAt ?? null,
-      createdAt: parsed.expiresAt ?? new Date().toISOString(),
+      createdAt: parsed.createdAt ?? new Date().toISOString(),
       storagePath: parsed.storagePath,
       sharedAudioUrl: parsed.sharedAudioUrl,
+      cloudExpiresAt: parsed.cloudExpiresAt ?? null,
       audioLocation: parsed.audioLocation,
       driveFileId: parsed.driveFileId,
       driveWebViewUrl: parsed.driveWebViewUrl,
@@ -223,10 +234,19 @@ export async function findLocalRecordingUri(id: string) {
   return null;
 }
 
-export async function updateLocalRecordingSharedUrl(id: string, sharedAudioUrl: string) {
+export async function updateLocalRecordingSharedUrl(
+  id: string,
+  sharedAudioUrl: string,
+  cloud?: Pick<LocalRecordingMetadata, 'storagePath' | 'cloudExpiresAt' | 'audioLocation' | 'fileSize' | 'mimeType'>,
+) {
   const metadata = await readLocalRecordingMetadata(id);
   if (!metadata) return;
-  await writeRecordingIndex({ ...metadata, sharedAudioUrl });
+  await writeRecordingIndex({
+    ...metadata,
+    ...cloud,
+    sharedAudioUrl,
+    audioLocation: cloud?.audioLocation ?? (sharedAudioUrl ? 'server' : metadata.audioLocation),
+  });
 }
 
 export function formatDuration(seconds: number) {
