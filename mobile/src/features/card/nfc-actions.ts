@@ -26,6 +26,30 @@ function assertCardUrl(cardUrl: string) {
   return normalized;
 }
 
+function sameCardUrl(actual: string, expected: string) {
+  try {
+    return new URL(actual).href === new URL(expected).href;
+  } catch {
+    return actual.trim() === expected.trim();
+  }
+}
+
+function verifiedUriFromTag(
+  tag: Awaited<ReturnType<Awaited<ReturnType<typeof loadNfcManager>>['NfcManager']['ndefHandler']['getNdefMessage']>>,
+  Ndef: Awaited<ReturnType<typeof loadNfcManager>>['Ndef'],
+) {
+  const uriRecord = tag?.ndefMessage?.find((record) => {
+    const type = record.type;
+    const isUriType = typeof type === 'string'
+      ? type === 'U'
+      : Array.isArray(type) && type.length === 1 && type[0] === 0x55;
+    return record.tnf === Ndef.TNF_WELL_KNOWN && isUriType;
+  });
+  return uriRecord?.payload
+    ? Ndef.uri.decodePayload(Uint8Array.from(uriRecord.payload))
+    : '';
+}
+
 async function loadNfcManager() {
   const NfcManager = (await import('react-native-nfc-manager')).default;
   const { NfcTech, Ndef, NdefStatus } = await import('react-native-nfc-manager');
@@ -38,6 +62,7 @@ async function writeNdefMessage(
   Ndef: Awaited<ReturnType<typeof loadNfcManager>>['Ndef'],
   NdefStatus: Awaited<ReturnType<typeof loadNfcManager>>['NdefStatus'],
   bytes: number[],
+  expectedUrl: string,
   onProgress?: NfcProgrammingProgress,
 ) {
   let ndefSessionStarted = false;
@@ -62,12 +87,9 @@ async function writeNdefMessage(
     await NfcManager.ndefHandler.writeNdefMessage(bytes);
     onProgress?.('verifying-tag');
     const writtenTag = await NfcManager.ndefHandler.getNdefMessage();
-    const firstRecord = writtenTag?.ndefMessage?.[0];
-    const writtenUrl = firstRecord?.payload
-      ? Ndef.uri.decodePayload(Uint8Array.from(firstRecord.payload))
-      : '';
-    if (!writtenUrl) {
-      throw new Error('The tag was written, but AfterMeet could not verify it. Scan it once before using it.');
+    const writtenUrl = verifiedUriFromTag(writtenTag, Ndef);
+    if (!sameCardUrl(writtenUrl, expectedUrl)) {
+      throw new Error('The tag was written, but the saved card link could not be verified. Program it again before using it.');
     }
     return;
   } catch (error) {
@@ -90,7 +112,8 @@ async function writeNdefMessage(
   });
   onProgress?.('verifying-tag');
   const writtenTag = await NfcManager.ndefHandler.getNdefMessage();
-  if (!writtenTag?.ndefMessage?.length) {
+  const writtenUrl = verifiedUriFromTag(writtenTag, Ndef);
+  if (!sameCardUrl(writtenUrl, expectedUrl)) {
     throw new Error('The tag was formatted, but AfterMeet could not verify the card link. Try programming it again.');
   }
 }
@@ -145,7 +168,7 @@ export async function programNfcTag(
     const records = [Ndef.uriRecord(normalized)];
     const bytes = Ndef.encodeMessage(records);
     if (!bytes) throw new Error('Could not encode the NFC message.');
-    await writeNdefMessage(NfcManager, NfcTech, Ndef, NdefStatus, bytes, onProgress);
+    await writeNdefMessage(NfcManager, NfcTech, Ndef, NdefStatus, bytes, normalized, onProgress);
   } catch (error) {
     throw new Error(explainNfcFailure(error));
   } finally {
