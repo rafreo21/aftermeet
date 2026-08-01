@@ -9,6 +9,8 @@ type GuestFollowUpRow = {
   guest_name: string | null;
   guest_email: string | null;
   note: string | null;
+  channel: GuestFollowUp["channel"] | null;
+  due_at: string | null;
   committed_at: string;
 };
 
@@ -21,7 +23,7 @@ export async function fetchGuestFollowUpsByEncounter(
 
   const { data, error } = await supabase
     .from("encounter_guest_follow_ups")
-    .select("id, encounter_id, participant_id, guest_name, guest_email, note, committed_at")
+    .select("id, encounter_id, participant_id, guest_name, guest_email, note, channel, due_at, committed_at")
     .in("encounter_id", encounterIds)
     .order("committed_at", { ascending: false });
 
@@ -38,6 +40,8 @@ export async function fetchGuestFollowUpsByEncounter(
       guestName: row.guest_name?.trim() || undefined,
       guestEmail: row.guest_email?.trim() || undefined,
       note: row.note?.trim() || undefined,
+      channel: row.channel ?? undefined,
+      dueAt: row.due_at?.trim() || undefined,
       committedAt: row.committed_at,
     });
     grouped.set(row.encounter_id, current);

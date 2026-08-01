@@ -50,8 +50,11 @@ export type EncounterAction = {
 };
 
 export type GuestFollowUp = {
+  id?: string;
   committedAt: string;
   note?: string;
+  channel?: FollowUpChannelId;
+  dueAt?: string;
 };
 
 export type EncounterParticipant = {
@@ -88,6 +91,7 @@ export type EncounterPayload = {
   shareToken: string;
   recording?: LocalRecordingMetadata;
   guestFollowUp?: GuestFollowUp;
+  guestFollowUps?: GuestFollowUp[];
 };
 
 export type InboundExchange = {

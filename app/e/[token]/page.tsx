@@ -16,6 +16,15 @@ import "../../app/product.css";
 import "../../app/flow.css";
 
 const LOCAL_PREVIEW_AUDIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+const GUEST_FOLLOW_UP_CHANNELS: Array<{ value: Encounter["actions"][number]["channel"]; label: string }> = [
+  { value: "email", label: "Send an email" },
+  { value: "call", label: "Make a call" },
+  { value: "meeting", label: "Schedule a meeting" },
+  { value: "linkedin", label: "Connect on LinkedIn" },
+  { value: "whatsapp", label: "Message on WhatsApp" },
+  { value: "send", label: "Send something" },
+  { value: "other", label: "Something else" },
+];
 
 function buildLocalPreviewEncounter(): Encounter {
   const now = new Date();
@@ -53,6 +62,8 @@ function buildLocalPreviewEncounter(): Encounter {
 export default function GuestEncounterPage() {
   const [encounter, setEncounter] = useState<Encounter | null | undefined>(undefined);
   const [followUpNote, setFollowUpNote] = useState("");
+  const [followUpChannel, setFollowUpChannel] = useState<Encounter["actions"][number]["channel"]>("email");
+  const [followUpDueAt, setFollowUpDueAt] = useState("");
   const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
   const [followUpError, setFollowUpError] = useState("");
   const [recordingDownloading, setRecordingDownloading] = useState(false);
@@ -137,7 +148,7 @@ export default function GuestEncounterPage() {
     setFollowUpSubmitting(true);
     setFollowUpError("");
     if (encounter.shareToken === "preview" && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
-      setEncounter({ ...encounter, guestFollowUp: { committedAt: new Date().toISOString(), note } });
+      setEncounter({ ...encounter, guestFollowUp: { committedAt: new Date().toISOString(), note, channel: followUpChannel, dueAt: followUpDueAt || undefined } });
       setFollowUpSubmitting(false);
       return;
     }
@@ -145,7 +156,7 @@ export default function GuestEncounterPage() {
       const response = await fetch(`/api/encounters/share/${encodeURIComponent(encounter.shareToken)}/follow-up`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note }),
+        body: JSON.stringify({ note, channel: followUpChannel, dueAt: followUpDueAt || null }),
       });
       const payload = await response.json() as { guestFollowUp?: Encounter["guestFollowUp"]; error?: string };
       if (!response.ok || !payload.guestFollowUp) {
@@ -225,7 +236,7 @@ export default function GuestEncounterPage() {
         <section className="guest-follow-up">
           <span>Your next step</span><h2>What will you do after this meeting?</h2>
           {encounter.guestFollowUp?.committedAt ? (
-            <article><CheckCircleIcon size={24} weight="fill" /><div><strong>Your next step was shared with the meeting host.</strong>{encounter.guestFollowUp.note ? <small>{encounter.guestFollowUp.note}</small> : null}</div></article>
+            <article><CheckCircleIcon size={24} weight="fill" /><div><strong>Your next step was shared with the meeting host.</strong>{encounter.guestFollowUp.note ? <small>{encounter.guestFollowUp.note}</small> : null}<small>{encounter.guestFollowUp.channel ? GUEST_FOLLOW_UP_CHANNELS.find((item) => item.value === encounter.guestFollowUp?.channel)?.label : "Follow-up"}{encounter.guestFollowUp.dueAt ? ` · Due ${encounter.guestFollowUp.dueAt}` : ""}</small></div></article>
           ) : (
             <>
               <p>Add the action you intend to take. It will appear in the host&apos;s AfterMeet follow-up view alongside this meeting.</p>
@@ -242,6 +253,16 @@ export default function GuestEncounterPage() {
                 required
               />
               <small className="guest-follow-up-help">Be specific enough to remember later—for example, include what you will send, who you will contact, or when you will respond.</small>
+              <div className="guest-follow-up-fields">
+                <label>How?
+                  <select value={followUpChannel} onChange={(event) => setFollowUpChannel(event.target.value as Encounter["actions"][number]["channel"])}>
+                    {GUEST_FOLLOW_UP_CHANNELS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
+                </label>
+                <label>By when? <span>Optional</span>
+                  <input type="date" value={followUpDueAt} min={new Date().toISOString().slice(0, 10)} onChange={(event) => setFollowUpDueAt(event.target.value)} />
+                </label>
+              </div>
               {followUpError ? <small className="guest-form-error">{followUpError}</small> : null}
               <Button
                 type="button"

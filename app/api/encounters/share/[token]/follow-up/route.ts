@@ -15,6 +15,9 @@ export async function POST(request: Request, context: { params: Promise<{ token:
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 280) : "";
+  const allowedChannels = new Set(["email", "linkedin", "call", "meeting", "send", "whatsapp", "instagram", "x", "tiktok", "other"]);
+  const channel = typeof body?.channel === "string" && allowedChannels.has(body.channel) ? body.channel : "other";
+  const dueAt = typeof body?.dueAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dueAt) ? body.dueAt : "";
   if (note.length < 3) {
     return NextResponse.json({ error: "Add the next step you intend to take." }, { status: 400 });
   }
@@ -37,13 +40,17 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     }
 
     const committedAt = new Date().toISOString();
-    const { error: insertError } = await service.from("encounter_guest_follow_ups").insert({
+    const { data: inserted, error: insertError } = await service.from("encounter_guest_follow_ups").insert({
       encounter_id: encounter.id,
       note,
+      channel,
+      due_at: dueAt || null,
       committed_at: committedAt,
-    });
+    }).select("committed_at, note, channel, due_at").single();
 
-    if (!insertError) return success({ committedAt, note });
+    if (!insertError && inserted) {
+      return NextResponse.json({ guestFollowUp: { committedAt: inserted.committed_at, note: inserted.note, channel: inserted.channel, dueAt: inserted.due_at || undefined } });
+    }
 
     // Compatibility for projects that still have the earlier single-value
     // guest follow-up migration but not the multi-guest table migration.

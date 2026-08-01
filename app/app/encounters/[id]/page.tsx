@@ -310,7 +310,7 @@ export default function EncounterReviewPage() {
                 {guestCommitments.map((commitment, index) => (
                   <article key={commitment.id || `${commitment.committedAt}-${index}`}>
                     <CheckCircleIcon size={20} weight="fill" />
-                    <div><strong>{commitment.note || "They confirmed they will follow up."}</strong><small>{commitment.guestName || participantName(commitment.participantId) || "Guest"} · shared {new Date(commitment.committedAt).toLocaleDateString()}</small></div>
+                    <div><strong>{commitment.note || "They confirmed they will follow up."}</strong><small>{commitment.guestName || participantName(commitment.participantId) || "Guest"}{commitment.channel ? ` · ${commitment.channel}` : ""}{commitment.dueAt ? ` · due ${commitment.dueAt}` : ""} · shared {new Date(commitment.committedAt).toLocaleDateString()}</small></div>
                   </article>
                 ))}
               </div>

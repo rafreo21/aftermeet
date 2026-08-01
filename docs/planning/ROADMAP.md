@@ -288,7 +288,7 @@ Phases above are checked off as "built," but real device testing surfaced gaps t
 |---|---|---|
 | ~~**Guest sharing UX is conflated**~~ **RESOLVED 2026-07-30** | Was one linear card with a single button doing double duty (upload + approve) | Fixed: a toggle now enables sharing and starts upload in the background with visible progress; Approve is disabled until upload succeeds |
 | ~~**Recording upload has been fragile across multiple sessions**~~ **RESOLVED 2026-08-01** | Hit "Unsupported FormDataPart implementation" and generic upload failures | Upload and transcription APIs now return structured, human-safe error states for auth, size, format, quota, configuration, provider, metadata, and temporary network failures. Web/mobile preserve the local copy, explain recovery, and only show Retry when retrying can help. |
-| ~~**Follow-up is one-directional**~~ **PARTIALLY RESOLVED 2026-07-30** | Only the recording owner used to set/own follow-up actions | Guest can now commit to their own lightweight "I'll follow up too" from the shared link (host sees it in Follow-up plan). Still one-directional in the sense that the guest can't set channels/due dates or edit the host's plan — full parity remains future work |
+| ~~**Follow-up is one-directional**~~ **RESOLVED 2026-08-01** | Only the recording owner used to set/own follow-up actions | A guest can now create their own structured commitment from the shared record, including the action, channel, and optional due date. The host sees the same commitment details on consumer web, iOS, and Android. Guests cannot edit the host's private plan. |
 | ~~**Follow-up channel enum inconsistency (mobile vs web)**~~ **RESOLVED 2026-08-01** | Web and mobile now expose the same 10 canonical channels, including `send` and `other`; mobile supports multi-select and web supports multiple extracted commitments plus an additional manual action | Keep the shared channel vocabulary aligned when adding future action types |
 | ~~**Live transcript during recording is off**~~ **RESOLVED 2026-08-01** | Live STT remains deliberately off for reliability | Web and mobile now show audio-level feedback / voice detection while recording without depending on live STT. Transcript appears after Finish. |
 | ~~**Transcription provider errors are opaque to the user**~~ **RESOLVED 2026-08-01** | Provider quota/configuration failures previously collapsed into a generic error | Structured capture errors now explain that the recording remains safe and offer retry or manual continuation according to whether the failure is recoverable. |
@@ -302,7 +302,7 @@ Phases above are checked off as "built," but real device testing surfaced gaps t
 - [x] Consumer web compiler lint passes
 - [x] Mobile TypeScript passes
 - [x] Mobile lint has no errors (warnings remain non-blocking)
-- [x] 189 contract and regression tests pass
+- [x] 192 contract and regression tests pass
 - [x] NFC programming walkthrough is implemented on mobile
 - [ ] Validate NFC read/write on supported physical Android hardware
 - [ ] Validate the full QR → save → share-back → follow-up loop on two physical phones

@@ -180,7 +180,7 @@ export default function FollowupsPage() {
                   <div>
                     <h2>{commitment.note}</h2>
                     <p>{commitment.guestName || encounter.personName || "Meeting participant"} <span className="owner-tag">Confirmed</span>{" · "}{encounter.title}</p>
-                    <small>Shared {new Date(commitment.committedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</small>
+                    <small>{commitment.channel ? `${commitment.channel} · ` : ""}{commitment.dueAt ? `Due ${commitment.dueAt} · ` : ""}Shared {new Date(commitment.committedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</small>
                   </div>
                   <div className="inbox-actions"><LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>Review context</LinkButton></div>
                 </article>

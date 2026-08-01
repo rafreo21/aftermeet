@@ -635,7 +635,7 @@ export default function CaptureDetailScreen() {
           <View style={styles.statusRow}>
             <CheckCircle size={18} color={colors.accent} weight="fill" />
             <Text style={styles.summaryCopy}>
-              Your guest said they&apos;ll follow up too{encounter.guestFollowUp.note ? `: "${encounter.guestFollowUp.note}"` : '.'}
+              Your guest said they&apos;ll follow up too{encounter.guestFollowUp.note ? `: "${encounter.guestFollowUp.note}"` : '.'}{encounter.guestFollowUp.channel ? ` · ${encounter.guestFollowUp.channel}` : ''}{encounter.guestFollowUp.dueAt ? ` · due ${encounter.guestFollowUp.dueAt}` : ''}
             </Text>
           </View>
         ) : null}

@@ -118,6 +118,8 @@ export type GuestFollowUp = {
   guestEmail?: string;
   committedAt: string;
   note?: string;
+  channel?: EncounterAction["channel"];
+  dueAt?: string;
 };
 
 export type Encounter = {
