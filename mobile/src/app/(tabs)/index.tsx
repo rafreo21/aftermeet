@@ -1,10 +1,10 @@
 import { router, useFocusEffect } from 'expo-router';
-import { Bell, CaretRight, QrCode, Scan } from 'phosphor-react-native';
+import { Bell, CaretRight, ListChecks, QrCode, Scan } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BrandMark } from '@/components/brand-mark';
-import { Body, Button, Eyebrow, Title } from '@/components/ui';
+import { Body, Button, Eyebrow, HeaderActionButton, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
@@ -51,10 +51,20 @@ export default function HomeScreen() {
     useCallback(() => {
       void loadFollowUps();
       void unreadNotificationCount().then(setUnreadNotifications);
+      const interval = setInterval(() => {
+        void loadFollowUps();
+        void unreadNotificationCount().then(setUnreadNotifications);
+      }, 30_000);
+      return () => clearInterval(interval);
     }, [loadFollowUps]),
   );
 
   const nudge = useMemo(() => summarizeFollowUpNudges(followUps), [followUps]);
+  const followUpProgress = useMemo(() => {
+    const completed = followUps.filter((item) => item.status === 'completed').length;
+    const total = followUps.length;
+    return { completed, total, rate: total ? Math.round((completed / total) * 100) : 0 };
+  }, [followUps]);
 
   return (
     <View style={styles.safe}>
@@ -63,18 +73,16 @@ export default function HomeScreen() {
           <BrandMark size={32} />
           <Eyebrow>AfterMeet</Eyebrow>
         </View>
-        <Pressable
-          accessibilityRole="button"
+        <HeaderActionButton
           accessibilityLabel={unreadNotifications ? `${unreadNotifications} unread notifications` : 'Notifications'}
-          onPress={() => router.push('/notifications')}
-          style={({ pressed }) => [styles.bellButton, pressed && styles.bellButtonPressed]}>
+          onPress={() => router.push('/notifications')}>
           <Bell size={21} color={colors.ink} weight="bold" />
           {unreadNotifications ? (
             <View style={styles.bellBadge}>
               <Text style={styles.bellBadgeText}>{Math.min(unreadNotifications, 9)}</Text>
             </View>
           ) : null}
-        </Pressable>
+        </HeaderActionButton>
       </View>
 
       <ScrollView
@@ -118,17 +126,27 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {session && nudge ? (
+        {session ? (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={nudge ? `${nudge.headline}. Open follow-ups` : 'Open follow-up progress'}
             onPress={() => router.push('/settings/follow-ups')}
-            style={({ pressed }) => [styles.nudgeCard, pressed && styles.nudgeCardPressed]}>
-            <Text style={styles.nudgeTitle}>{nudge.headline}</Text>
-            <Text style={styles.nudgeCopy}>{nudge.copy}</Text>
-            <View style={styles.nudgeAction}>
-              <Text style={styles.nudgeActionText}>Open follow-ups</Text>
-              <CaretRight size={14} color={colors.ink} weight="bold" />
+            style={({ pressed }) => [styles.progressCard, pressed && styles.progressCardPressed]}>
+            <View style={[styles.progressIcon, nudge && styles.progressIconAttention]}>
+              <ListChecks size={20} color={colors.ink} weight="bold" />
             </View>
+            <View style={styles.progressCopy}>
+              <Text style={styles.progressValue}>
+                {nudge?.headline
+                  ?? (followUpProgress.total ? `${followUpProgress.completed} completed` : 'No follow-ups yet')}
+              </Text>
+              <Text style={styles.progressLabel}>
+                {followUpProgress.total
+                  ? `${followUpProgress.completed} completed · ${followUpProgress.rate}% of ${followUpProgress.total} kept`
+                  : 'Your progress will appear here.'}
+              </Text>
+            </View>
+            <CaretRight size={16} color={colors.ink} weight="bold" />
           </Pressable>
         ) : null}
 
@@ -160,7 +178,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   fixedBar: {
     paddingHorizontal: spacing.x5,
-    paddingBottom: spacing.x3,
+    paddingBottom: spacing.x2,
     backgroundColor: colors.canvas,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
@@ -170,17 +188,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
-  bellButton: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  bellButtonPressed: { backgroundColor: colors.surfaceMuted },
   bellBadge: {
     position: 'absolute',
     top: -2,
@@ -199,14 +206,14 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: spacing.x5,
-    paddingTop: spacing.x4,
-    paddingBottom: spacing.x3,
-    gap: spacing.x4,
+    paddingTop: spacing.x3,
+    paddingBottom: spacing.x4,
+    gap: spacing.x3,
   },
-  title: { fontSize: 34, lineHeight: 36 },
-  lead: { marginTop: -spacing.x2 },
+  title: { fontSize: 32, lineHeight: 35 },
+  lead: { marginTop: -spacing.x1 },
   heroCard: {
-    padding: spacing.x5,
+    padding: spacing.x4,
     borderRadius: radius.medium,
     backgroundColor: colors.ink,
     gap: spacing.x2,
@@ -235,22 +242,32 @@ const styles = StyleSheet.create({
   },
   heroScanOverlayPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
   heroScanOverlayText: { color: colors.white, fontSize: 14, fontWeight: '800' },
-  nudgeCard: {
+  progressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
     padding: spacing.x4,
     borderRadius: radius.medium,
-    backgroundColor: '#fff4e8',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#f0c892',
-    gap: spacing.x2,
+    borderColor: colors.line,
   },
-  nudgeCardPressed: { opacity: 0.92 },
-  nudgeTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
-  nudgeCopy: { color: colors.muted, fontSize: 13, lineHeight: 18 },
-  nudgeAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  nudgeActionText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
+  progressCardPressed: { opacity: 0.92 },
+  progressIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+  },
+  progressIconAttention: { backgroundColor: '#fff0dc' },
+  progressCopy: { flex: 1, gap: 2 },
+  progressValue: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  progressLabel: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   steps: { gap: spacing.x2 },
   stepCard: {
-    padding: spacing.x5,
+    padding: spacing.x4,
     borderRadius: radius.medium,
     backgroundColor: colors.ink,
     gap: spacing.x2,

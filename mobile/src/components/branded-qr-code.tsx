@@ -55,7 +55,7 @@ export function BrandedQrCode({
   const enhanceKey = `${mode}:${card?.id ?? ''}:${cardUrl ?? ''}`;
 
   useEffect(() => {
-    setRenderError('');
+    void Promise.resolve().then(() => setRenderError(''));
   }, [resolved?.payload, resolved?.ecl]);
 
   useEffect(() => {

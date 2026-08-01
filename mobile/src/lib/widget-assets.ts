@@ -2,6 +2,7 @@ import { Asset } from 'expo-asset';
 import { File, Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import logoAsset from '../../assets/images/splash-icon.png';
 
 import { isRemoteImageUrl } from '@/lib/card-assets-client';
 
@@ -36,7 +37,7 @@ export async function ensureWidgetLogoUri() {
   const existing = await FileSystem.getInfoAsync(destination);
   if (existing.exists) return destination;
 
-  const asset = Asset.fromModule(require('../../assets/images/splash-icon.png'));
+  const asset = Asset.fromModule(logoAsset);
   await asset.downloadAsync();
   if (!asset.localUri) return undefined;
 

@@ -53,7 +53,6 @@ import {
   upsertLibraryCard,
 } from "../../../../lib/card-library";
 import { hydrateCardLibraryFromServer, queueCardSync } from "../../../../lib/card-library-sync";
-import "../../product.css";
 
 type MethodType =
   | "email" | "phone" | "website" | "link" | "address"
@@ -376,7 +375,8 @@ export default function CardEditor() {
 
   return (
     <AppShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
-      actions={<div className="app-shell-action-group"><LinkButton size="small" variant="ghost" href="/app/cards"><ArrowLeftIcon size={16} weight="bold" />Back</LinkButton><Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button></div>}>
+      backHref="/app/cards"
+      actions={<Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button>}>
       <section className="card-creator">
         {hydrated && (
           <div className={`creator-publish-state ${hasUnpublishedChanges ? "is-dirty" : "is-published"}`} role="status">

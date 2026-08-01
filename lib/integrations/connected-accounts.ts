@@ -39,10 +39,28 @@ export async function connectedAccountStatus(user: AppUser): Promise<ConnectedAc
 
   for (const row of await listConnectedAccounts(user)) {
     if (row.provider === "google") {
-      status.google = { connected: true, email: row.account_email, scopes: row.scopes };
+      status.google = {
+        connected: true,
+        email: row.account_email,
+        scopes: row.scopes,
+        capabilities: {
+          gmail: row.scopes.includes("https://www.googleapis.com/auth/gmail.send"),
+          calendar: row.scopes.includes("https://www.googleapis.com/auth/calendar.events"),
+          drive: row.scopes.includes("https://www.googleapis.com/auth/drive.file"),
+        },
+      };
     }
     if (row.provider === "microsoft") {
-      status.microsoft = { connected: true, email: row.account_email, scopes: row.scopes };
+      status.microsoft = {
+        connected: true,
+        email: row.account_email,
+        scopes: row.scopes,
+        capabilities: {
+          outlook: row.scopes.includes("Mail.Send"),
+          calendar: row.scopes.includes("Calendars.ReadWrite"),
+          onedrive: row.scopes.includes("Files.ReadWrite.AppFolder"),
+        },
+      };
     }
   }
 

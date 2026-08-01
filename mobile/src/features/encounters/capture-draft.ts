@@ -9,6 +9,8 @@ import {
 } from '@/features/encounters/gather-people';
 import type { FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
 import { normalizeFollowUpChannels } from '@/features/follow-ups/follow-up-channels';
+import type { CaptureSessionStatus } from '@/features/encounters/capture-session-state';
+import type { RemoteCaptureSession } from '@/features/encounters/encounter-api';
 
 export type { GatherPerson };
 export { MAX_GATHER_PEOPLE } from '@/features/encounters/gather-people';
@@ -16,6 +18,12 @@ export { MAX_GATHER_PEOPLE } from '@/features/encounters/gather-people';
 export type CaptureWizardDraft = {
   step: number;
   encounterId: string;
+  captureMode: 'recording' | 'quick_context';
+  sessionStatus: CaptureSessionStatus;
+  failureReason: string;
+  recordingStartedAt: string;
+  recordingStoppedAt: string;
+  recordingDestination: 'local_only' | 'shared_3_days' | 'google_drive' | 'onedrive';
   consent: boolean;
   consentMethod: 'verbal' | 'written';
   durationSeconds: number;
@@ -42,6 +50,9 @@ export type CaptureWizardDraft = {
   importFileName: string;
   importMimeType: string;
   updatedAt: string;
+  originDeviceId: string;
+  originDeviceLabel: string;
+  hasLocalAudio: boolean;
 };
 
 export type CaptureDraftSummary = {
@@ -51,11 +62,14 @@ export type CaptureDraftSummary = {
   personName: string;
   title: string;
   transcriptPreview: string;
+  sessionStatus: CaptureSessionStatus;
+  failureReason: string;
 };
 
 export const CAPTURE_DRAFT_KEY = 'aftermeet-capture-wizard-v1';
 export const CAPTURE_DRAFTS_INDEX_KEY = 'aftermeet-capture-drafts-index-v2';
 export const AUTH_RETURN_KEY = 'aftermeet-auth-return-v1';
+const CAPTURE_DEVICE_ID_KEY = 'aftermeet-capture-device-id-v1';
 
 function createEncounterId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
@@ -78,6 +92,22 @@ function migrateCaptureStep(step: number) {
   return 2;
 }
 
+function normalizeSessionStatus(parsed: Partial<CaptureWizardDraft>): CaptureSessionStatus {
+  const status = parsed.sessionStatus;
+  if (
+    status === 'draft'
+    || status === 'recording'
+    || status === 'paused'
+    || status === 'processing'
+    || status === 'review_ready'
+    || status === 'saved'
+    || status === 'failed'
+  ) {
+    return status;
+  }
+  return parsed.recordingUri?.trim() ? 'review_ready' : 'draft';
+}
+
 function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft {
   const people = migrateGatherPeople(parsed);
   const synced = syncLegacyPersonFields(people);
@@ -98,6 +128,16 @@ function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft
     updatedAt: parsed.updatedAt || new Date().toISOString(),
     gatherSessionStartedAt: parsed.gatherSessionStartedAt || '',
     step: migrateCaptureStep(rawStep),
+    captureMode: parsed.captureMode === 'quick_context' ? 'quick_context' : 'recording',
+    sessionStatus: normalizeSessionStatus(parsed),
+    failureReason: typeof parsed.failureReason === 'string' ? parsed.failureReason : '',
+    recordingStartedAt: typeof parsed.recordingStartedAt === 'string' ? parsed.recordingStartedAt : '',
+    recordingStoppedAt: typeof parsed.recordingStoppedAt === 'string' ? parsed.recordingStoppedAt : '',
+    recordingDestination: parsed.recordingDestination === 'shared_3_days'
+      || parsed.recordingDestination === 'google_drive'
+      || parsed.recordingDestination === 'onedrive'
+      ? parsed.recordingDestination
+      : 'local_only',
     privateNotes: typeof parsed.privateNotes === 'string' ? parsed.privateNotes : '',
     followUpChannels,
     followUpType: followUpChannels[0] || 'email',
@@ -112,12 +152,20 @@ function toSummary(draft: CaptureWizardDraft): CaptureDraftSummary {
     personName: draft.personName.trim(),
     title: draft.title.trim(),
     transcriptPreview: draft.transcript.trim().slice(0, 120),
+    sessionStatus: draft.sessionStatus,
+    failureReason: draft.failureReason,
   };
 }
 
 export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   step: 0,
   encounterId: createEncounterId(),
+  captureMode: 'recording',
+  sessionStatus: 'draft',
+  failureReason: '',
+  recordingStartedAt: '',
+  recordingStoppedAt: '',
+  recordingDestination: 'local_only',
   consent: false,
   consentMethod: 'verbal',
   durationSeconds: 0,
@@ -144,6 +192,9 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   importFileName: '',
   importMimeType: '',
   updatedAt: new Date().toISOString(),
+  originDeviceId: '',
+  originDeviceLabel: '',
+  hasLocalAudio: false,
 };
 
 export function createFreshCaptureDraft(): CaptureWizardDraft {
@@ -154,6 +205,15 @@ export function createFreshCaptureDraft(): CaptureWizardDraft {
     gatherSessionStartedAt: now,
     updatedAt: now,
   };
+}
+
+export async function getCaptureDeviceIdentity() {
+  let id = await AsyncStorage.getItem(CAPTURE_DEVICE_ID_KEY);
+  if (!id) {
+    id = createEncounterId();
+    await AsyncStorage.setItem(CAPTURE_DEVICE_ID_KEY, id);
+  }
+  return { id, label: 'Mobile device' };
 }
 
 async function readDraftIndex(): Promise<CaptureDraftSummary[]> {
@@ -250,6 +310,35 @@ export async function writeCaptureDraft(draft: CaptureWizardDraft) {
     filtered.unshift(toSummary(next));
   }
   await writeDraftIndex(filtered);
+}
+
+export function captureDraftFromRemote(session: RemoteCaptureSession): CaptureWizardDraft {
+  return normalizeDraft({
+    ...(session as Partial<CaptureWizardDraft>),
+    encounterId: session.encounterId,
+    recordingUri: '',
+    recordingSource: '',
+    originDeviceId: typeof session.deviceId === 'string' ? session.deviceId : '',
+    originDeviceLabel: typeof session.deviceLabel === 'string' ? session.deviceLabel : '',
+    hasLocalAudio: Boolean(session.hasLocalAudio),
+  });
+}
+
+export function captureDraftToRemote(
+  draft: CaptureWizardDraft,
+  device: { id: string; label: string },
+): RemoteCaptureSession {
+  const { recordingUri: _recordingUri, ...safeDraft } = draft;
+  return {
+    ...safeDraft,
+    encounterId: draft.encounterId,
+    sessionStatus: draft.sessionStatus === 'saved' ? 'review_ready' : draft.sessionStatus,
+    durationSeconds: draft.durationSeconds,
+    deviceId: device.id,
+    deviceLabel: device.label,
+    hasLocalAudio: Boolean(draft.recordingUri),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export async function deleteCaptureDraft(encounterId: string) {

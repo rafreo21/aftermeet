@@ -9,10 +9,15 @@ export type RecordingMetadataRecord = {
   retention?: string;
   expiresAt?: string | null;
   createdAt?: string | null;
-  audioLocation?: "user_device" | "server";
+  audioLocation?: "user_device" | "server" | "google_drive" | "onedrive";
   storagePath?: string;
   sharedAudioUrl?: string;
   cloudExpiresAt?: string | null;
+  driveFileId?: string;
+  driveWebViewUrl?: string;
+  oneDriveItemId?: string;
+  oneDriveWebUrl?: string;
+  captureSession?: Record<string, unknown> | null;
 };
 
 export function cloudExpiresAt(from = new Date()): string {
@@ -52,10 +57,21 @@ export function normalizeIncomingRecording(
     retention: typeof recording.retention === "string" ? recording.retention : "7_days",
     expiresAt: typeof recording.expiresAt === "string" ? recording.expiresAt : null,
     createdAt: typeof recording.createdAt === "string" ? recording.createdAt : null,
-    audioLocation: recording.audioLocation === "server" ? "server" : "user_device",
+    audioLocation: recording.audioLocation === "server"
+      ? "server"
+      : recording.audioLocation === "google_drive"
+        ? "google_drive"
+        : recording.audioLocation === "onedrive" ? "onedrive" : "user_device",
     storagePath: typeof recording.storagePath === "string" ? recording.storagePath : undefined,
     sharedAudioUrl: typeof recording.sharedAudioUrl === "string" ? recording.sharedAudioUrl : undefined,
     cloudExpiresAt: typeof recording.cloudExpiresAt === "string" ? recording.cloudExpiresAt : null,
+    driveFileId: typeof recording.driveFileId === "string" ? recording.driveFileId : undefined,
+    driveWebViewUrl: typeof recording.driveWebViewUrl === "string" ? recording.driveWebViewUrl : undefined,
+    oneDriveItemId: typeof recording.oneDriveItemId === "string" ? recording.oneDriveItemId : undefined,
+    oneDriveWebUrl: typeof recording.oneDriveWebUrl === "string" ? recording.oneDriveWebUrl : undefined,
+    captureSession: recording.captureSession && typeof recording.captureSession === "object"
+      ? recording.captureSession as Record<string, unknown>
+      : null,
   };
 }
 
@@ -71,8 +87,33 @@ export function mergeRecordingMetadataForSave(
   if (!next) return previous;
   if (!previous) return next;
 
-  const cloudActive = hasActiveCloudRecording(previous);
-  if (!cloudActive) {
+  if (previous.audioLocation === "google_drive" && previous.driveFileId) {
+    return {
+      ...previous,
+      ...next,
+      audioLocation: "google_drive",
+      driveFileId: previous.driveFileId,
+      driveWebViewUrl: previous.driveWebViewUrl,
+      cloudExpiresAt: null,
+    };
+  }
+
+  if (previous.audioLocation === "onedrive" && previous.oneDriveItemId) {
+    return {
+      ...previous,
+      ...next,
+      audioLocation: "onedrive",
+      oneDriveItemId: previous.oneDriveItemId,
+      oneDriveWebUrl: previous.oneDriveWebUrl,
+      cloudExpiresAt: null,
+    };
+  }
+
+  // Expiry controls whether the cloud copy can be played, not whether its
+  // persisted metadata should be discarded during an ordinary device sync.
+  // The expiry/cleanup flow owns clearing these fields explicitly.
+  const hasServerCopy = previous.audioLocation === "server" && Boolean(previous.storagePath?.trim());
+  if (!hasServerCopy) {
     return { ...previous, ...next };
   }
 

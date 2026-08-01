@@ -12,6 +12,7 @@ import {
 } from 'phosphor-react-native';
 import { Platform, Image, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
 
 import { BrandedQrPreview } from '@/components/branded-qr-preview';
 import { VirtualBackgroundPreviewBackground, WalletPreviewBackground } from '@/components/card-tool-preview-backgrounds';
@@ -23,7 +24,6 @@ import {
   copyNfcManufacturerPayload,
   isNativeNfcSupported,
   openNfcSettings,
-  programNfcTag,
 } from '@/features/card/nfc-actions';
 import {
   isTapToShareActive,
@@ -160,8 +160,7 @@ export function NfcToolSheetContent({
   card,
   publicUrl,
   actions,
-  accessToken,
-}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions' | 'accessToken'>) {
+}: Pick<SharedSheetProps, 'card' | 'publicUrl' | 'actions'>) {
   const { busy, run } = actions;
   const [tapActive, setTapActive] = useState(isTapToShareActive());
   const tapNativeReady = isTapToShareNativeReady();
@@ -201,10 +200,8 @@ export function NfcToolSheetContent({
       {isNativeNfcSupported() ? (
         <>
           <Button
-            loading={busy === 'nfc'}
-            onPress={() => void run('nfc', async () => {
-              await programNfcTag(card, publicUrl);
-            }, { successMessage: 'NFC tag programmed. Tap it with a phone to save your contact.' })}>
+            disabled={!publicUrl}
+            onPress={() => router.push(`/program-nfc?id=${card.id}`)}>
             <ContactlessPayment size={18} color={colors.ink} weight="bold" />
             Program NFC tag
           </Button>
@@ -213,7 +210,7 @@ export function NfcToolSheetContent({
           </Button>
         </>
       ) : (
-        <Text style={styles.note}>NFC writing works on Android. iPhone can read tags but cannot write them from the app.</Text>
+        <Text style={styles.note}>Open AfterMeet on a supported iPhone or Android phone to program a writable NFC tag.</Text>
       )}
       <Button
         variant="secondary"

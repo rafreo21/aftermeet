@@ -5,11 +5,21 @@ export type ConnectedAccountStatus = {
     connected: boolean;
     email: string;
     scopes: string[];
+    capabilities: {
+      gmail: boolean;
+      calendar: boolean;
+      drive: boolean;
+    };
   };
   microsoft: {
     connected: boolean;
     email: string;
     scopes: string[];
+    capabilities: {
+      outlook: boolean;
+      calendar: boolean;
+      onedrive: boolean;
+    };
   };
   configured: {
     google: boolean;
@@ -34,6 +44,7 @@ export type ConnectedAccountRow = {
 export const GOOGLE_INTEGRATION_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
@@ -42,12 +53,23 @@ export const MICROSOFT_INTEGRATION_SCOPES = [
   "User.Read",
   "Mail.Send",
   "Calendars.ReadWrite",
+  "Files.ReadWrite.AppFolder",
 ];
 
 export function emptyConnectedAccountStatus(): ConnectedAccountStatus {
   return {
-    google: { connected: false, email: "", scopes: [] },
-    microsoft: { connected: false, email: "", scopes: [] },
+    google: {
+      connected: false,
+      email: "",
+      scopes: [],
+      capabilities: { gmail: false, calendar: false, drive: false },
+    },
+    microsoft: {
+      connected: false,
+      email: "",
+      scopes: [],
+      capabilities: { outlook: false, calendar: false, onedrive: false },
+    },
     configured: { google: false, microsoft: false },
   };
 }

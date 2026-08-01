@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { CheckCircle, CloudArrowUp, EnvelopeSimple, Plus, ShareNetwork, Trash } from 'phosphor-react-native';
+import { CaretDown, CaretUp, CheckCircle, CloudArrowUp, EnvelopeSimple, LockKey, PencilSimple, Plus, ShareNetwork, Trash } from 'phosphor-react-native';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
+import { SpeakerIdentityEditor } from '@/components/speaker-identity-editor';
+import { renameSpeakerAssignees } from '@/features/encounters/speaker-labels';
 import { FollowUpDuePicker } from '@/components/follow-up-due-picker';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
@@ -26,6 +28,7 @@ import {
   FOLLOW_UP_CHANNELS,
   type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
+import { FOLLOW_UP_TEMPLATES } from '@/features/follow-ups/follow-up-templates';
 import { formatDueLabel } from '@/lib/due-date';
 import { openEmailCompose } from '@/lib/email-compose';
 import { readEnv } from '@/lib/env';
@@ -56,10 +59,14 @@ export default function CaptureDetailScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [actionComposerOpen, setActionComposerOpen] = useState(false);
+  const [editingActionId, setEditingActionId] = useState('');
   const [newActionTitle, setNewActionTitle] = useState('');
   const [newActionChannel, setNewActionChannel] = useState<FollowUpChannel>('email');
   const [newActionDueAt, setNewActionDueAt] = useState('');
   const [newActionOwner, setNewActionOwner] = useState('me');
+  const [newActionParticipantId, setNewActionParticipantId] = useState('');
 
   const guestUrl = encounter && readEnv()
     ? `${readEnv()!.publicCardBaseUrl}/e/${encounter.shareToken}`
@@ -115,8 +122,10 @@ export default function CaptureDetailScreen() {
 
   useEffect(() => {
     if (!session?.access_token || !id) {
-      setLoading(false);
-      setRecordingLoading(false);
+      void Promise.resolve().then(() => {
+        setLoading(false);
+        setRecordingLoading(false);
+      });
       return;
     }
 
@@ -180,7 +189,7 @@ export default function CaptureDetailScreen() {
     && !cloudReady
     && uploadStatus !== 'uploaded',
   );
-  const canApprove = guestSharingEnabled && uploadStatus !== 'uploading' && !needsUpload;
+  const canApprove = uploadStatus !== 'uploading';
 
   function toggleGuestSharing(next: boolean) {
     setGuestSharingEnabled(next);
@@ -226,14 +235,17 @@ export default function CaptureDetailScreen() {
 
   function addAction() {
     if (!encounter || !newActionTitle.trim()) return;
-    const participant = encounter.participants.find((person) => person.id === newActionOwner);
+    const ownerParticipant = encounter.participants.find((person) => person.id === newActionOwner);
+    const participant = ownerParticipant
+      ?? encounter.participants.find((person) => person.id === newActionParticipantId)
+      ?? encounter.participants[0];
     setEncounter({
       ...encounter,
       actions: [...encounter.actions, {
         id: `action-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         title: newActionTitle.trim(),
         channel: newActionChannel,
-        owner: participant ? 'guest' : 'me',
+        owner: ownerParticipant ? 'guest' : 'me',
         dueAt: newActionDueAt,
         status: 'open',
         participantId: participant?.id,
@@ -243,6 +255,8 @@ export default function CaptureDetailScreen() {
     });
     setNewActionTitle('');
     setNewActionDueAt('');
+    setNewActionParticipantId('');
+    setActionComposerOpen(false);
   }
 
   function toggleAction(actionId: string) {
@@ -250,7 +264,9 @@ export default function CaptureDetailScreen() {
     setEncounter({
       ...encounter,
       actions: encounter.actions.map((action) => action.id === actionId
-        ? { ...action, status: action.status === 'completed' ? 'open' : 'completed' }
+        ? action.status === 'completed'
+          ? { ...action, status: 'open', completedAt: undefined }
+          : { ...action, status: 'completed', completedAt: new Date().toISOString() }
         : action),
     });
   }
@@ -258,6 +274,14 @@ export default function CaptureDetailScreen() {
   function removeAction(actionId: string) {
     if (!encounter) return;
     setEncounter({ ...encounter, actions: encounter.actions.filter((action) => action.id !== actionId) });
+  }
+
+  function updateAction(actionId: string, update: Partial<EncounterPayload['actions'][number]>) {
+    if (!encounter) return;
+    setEncounter({
+      ...encounter,
+      actions: encounter.actions.map((action) => action.id === actionId ? { ...action, ...update } : action),
+    });
   }
 
   async function approveAndShare() {
@@ -269,14 +293,23 @@ export default function CaptureDetailScreen() {
       return;
     }
 
-    if (!guestSharingEnabled) {
-      setApproveHint('Turn on guest sharing above, then approve.');
+    if (uploadStatus === 'uploading') {
+      setApproveHint('Recording is still uploading. Approve unlocks once it finishes.');
       return;
     }
 
-    if (uploadStatus === 'uploading' || needsUpload) {
-      setApproveHint('Recording is still uploading. Approve unlocks once it finishes.');
-      return;
+    setGuestSharingEnabled(true);
+    if (needsUpload && recordingUri) {
+      const uploaded = await syncUpload(
+        session.access_token,
+        encounter.id,
+        recordingUri,
+        encounter.recording?.mimeType,
+      );
+      if (!uploaded) {
+        setApproveHint('The recording could not be prepared for sharing. Retry the upload below.');
+        return;
+      }
     }
 
     const next = { ...encounter, status: 'shared' as const };
@@ -324,7 +357,7 @@ export default function CaptureDetailScreen() {
     if (canShare) {
       await Sharing.shareAsync(recordingUri, {
         mimeType: encounter.recording?.mimeType || 'audio/mp4',
-        dialogTitle: 'Send meeting recording',
+        dialogTitle: Platform.OS === 'ios' ? 'Save recording to Files or iCloud Drive' : 'Send meeting recording',
       });
       return;
     }
@@ -367,48 +400,29 @@ export default function CaptureDetailScreen() {
     recordingUri
     && (cloudExpired || uploadStatus === 'failed' || !encounter.recording?.sharedAudioUrl),
   );
+  const openActions = encounter.actions.filter((action) => action.status !== 'completed');
+  const peopleCount = encounter.participants.length || (encounter.personName ? 1 : 0);
 
   return (
     <Screen edges={['top', 'bottom']} reserveTabBar={false}>
       <PageHeader
-        eyebrow="Previous capture"
+        eyebrow="Ready to review"
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Review the summary, save your edits, and share with guests from the follow-up plan when ready.</Body>
+      <Body>Confirm the recap and follow-ups, then choose whether to share.</Body>
 
-      {expectsAudio || hasTranscript ? (
-        <View style={styles.recorderCard}>
-          {expectsAudio ? (
-            recordingLoading ? (
-              <View style={styles.recordingLoading}>
-                <ActivityIndicator color={colors.ink} />
-                <Text style={styles.recordingMissing}>Loading recording…</Text>
-              </View>
-            ) : recordingUri ? (
-              <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
-            ) : (
-              <Text style={styles.recordingMissing}>
-                Audio is not on this device yet. If you just recorded here, try Record again — a saved file is required for playback and guest sharing.
-              </Text>
-            )
-          ) : null}
-
-          {hasTranscript ? (
-            <CollapsibleTranscriptSection
-              title="Full transcript"
-              hint="Expand to edit the full transcript"
-              value={encounter.transcript}
-              onChangeText={(value) => setEncounter({ ...encounter, transcript: value })}
-              defaultOpen={false}
-            />
-          ) : null}
-        </View>
-      ) : null}
+      <View style={styles.reviewStatusLine} accessibilityLabel={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}, ${openActions.length} open follow-ups, ${isShared ? 'guest view shared' : 'private draft'}`}>
+        <Text style={styles.reviewStatusText}>{peopleCount} {peopleCount === 1 ? 'person' : 'people'}</Text>
+        <View style={styles.reviewStatusDot} />
+        <Text style={styles.reviewStatusText}>{openActions.length} open follow-up{openActions.length === 1 ? '' : 's'}</Text>
+        <View style={styles.reviewStatusDot} />
+        <Text style={styles.reviewStatusText}>{isShared ? 'Guest view shared' : 'Private draft'}</Text>
+      </View>
 
       <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Share summary</Text>
-        <Text style={styles.label}>Meeting recap</Text>
+        <Text style={styles.sectionTitle}>Meeting recap</Text>
+        <Text style={styles.helperCopy}>This is what participants will see after you approve the guest view.</Text>
         <TextInput
           value={encounter.sharedSummary}
           onChangeText={(value) => {
@@ -424,37 +438,16 @@ export default function CaptureDetailScreen() {
       </Panel>
 
       <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Follow-up plan</Text>
-        {encounter.participants.length ? (
-          <View style={styles.peopleWrap}>
-            <Text style={styles.label}>People in this meeting</Text>
-            <View style={styles.peopleRow}>
-              {encounter.participants.map((person) => (
-                <View key={person.id} style={styles.personChip}>
-                  <Text style={styles.personChipText}>{person.name || 'Guest'}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-        <Text style={styles.label}>Private notes</Text>
-        <TextInput
-          value={encounter.privateNotes}
-          onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
-          multiline
-          scrollEnabled
-          placeholder="Anything only you need to remember…"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.privateNotesField]}
-        />
-        <Text style={styles.label}>Next actions</Text>
+        <Text style={styles.sectionTitle}>Follow-ups</Text>
+        <Text style={styles.label}>Commitments</Text>
         {encounter.actions.length ? (
           <View style={styles.actionList}>
             {encounter.actions.map((action) => {
               const participant = encounter.participants.find((person) => person.id === action.participantId);
               const channelLabel = FOLLOW_UP_CHANNELS.find((channel) => channel.id === action.channel)?.label || action.channel;
               return (
-                <View key={action.id} style={styles.actionRow}>
+                <View key={action.id} style={styles.actionItem}>
+                  <View style={styles.actionRow}>
                   <Pressable
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: action.status === 'completed' }}
@@ -464,17 +457,126 @@ export default function CaptureDetailScreen() {
                   </Pressable>
                   <View style={styles.actionCopy}>
                     <Text style={[styles.actionTitle, action.status === 'completed' && styles.actionTitleDone]}>{action.title}</Text>
-                    <Text style={styles.helperCopy}>{action.owner === 'me' ? 'You' : participant?.name || action.assigneeName || 'Guest'} · {channelLabel}{action.dueAt ? ` · ${formatDueLabel(action.dueAt)}` : ''}</Text>
+                    <Text style={styles.helperCopy}>{action.owner === 'me' ? participant?.name ? `You → ${participant.name}` : 'You' : participant?.name || action.assigneeName || 'Guest'} · {channelLabel}{action.dueAt ? ` · ${formatDueLabel(action.dueAt)}` : ''}</Text>
                   </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit owner and due date for ${action.title}`}
+                    accessibilityState={{ expanded: editingActionId === action.id }}
+                    onPress={() => setEditingActionId((current) => current === action.id ? '' : action.id)}
+                    hitSlop={8}>
+                    <PencilSimple size={19} color={colors.ink} weight="bold" />
+                  </Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${action.title}`} onPress={() => removeAction(action.id)} hitSlop={8}>
                     <Trash size={19} color={colors.muted} />
                   </Pressable>
+                  </View>
+                  {editingActionId === action.id ? (
+                    <View style={styles.actionEditor}>
+                      <Text style={styles.label}>Owner</Text>
+                      <View style={styles.choiceRow}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: action.owner === 'me' }}
+                          onPress={() => updateAction(action.id, { owner: 'me' })}
+                          style={[styles.choiceChip, action.owner === 'me' && styles.choiceChipActive]}>
+                          <Text style={[styles.choiceChipText, action.owner === 'me' && styles.choiceChipTextActive]}>Me</Text>
+                        </Pressable>
+                        {encounter.participants.length ? encounter.participants.map((person) => {
+                          const selected = action.owner === 'guest' && action.participantId === person.id;
+                          return (
+                            <Pressable
+                              key={person.id}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected }}
+                              onPress={() => updateAction(action.id, {
+                                owner: 'guest',
+                                participantId: person.id,
+                                assigneeName: person.name,
+                                assigneeEmail: person.email,
+                              })}
+                              style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                              <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                            </Pressable>
+                          );
+                        }) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: action.owner === 'guest' }}
+                            onPress={() => updateAction(action.id, { owner: 'guest', assigneeName: encounter.personName || 'Guest' })}
+                            style={[styles.choiceChip, action.owner === 'guest' && styles.choiceChipActive]}>
+                            <Text style={[styles.choiceChipText, action.owner === 'guest' && styles.choiceChipTextActive]}>{encounter.personName || 'Guest'}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                      {action.owner === 'me' && encounter.participants.length ? (
+                        <>
+                          <Text style={styles.label}>For person</Text>
+                          <View style={styles.choiceRow}>
+                            {encounter.participants.map((person) => {
+                              const selected = (action.participantId || encounter.participants[0]?.id) === person.id;
+                              return (
+                                <Pressable
+                                  key={person.id}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected }}
+                                  onPress={() => updateAction(action.id, {
+                                    participantId: person.id,
+                                    assigneeName: person.name,
+                                    assigneeEmail: person.email,
+                                  })}
+                                  style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                                  <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </>
+                      ) : null}
+                      <FollowUpDuePicker dueAt={action.dueAt || ''} onChange={(dueAt) => updateAction(action.id, { dueAt })} />
+                      <Button variant="secondary" onPress={() => setEditingActionId('')}>Done</Button>
+                    </View>
+                  ) : null}
                 </View>
               );
             })}
           </View>
         ) : <Text style={styles.helperCopy}>No next actions yet.</Text>}
-        <View style={styles.actionComposer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: actionComposerOpen }}
+          onPress={() => setActionComposerOpen((value) => !value)}
+          style={styles.actionComposerToggle}>
+          <View style={styles.actionComposerToggleCopy}>
+            <Plus size={17} color={colors.ink} weight="bold" />
+            <Text style={styles.actionComposerToggleText}>Add another follow-up</Text>
+          </View>
+          {actionComposerOpen ? <CaretUp size={17} color={colors.ink} weight="bold" /> : <CaretDown size={17} color={colors.ink} weight="bold" />}
+        </Pressable>
+        {actionComposerOpen ? <View style={styles.actionComposer}>
+          <Text style={styles.label}>Start with a template</Text>
+          <Text style={styles.helperCopy}>Choose a common next step, then adjust the owner or date.</Text>
+          <View style={styles.choiceRow}>
+            {FOLLOW_UP_TEMPLATES.map((template) => {
+              const personName = encounter.participants.map((person) => person.name).filter(Boolean).join(', ') || encounter.personName;
+              const title = template.buildTitle(personName);
+              const selected = newActionTitle === title && newActionChannel === template.channel;
+              return (
+                <Pressable
+                  key={template.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    setNewActionTitle(title);
+                    setNewActionChannel(template.channel);
+                    setNewActionDueAt(template.dueAt());
+                  }}
+                  style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                  <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{template.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <TextInput
             value={newActionTitle}
             onChangeText={setNewActionTitle}
@@ -493,6 +595,26 @@ export default function CaptureDetailScreen() {
               </Pressable>
             ))}
           </View>
+          {newActionOwner === 'me' && encounter.participants.length ? (
+            <>
+              <Text style={styles.label}>For person</Text>
+              <View style={styles.choiceRow}>
+                {encounter.participants.map((person) => {
+                  const selected = (newActionParticipantId || encounter.participants[0]?.id) === person.id;
+                  return (
+                    <Pressable
+                      key={person.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => setNewActionParticipantId(person.id)}
+                      style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
           <Text style={styles.label}>Channel</Text>
           <View style={styles.choiceRow}>
             {FOLLOW_UP_CHANNELS.map((channel) => (
@@ -506,7 +628,7 @@ export default function CaptureDetailScreen() {
             <Plus size={18} color={colors.ink} weight="bold" />
             Add action
           </Button>
-        </View>
+        </View> : null}
         {encounter.guestFollowUp?.committedAt ? (
           <View style={styles.statusRow}>
             <CheckCircle size={18} color={colors.accent} weight="fill" />
@@ -517,20 +639,76 @@ export default function CaptureDetailScreen() {
         ) : null}
       </Panel>
 
+      <View style={styles.detailsCard}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: detailsOpen }}
+          onPress={() => setDetailsOpen((value) => !value)}
+          style={styles.detailsToggle}>
+          <View style={styles.detailsIcon}><LockKey size={20} color={colors.ink} weight="bold" /></View>
+          <View style={styles.detailsCopy}>
+            <Text style={styles.detailsTitle}>Meeting details</Text>
+            <Text style={styles.helperCopy}>Recording, transcript, speaker names, and private notes</Text>
+          </View>
+          {detailsOpen ? <CaretUp size={18} color={colors.ink} weight="bold" /> : <CaretDown size={18} color={colors.ink} weight="bold" />}
+        </Pressable>
+        {detailsOpen ? (
+          <View style={styles.detailsContent}>
+            {expectsAudio ? (
+              recordingLoading ? (
+                <View style={styles.recordingLoading}>
+                  <ActivityIndicator color={colors.ink} />
+                  <Text style={styles.recordingMissing}>Loading recording…</Text>
+                </View>
+              ) : recordingUri ? (
+                <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
+              ) : (
+                <Text style={styles.recordingMissing}>Audio is not available on this device.</Text>
+              )
+            ) : null}
+            {hasTranscript ? (
+              <>
+                <SpeakerIdentityEditor
+                  key={encounter.transcript}
+                  transcript={encounter.transcript}
+                  attendeeNames={[encounter.personName, ...encounter.participants.map((person) => person.name)]}
+                  onApply={(value, names) => setEncounter({
+                    ...encounter,
+                    transcript: value,
+                    actions: renameSpeakerAssignees(encounter.actions, names, encounter.participants),
+                  })}
+                />
+                <CollapsibleTranscriptSection
+                  title="Full transcript"
+                  hint="Expand to edit the full transcript"
+                  value={encounter.transcript}
+                  onChangeText={(value) => setEncounter({ ...encounter, transcript: value })}
+                  defaultOpen={false}
+                />
+              </>
+            ) : <Text style={styles.helperCopy}>No transcript saved for this meeting.</Text>}
+            <Text style={styles.label}>Private notes</Text>
+            <TextInput
+              value={encounter.privateNotes}
+              onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
+              multiline
+              scrollEnabled
+              placeholder="Anything only you need to remember…"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.privateNotesField]}
+            />
+          </View>
+        ) : null}
+      </View>
+
       <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Guest sharing</Text>
-        <View style={styles.statusRow}>
-          <Switch
-            accessibilityLabel="Enable guest sharing"
-            value={guestSharingEnabled}
-            onValueChange={toggleGuestSharing}
-            trackColor={{ false: colors.line, true: colors.accent }}
-            thumbColor={colors.white}
-          />
-          <Text style={styles.summaryCopy}>
-            {guestSharingEnabled ? 'Guest sharing is on.' : 'Guest sharing is off. Turn on to prepare the shared link.'}
-          </Text>
-        </View>
+        <Text style={styles.label}>{isShared ? 'Ready to share' : 'Private by default'}</Text>
+        <Text style={styles.sectionTitle}>{isShared ? 'The guest view is ready' : 'Share with participants'}</Text>
+        <Text style={styles.summaryCopy}>
+          {isShared
+            ? 'Send the secure link yourself. Nothing is sent automatically.'
+            : 'Approve the recap to create a secure guest view. Leave it as a draft to keep everything private.'}
+        </Text>
         <View style={styles.statusRow}>
           {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
           <Text style={styles.summaryCopy}>
@@ -577,13 +755,11 @@ export default function CaptureDetailScreen() {
         {!isShared ? (
           <>
             <Button loading={approving} disabled={!canApprove} onPress={() => void approveAndShare()}>
-              Approve guest view
+              Approve and create link
             </Button>
             {!canApprove ? (
               <Text style={styles.helperCopy}>
-                {!guestSharingEnabled
-                  ? 'Turn on guest sharing above to enable this.'
-                  : 'Approve unlocks once the recording finishes uploading.'}
+                Approve unlocks once the recording finishes uploading.
               </Text>
             ) : null}
           </>
@@ -592,6 +768,9 @@ export default function CaptureDetailScreen() {
             <ShareNetwork size={18} color={colors.ink} />
             Share guest link
           </Button>
+        ) : null}
+        {isShared ? (
+          <Button variant="ghost" onPress={() => toggleGuestSharing(false)}>Make private again</Button>
         ) : null}
         {showEmailRecording ? (
           <>
@@ -603,7 +782,7 @@ export default function CaptureDetailScreen() {
               </Button>
               <Button variant="ghost" style={styles.secondaryActionsRowItem} onPress={() => void shareRecordingFile()}>
                 <ShareNetwork size={18} color={colors.ink} />
-                Send file
+                {Platform.OS === 'ios' ? 'Save to Files / iCloud' : 'Send file'}
               </Button>
             </View>
           </>
@@ -638,6 +817,9 @@ export default function CaptureDetailScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 30, lineHeight: 32 },
+  reviewStatusLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.x2 },
+  reviewStatusText: { color: colors.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  reviewStatusDot: { width: 3, height: 3, borderRadius: radius.round, backgroundColor: colors.muted },
   recorderCard: {
     gap: spacing.x5,
     padding: spacing.x6,
@@ -652,6 +834,18 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
   },
   recordingMissing: { color: colors.muted, fontSize: 13, lineHeight: 20, flex: 1 },
+  detailsCard: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.large,
+    backgroundColor: colors.surface,
+  },
+  detailsToggle: { minHeight: 72, padding: spacing.x4, flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  detailsIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.medium, backgroundColor: colors.canvas },
+  detailsCopy: { minWidth: 0, flex: 1, gap: 2 },
+  detailsTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  detailsContent: { gap: spacing.x4, padding: spacing.x4, borderTopWidth: 1, borderTopColor: colors.line },
   section: { gap: spacing.x3 },
   sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
@@ -676,15 +870,25 @@ const styles = StyleSheet.create({
   notesField: { height: 140, maxHeight: 140, paddingTop: spacing.x3, textAlignVertical: 'top' },
   privateNotesField: { height: 110, maxHeight: 110, paddingTop: spacing.x3, textAlignVertical: 'top' },
   summaryCopy: { color: colors.ink, fontSize: 15, lineHeight: 22, flex: 1 },
-  peopleWrap: { gap: spacing.x2 },
-  peopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
-  personChip: { paddingHorizontal: spacing.x3, paddingVertical: spacing.x2, borderRadius: radius.medium, backgroundColor: colors.canvas },
-  personChipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   actionList: { gap: spacing.x2 },
+  actionItem: { overflow: 'hidden', borderRadius: radius.medium, backgroundColor: colors.canvas },
   actionRow: { minHeight: 54, padding: spacing.x3, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderRadius: radius.medium, backgroundColor: colors.canvas },
+  actionEditor: { padding: spacing.x3, paddingTop: 0, gap: spacing.x3, borderTopWidth: 1, borderTopColor: colors.line },
   actionCopy: { flex: 1, gap: 2 },
   actionTitle: { color: colors.ink, fontSize: 14, fontWeight: '700' },
   actionTitleDone: { color: colors.muted, textDecorationLine: 'line-through' },
+  actionComposerToggle: {
+    minHeight: 46,
+    paddingHorizontal: spacing.x4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.x3,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
+  },
+  actionComposerToggleCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
+  actionComposerToggleText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
   actionComposer: { marginTop: spacing.x2, paddingTop: spacing.x4, gap: spacing.x3, borderTopWidth: 1, borderTopColor: colors.line },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   choiceChip: { minHeight: 36, paddingHorizontal: spacing.x3, justifyContent: 'center', borderRadius: radius.medium, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },

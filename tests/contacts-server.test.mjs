@@ -23,6 +23,10 @@ test("contactFromRow maps database columns to Contact", () => {
     email: "sarah@example.com",
     phone: "+441234",
     linkedin_url: "https://linkedin.com/in/sarahchen",
+    whatsapp_url: "447700900000",
+    instagram_url: "sarahchen",
+    x_url: "sarah_x",
+    tiktok_url: "sarah.tiktok",
     company: "Acme",
     role: "Founder",
     context: "Met at summit",
@@ -37,6 +41,7 @@ test("contactFromRow maps database columns to Contact", () => {
   assert.equal(contact.firstName, "Sarah");
   assert.equal(contact.exchangeId, "ex-1");
   assert.equal(contact.phone, "+441234");
+  assert.equal(contact.instagramUrl, "sarahchen");
 });
 
 test("contactToRow stores legacy id for non-uuid client ids", () => {
@@ -46,6 +51,10 @@ test("contactToRow stores legacy id for non-uuid client ids", () => {
       firstName: "Sarah",
       lastName: "Chen",
       email: "sarah@example.com",
+      whatsappUrl: "447700900000",
+      instagramUrl: "sarahchen",
+      xUrl: "sarah_x",
+      tiktokUrl: "sarah.tiktok",
       company: "",
       role: "",
       context: "",
@@ -59,6 +68,8 @@ test("contactToRow stores legacy id for non-uuid client ids", () => {
   assert.equal(row.legacy_id, "exchange-ex-1");
   assert.equal(isContactUuid(row.id), true);
   assert.equal(row.exchange_id, "ex-1");
+  assert.equal(row.whatsapp_url, "447700900000");
+  assert.equal(row.instagram_url, "sarahchen");
 });
 
 test("contactMatchesLocal matches by id or exchange id", () => {

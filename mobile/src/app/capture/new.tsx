@@ -22,9 +22,12 @@ import { Body, Button, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
   createFreshCaptureDraft,
+  captureDraftFromRemote,
+  captureDraftToRemote,
   deleteCaptureDraft,
   EMPTY_CAPTURE_DRAFT,
   hasCaptureDraftProgress,
+  getCaptureDeviceIdentity,
   readCaptureDraft,
   setAuthReturnPath,
   writeCaptureDraft,
@@ -53,35 +56,87 @@ import {
 } from '@/features/encounters/local-recordings';
 import {
   buildEncounterPayload,
+  CaptureSessionConflictError,
   extractEncounterDraft,
   fetchInboundExchanges,
+  fetchCaptureSessions,
   fetchPublicCardName,
   saveEncounter,
+  syncCaptureSession,
   transcribeEncounterAudio,
   uploadEncounterRecording,
+  uploadEncounterRecordingToDrive,
+  uploadEncounterRecordingToOneDrive,
+  type EncounterExtractionCommitment,
   type InboundExchange,
 } from '@/features/encounters/encounter-api';
+import { fetchConnectedAccounts } from '@/features/integrations/integrations-api';
 import { fetchEncounterRecords } from '@/features/follow-ups/follow-up-api';
 import {
   FOLLOW_UP_CHANNELS,
+  normalizeFollowUpChannels,
   toggleFollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
+import { FOLLOW_UP_TEMPLATES } from '@/features/follow-ups/follow-up-templates';
 import { useCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/use-capture-recorder';
+import {
+  registerActiveCaptureController,
+  updateActiveCaptureSnapshot,
+} from '@/features/encounters/active-capture-controller';
 import { normalizeTranscriptForExtraction } from '@/lib/transcript-cleanup';
 import { useAppInsets } from '@/lib/safe-area';
 import { readEnv } from '@/lib/env';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type GenerationStatus = 'idle' | 'generating' | 'error';
+type CommitmentAssignment = { owner: 'me' | 'guest'; targetName: string };
+
+function commitmentKey(commitment: EncounterExtractionCommitment, index: number): string {
+  return `${index}:${commitment.title}:${commitment.channel}:${commitment.dueAt}`;
+}
+
+function defaultCommitmentKeys(commitments: EncounterExtractionCommitment[]): string[] {
+  return commitments.flatMap((commitment, index) => commitment.title.trim() ? [commitmentKey(commitment, index)] : []);
+}
+
+function initialCommitmentAssignments(
+  commitments: EncounterExtractionCommitment[],
+  people: Array<{ name: string }>,
+): Record<string, CommitmentAssignment> {
+  return Object.fromEntries(commitments.map((commitment, index) => {
+    const matched = people.find((person) => (
+      person.name.trim().toLocaleLowerCase() === commitment.ownerName.trim().toLocaleLowerCase()
+    ));
+    return [commitmentKey(commitment, index), {
+      owner: commitment.owner,
+      targetName: (commitment.owner === 'guest' ? matched?.name : people[0]?.name) || commitment.ownerName,
+    }];
+  }));
+}
 
 export default function CaptureWizardScreen() {
-  const params = useLocalSearchParams<{ exchange?: string; slug?: string; draftId?: string }>();
+  const params = useLocalSearchParams<{
+    exchange?: string;
+    slug?: string;
+    draftId?: string;
+    personName?: string;
+    personEmail?: string;
+    sourceId?: string;
+    contactId?: string;
+  }>();
   const { session } = useAuth();
   const insets = useAppInsets();
   const [draft, setDraft] = useState<CaptureWizardDraft>(EMPTY_CAPTURE_DRAFT);
+  const captureDeviceRef = useRef<{ id: string; label: string } | null>(null);
+  const remoteSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSyncedDraftAtRef = useRef('');
+  const suppressNextRemoteSyncRef = useRef(false);
   const [leaveSheetOpen, setLeaveSheetOpen] = useState(false);
   const [exchanges, setExchanges] = useState<InboundExchange[]>([]);
   const [uncertainFields, setUncertainFields] = useState<string[]>([]);
+  const [commitmentSuggestions, setCommitmentSuggestions] = useState<EncounterExtractionCommitment[]>([]);
+  const [selectedCommitmentKeys, setSelectedCommitmentKeys] = useState<string[]>([]);
+  const [commitmentAssignments, setCommitmentAssignments] = useState<Record<string, CommitmentAssignment>>({});
   const [extracting, setExtracting] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle');
   const [generationError, setGenerationError] = useState('');
@@ -90,6 +145,7 @@ export default function CaptureWizardScreen() {
   const [error, setError] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [message, setMessage] = useState('');
+  const [syncConflict, setSyncConflict] = useState(false);
   const requestRef = useRef(0);
   const generationKickoffRef = useRef('');
   const generationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -99,6 +155,8 @@ export default function CaptureWizardScreen() {
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [priorMeetingCounts, setPriorMeetingCounts] = useState<Record<string, number>>({});
   const [draftReady, setDraftReady] = useState(false);
+  const [googleDriveReady, setGoogleDriveReady] = useState(false);
+  const [oneDriveReady, setOneDriveReady] = useState(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
 
@@ -108,7 +166,7 @@ export default function CaptureWizardScreen() {
       const unchanged = (Object.keys(changes) as Array<keyof CaptureWizardDraft>).every(
         (key) => Object.is(current[key], next[key]),
       );
-      return unchanged ? current : next;
+      return unchanged ? current : { ...next, updatedAt: new Date().toISOString() };
     });
   }, []);
 
@@ -118,6 +176,35 @@ export default function CaptureWizardScreen() {
     return priorMeetingCounts[normalized] ?? 0;
   }, [priorMeetingCounts]);
 
+  const reloadLatestRemoteCapture = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const current = draftRef.current;
+      const sessions = await fetchCaptureSessions(session.access_token);
+      const match = sessions.find((item) => item.encounterId === current.encounterId);
+      if (!match) {
+        setMessage('The latest capture could not be loaded. Your local recording remains safe on this device.');
+        return;
+      }
+      const remote = captureDraftFromRemote(match);
+      const merged: CaptureWizardDraft = {
+        ...remote,
+        recordingUri: current.recordingUri,
+        recordingSource: current.recordingSource,
+        importFileName: current.importFileName,
+        importMimeType: current.importMimeType,
+        hasLocalAudio: Boolean(current.recordingUri) || remote.hasLocalAudio,
+      };
+      suppressNextRemoteSyncRef.current = true;
+      lastSyncedDraftAtRef.current = remote.updatedAt;
+      setDraft(merged);
+      setSyncConflict(false);
+      setMessage('Loaded the latest capture. Audio stored on this device is still available.');
+    } catch {
+      setMessage('The latest capture could not be loaded. Check your connection and try again; your local recording remains safe.');
+    }
+  }, [session?.access_token]);
+
   function resolveContactIdForDraft(current: CaptureWizardDraft) {
     const email = current.personEmail.trim().toLowerCase();
     const exchangeId = current.exchangeId?.trim();
@@ -125,7 +212,8 @@ export default function CaptureWizardScreen() {
       (email && connection.email?.trim().toLowerCase() === email)
       || (exchangeId && connection.source === 'inbound' && connection.sourceId === exchangeId)
     ));
-    return match?.id || current.contactId || '';
+    if (match?.source === 'contact') return match.sourceId;
+    return current.contactId || '';
   }
 
   const handleTranscriptChange = useCallback((transcript: string) => {
@@ -217,11 +305,22 @@ export default function CaptureWizardScreen() {
       });
       if (activeRequest !== requestRef.current) return;
 
+      const commitments = result.draft?.commitments ?? [];
+      setCommitmentSuggestions(commitments);
+      setSelectedCommitmentKeys(defaultCommitmentKeys(commitments));
+      setCommitmentAssignments(initialCommitmentAssignments(commitments, hints.people));
+
       setDraft((current) => {
         const extracted = applyExtractionDraft(current, result.draft!, { replace: true });
         return {
           ...current,
           ...extracted,
+          followUp: commitments.length ? '' : extracted.followUp,
+          followUpChannels: commitments.length
+            ? []
+            : result.draft?.followUp
+            ? normalizeFollowUpChannels([result.draft.followUpType])
+            : current.followUpChannels,
         };
       });
       setUncertainFields(result.uncertainFields ?? []);
@@ -286,6 +385,71 @@ export default function CaptureWizardScreen() {
     || recorder.serverTranscribePhase === 'revealing'
     || recorder.isFinishing;
 
+  useEffect(() => {
+    const status = isTranscribing
+      ? 'processing'
+      : recorder.recordingState === 'paused'
+        ? 'paused'
+        : recorder.recordingState === 'recording'
+          ? 'recording'
+          : null;
+    if (!status) return;
+    return registerActiveCaptureController({
+      pauseOrResume: recorder.pauseOrResume,
+      finish: recorder.stopRecording,
+    }, {
+      encounterId: draftRef.current.encounterId,
+      status,
+      seconds: recorder.seconds,
+    });
+  }, [isTranscribing, recorder.pauseOrResume, recorder.recordingState, recorder.stopRecording]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const status = isTranscribing
+      ? 'processing'
+      : recorder.recordingState === 'paused'
+        ? 'paused'
+        : recorder.recordingState === 'recording'
+          ? 'recording'
+          : null;
+    if (!status) return;
+    updateActiveCaptureSnapshot({
+      encounterId: draft.encounterId,
+      status,
+      seconds: recorder.seconds,
+    });
+  }, [draft.encounterId, draftReady, isTranscribing, recorder.recordingState, recorder.seconds]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+
+    const now = new Date().toISOString();
+    if (recorder.recordingState === 'recording') {
+      updateDraft({
+        sessionStatus: 'recording',
+        failureReason: '',
+        recordingStartedAt: draftRef.current.recordingStartedAt || now,
+        recordingStoppedAt: '',
+      });
+      return;
+    }
+    if (recorder.recordingState === 'paused') {
+      updateDraft({ sessionStatus: 'paused' });
+      return;
+    }
+    if (isTranscribing) {
+      updateDraft({ sessionStatus: 'processing' });
+      return;
+    }
+    if (recorder.recordingUri || draftRef.current.recordingUri) {
+      updateDraft({
+        sessionStatus: 'review_ready',
+        recordingStoppedAt: draftRef.current.recordingStoppedAt || now,
+      });
+    }
+  }, [draftReady, isTranscribing, recorder.recordingState, recorder.recordingUri, updateDraft]);
+
   const sessionExchanges = useMemo(() => {
     const started = draft.gatherSessionStartedAt;
     if (!started) return [];
@@ -348,6 +512,19 @@ export default function CaptureWizardScreen() {
   );
 
   useEffect(() => {
+    if (!session?.access_token) return;
+    void fetchConnectedAccounts(session.access_token)
+      .then((status) => {
+        setGoogleDriveReady(Boolean(status.google.connected && status.google.capabilities.drive));
+        setOneDriveReady(Boolean(status.microsoft.connected && status.microsoft.capabilities.onedrive));
+      })
+      .catch(() => {
+        setGoogleDriveReady(false);
+        setOneDriveReady(false);
+      });
+  }, [session?.access_token]);
+
+  useEffect(() => {
     if (!draftReady || draft.step !== 1) return;
     const clean = draft.transcript.trim();
     if (clean.length < 20) return;
@@ -386,8 +563,27 @@ export default function CaptureWizardScreen() {
         const stored = params.draftId
           ? await readCaptureDraft(String(params.draftId))
           : await readCaptureDraft();
-        const next = { ...(stored ?? createFreshCaptureDraft()) };
+        let remote: CaptureWizardDraft | null = null;
+        if (!stored && params.draftId && session?.access_token) {
+          const sessions = await fetchCaptureSessions(session.access_token).catch(() => []);
+          const match = sessions.find((item) => item.encounterId === String(params.draftId));
+          if (match) {
+            remote = captureDraftFromRemote(match);
+            lastSyncedDraftAtRef.current = remote.updatedAt;
+          }
+        }
+        const next = { ...(stored ?? remote ?? createFreshCaptureDraft()) };
         if (params.exchange) next.exchangeId = String(params.exchange);
+        if (!(next.people ?? []).length && params.personName?.trim()) {
+          next.people = [createGatherPerson({
+            id: params.sourceId ? String(params.sourceId) : undefined,
+            name: String(params.personName).trim(),
+            email: params.personEmail ? String(params.personEmail).trim() : '',
+            exchangeId: params.exchange ? String(params.exchange) : undefined,
+          })];
+          Object.assign(next, syncLegacyPersonFields(next.people));
+          next.contactId = params.contactId ? String(params.contactId) : next.contactId;
+        }
         if (params.slug && readEnv()) {
           const name = await fetchPublicCardName(readEnv()!.publicCardBaseUrl, String(params.slug));
           if (name && !(next.people ?? []).length) {
@@ -401,7 +597,7 @@ export default function CaptureWizardScreen() {
         setDraftReady(true);
       }
     })();
-  }, [params.draftId, params.exchange, params.slug]);
+  }, [params.contactId, params.draftId, params.exchange, params.personEmail, params.personName, params.slug, params.sourceId, session?.access_token]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -419,8 +615,109 @@ export default function CaptureWizardScreen() {
   }, [draft, draftReady]);
 
   useEffect(() => {
+    if (!draftReady || !session?.access_token || !hasCaptureDraftProgress(draft)) return;
+    if (suppressNextRemoteSyncRef.current) {
+      suppressNextRemoteSyncRef.current = false;
+      return;
+    }
+    if (remoteSyncDebounceRef.current) clearTimeout(remoteSyncDebounceRef.current);
+    remoteSyncDebounceRef.current = setTimeout(() => {
+      void (async () => {
+        const device = captureDeviceRef.current ?? await getCaptureDeviceIdentity();
+        captureDeviceRef.current = device;
+        const syncingDraft = draftRef.current;
+        await syncCaptureSession(session.access_token, captureDraftToRemote(syncingDraft, device));
+        lastSyncedDraftAtRef.current = syncingDraft.updatedAt;
+        setSyncConflict(false);
+      })().catch((syncError: unknown) => {
+        if (syncError instanceof CaptureSessionConflictError) {
+          setSyncConflict(true);
+          setMessage('This capture moved forward on another device. Return to Capture and reopen it to load the latest version. Your local recording remains safe on this device.');
+          return;
+        }
+        // Local draft remains authoritative while offline; the next edit retries sync.
+      });
+    }, 1200);
+    return () => {
+      if (remoteSyncDebounceRef.current) clearTimeout(remoteSyncDebounceRef.current);
+    };
+  }, [draft, draftReady, session?.access_token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!draftReady || !session?.access_token || !hasCaptureDraftProgress(draftRef.current)) return undefined;
+      let cancelled = false;
+
+      const refreshRemoteDraft = async () => {
+        const current = draftRef.current;
+        if (current.sessionStatus === 'recording' || current.sessionStatus === 'paused' || current.sessionStatus === 'processing') return;
+        const device = captureDeviceRef.current ?? await getCaptureDeviceIdentity();
+        captureDeviceRef.current = device;
+        const sessions = await fetchCaptureSessions(session.access_token).catch(() => []);
+        if (cancelled) return;
+        const match = sessions.find((item) => item.encounterId === current.encounterId);
+        if (!match || match.deviceId === device.id) return;
+        if (Date.parse(match.updatedAt) <= Date.parse(current.updatedAt)) return;
+
+        if (lastSyncedDraftAtRef.current && current.updatedAt !== lastSyncedDraftAtRef.current) {
+          setMessage(`Newer changes are available from ${match.deviceLabel || 'another device'}. Finish or leave this field before reopening the draft to avoid replacing your local edits.`);
+          return;
+        }
+
+        const remote = captureDraftFromRemote(match);
+        const merged: CaptureWizardDraft = {
+          ...remote,
+          recordingUri: current.recordingUri,
+          recordingSource: current.recordingSource,
+          importFileName: current.importFileName,
+          importMimeType: current.importMimeType,
+          hasLocalAudio: Boolean(current.recordingUri) || remote.hasLocalAudio,
+        };
+        suppressNextRemoteSyncRef.current = true;
+        lastSyncedDraftAtRef.current = remote.updatedAt;
+        setDraft(merged);
+        setSyncConflict(false);
+        setMessage(match.sessionStatus === 'failed' && match.failureReason === 'recording_heartbeat_lost'
+          ? `The recording on ${match.deviceLabel || 'another device'} was interrupted. Everything already captured is safe; review the draft here.`
+          : `Updated with the latest context from ${match.deviceLabel || 'another device'}. Audio stays on the device that recorded it.`);
+      };
+
+      void refreshRemoteDraft();
+      const timer = setInterval(() => { void refreshRemoteDraft(); }, 15000);
+      return () => {
+        cancelled = true;
+        clearInterval(timer);
+      };
+    }, [draftReady, session?.access_token]),
+  );
+
+  useEffect(() => {
     if (!draftReady || recorderHydratedRef.current) return;
     recorderHydratedRef.current = true;
+
+    void getCaptureDeviceIdentity().then((device) => { captureDeviceRef.current = device; });
+    if (
+      (draft.sessionStatus === 'recording' || draft.sessionStatus === 'paused')
+      && !draft.recordingUri
+      && (!draft.originDeviceId || draft.originDeviceId === captureDeviceRef.current?.id)
+    ) {
+      updateDraft({
+        sessionStatus: 'failed',
+        failureReason: 'recording_interrupted',
+        recordingStoppedAt: new Date().toISOString(),
+      });
+      showCaptureError('The previous recording was interrupted before it could be saved. Your draft is safe; start a new recording to continue.');
+    }
+
+    if (draft.sessionStatus === 'failed' && draft.failureReason === 'recording_heartbeat_lost') {
+      void Promise.resolve().then(() => {
+        setMessage('The live recording was interrupted. Everything already captured is safe; review this draft and record again only if you need more audio.');
+      });
+    }
+
+    if (draft.originDeviceId && draft.originDeviceId !== captureDeviceRef.current?.id && !draft.recordingUri) {
+      showCaptureError(`The audio remains on ${draft.originDeviceLabel || 'the device that started this capture'}. You can continue the people, transcript, context, and follow-up here.`);
+    }
 
     recorder.hydrateFromDraft({
       recordingUri: draft.recordingUri,
@@ -432,7 +729,7 @@ export default function CaptureWizardScreen() {
     if (draft.recordingUri && draft.transcript.trim().length < 20 && session?.access_token) {
       void recorder.transcribeRecordingIfNeeded(draft.recordingUri);
     }
-  }, [draft.durationSeconds, draft.recordingSource, draft.recordingUri, draft.transcript, draftReady, recorder, session?.access_token]);
+  }, [draft.durationSeconds, draft.recordingSource, draft.recordingUri, draft.sessionStatus, draft.transcript, draftReady, recorder, session?.access_token, updateDraft]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -487,8 +784,10 @@ export default function CaptureWizardScreen() {
 
   useEffect(() => {
     if (!session?.access_token) {
-      setConnections([]);
-      setPriorMeetingCounts({});
+      void Promise.resolve().then(() => {
+        setConnections([]);
+        setPriorMeetingCounts({});
+      });
       return;
     }
 
@@ -540,7 +839,7 @@ export default function CaptureWizardScreen() {
   }
 
   async function continueFromInteraction(skipRecording = false) {
-    if (!draft.consent) {
+    if (draft.captureMode === 'recording' && !draft.consent) {
       showCaptureError('Confirm that everyone agreed before continuing.');
       return;
     }
@@ -549,7 +848,7 @@ export default function CaptureWizardScreen() {
       showCaptureError('Add at least one person you met.');
       return;
     }
-    if (!skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
+    if (draft.captureMode === 'recording' && !skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
       await recorder.stopRecording();
     } else {
       await recorder.awaitPendingFinish();
@@ -595,30 +894,10 @@ export default function CaptureWizardScreen() {
           recording = await saveLocalRecording(draft.encounterId, recordingUri, {
             durationSeconds: draft.durationSeconds || recorder.seconds,
             source: draft.recordingSource || recorder.recordingSource || 'recorded',
-            retention: draft.retention,
+            retention: draft.recordingDestination === 'local_only' ? 'never' : draft.retention,
           });
         } catch (caught) {
           if (!recording) throw caught;
-        }
-      }
-
-      if (recording?.localUri) {
-        try {
-          const uploaded = await uploadEncounterRecording(
-            token,
-            draft.encounterId,
-            recording.localUri,
-          );
-          recording = {
-            ...recording,
-            ...uploaded,
-            localUri: recording.localUri,
-            audioLocation: 'server',
-          };
-          await updateLocalRecordingSharedUrl(draft.encounterId, uploaded.sharedAudioUrl ?? '');
-          // Keep local audio for host playback — cloud copy is only the guest bridge.
-        } catch {
-          // host keeps local playback; guest sharing retried from review screen
         }
       }
 
@@ -633,14 +912,92 @@ export default function CaptureWizardScreen() {
         exchangeId: draft.exchangeId || undefined,
         sharedSummary: draft.sharedSummary,
         privateNotes: draft.privateNotes,
+        followUp: draft.followUp,
         followUpChannels: draft.followUpChannels,
+        commitments: commitmentSuggestions.flatMap((commitment, index) => {
+          const key = commitmentKey(commitment, index);
+          if (!selectedCommitmentKeys.includes(key)) return [];
+          const assignment = commitmentAssignments[key] ?? { owner: commitment.owner, targetName: commitment.ownerName };
+          return [{ ...commitment, owner: assignment.owner, ownerName: assignment.targetName }];
+        }),
         dueAt: draft.dueAt,
         consentMethod: draft.consentMethod,
+        consentConfirmed: draft.captureMode === 'recording' ? draft.consent : false,
         status: 'draft',
         durationSeconds: draft.durationSeconds || recorder.seconds,
         recording: recording ?? undefined,
       });
       await saveEncounter(token, payload);
+
+      if (recording?.localUri && draft.recordingDestination === 'shared_3_days') {
+        try {
+          const uploaded = await uploadEncounterRecording(
+            token,
+            draft.encounterId,
+            recording.localUri,
+          );
+          recording = {
+            ...recording,
+            ...uploaded,
+            localUri: recording.localUri,
+            audioLocation: 'server',
+          };
+          await updateLocalRecordingSharedUrl(draft.encounterId, uploaded.sharedAudioUrl ?? '');
+          await saveEncounter(token, { ...payload, recording });
+        } catch (caught) {
+          const shareError = caught instanceof Error
+            ? caught.message
+            : 'The three-day recording link could not be created. Your local copy is still safe.';
+          showCaptureError(`${shareError} Retry when you are online.`);
+          return;
+        }
+      }
+
+      if (recording?.localUri && draft.recordingDestination === 'google_drive') {
+        try {
+          const driveRecording = await uploadEncounterRecordingToDrive(
+            token,
+            draft.encounterId,
+            recording.localUri,
+          );
+          recording = {
+            ...recording,
+            ...driveRecording,
+            localUri: recording.localUri,
+            audioLocation: 'google_drive',
+          };
+          await saveEncounter(token, { ...payload, recording });
+        } catch (caught) {
+          const driveError = caught instanceof Error
+            ? caught.message
+            : 'Google Drive could not save this recording. Your local copy is still safe.';
+          showCaptureError(`${driveError} Open Connected accounts to reconnect Google, then retry from this draft.`);
+          return;
+        }
+      }
+
+      if (recording?.localUri && draft.recordingDestination === 'onedrive') {
+        try {
+          const oneDriveRecording = await uploadEncounterRecordingToOneDrive(
+            token,
+            draft.encounterId,
+            recording.localUri,
+          );
+          recording = {
+            ...recording,
+            ...oneDriveRecording,
+            localUri: recording.localUri,
+            audioLocation: 'onedrive',
+          };
+          await saveEncounter(token, { ...payload, recording });
+        } catch (caught) {
+          const oneDriveError = caught instanceof Error
+            ? caught.message
+            : 'OneDrive could not save this recording. Your local copy is still safe.';
+          showCaptureError(`${oneDriveError} Open Connected accounts to reconnect Microsoft, then retry from this draft.`);
+          return;
+        }
+      }
       await deleteCaptureDraft(draft.encounterId);
       router.replace(`/capture/${payload.id}`);
     } catch (caught) {
@@ -688,6 +1045,9 @@ export default function CaptureWizardScreen() {
               onEnsureAuth={ensureAuth}
               getPriorMeetingCount={getPriorMeetingCount}
               knownConnectionEmails={connections.map((connection) => connection.email?.trim().toLowerCase() || '').filter(Boolean)}
+              googleDriveReady={googleDriveReady}
+              oneDriveReady={oneDriveReady}
+              onOpenConnectedAccounts={() => router.push('/settings/connected-accounts')}
             />
           ) : null}
 
@@ -715,6 +1075,89 @@ export default function CaptureWizardScreen() {
                 <Text style={styles.blockTitle}>What happens next?</Text>
               </View>
               <Body>Pick how you want to follow up, add any private notes, then save and review.</Body>
+              {commitmentSuggestions.length ? (
+                <View style={styles.commitmentPanel}>
+                  <Text style={styles.commitmentTitle}>Suggested from the conversation</Text>
+                  <Text style={styles.fieldHint}>Every included promise becomes its own follow-up. Remove any suggestion that is wrong.</Text>
+                  {commitmentSuggestions.map((commitment, sourceIndex) => ({ commitment, sourceIndex })).map(({ commitment, sourceIndex }) => {
+                    const key = commitmentKey(commitment, sourceIndex);
+                    const selected = selectedCommitmentKeys.includes(key);
+                    const assignment = commitmentAssignments[key] ?? { owner: commitment.owner, targetName: commitment.ownerName };
+                    return <View key={key} style={[styles.commitmentOption, selected && styles.commitmentOptionSelected]}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => setSelectedCommitmentKeys((current) => (
+                          current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+                        ))}
+                        style={styles.commitmentToggle}>
+                        <View style={styles.commitmentCopy}>
+                          <Text style={styles.commitmentOptionTitle}>{commitment.title}</Text>
+                          <Text style={styles.commitmentMeta}>
+                            {commitment.channel}{commitment.dueAt ? ` · due ${commitment.dueAt}` : ' · no due date agreed'}
+                          </Text>
+                        </View>
+                        <Text style={styles.commitmentUse}>{selected ? 'Included' : 'Add'}</Text>
+                      </Pressable>
+                      {selected ? <View style={styles.commitmentAssignment}>
+                        <Text style={styles.commitmentAssignmentLabel}>Owner</Text>
+                        <View style={styles.commitmentAssignmentRow}>
+                          <Pressable onPress={() => setCommitmentAssignments((current) => ({
+                            ...current,
+                            [key]: { owner: 'me', targetName: current[key]?.targetName || draft.people[0]?.name || '' },
+                          }))} style={[styles.assignmentChip, assignment.owner === 'me' && styles.assignmentChipSelected]}>
+                            <Text style={styles.assignmentChipText}>You</Text>
+                          </Pressable>
+                          {draft.people.map((person) => <Pressable key={person.id} onPress={() => setCommitmentAssignments((current) => ({
+                            ...current,
+                            [key]: { owner: 'guest', targetName: person.name },
+                          }))} style={[styles.assignmentChip, assignment.owner === 'guest' && assignment.targetName === person.name && styles.assignmentChipSelected]}>
+                            <Text style={styles.assignmentChipText}>{person.name || 'Guest'}</Text>
+                          </Pressable>)}
+                        </View>
+                        {assignment.owner === 'me' && draft.people.length > 1 ? <>
+                          <Text style={styles.commitmentAssignmentLabel}>Track with</Text>
+                          <View style={styles.commitmentAssignmentRow}>
+                            {draft.people.map((person) => <Pressable key={person.id} onPress={() => setCommitmentAssignments((current) => ({
+                              ...current,
+                              [key]: { ...assignment, targetName: person.name },
+                            }))} style={[styles.assignmentChip, assignment.targetName === person.name && styles.assignmentChipSelected]}>
+                              <Text style={styles.assignmentChipText}>{person.name || 'Guest'}</Text>
+                            </Pressable>)}
+                          </View>
+                        </> : null}
+                      </View> : null}
+                    </View>;
+                  })}
+                </View>
+              ) : null}
+              <Text style={styles.label}>Start with a template</Text>
+              <Text style={styles.fieldHint}>Choose a common next step, then make it specific.</Text>
+              <View style={styles.templateRow}>
+                {FOLLOW_UP_TEMPLATES.map((template) => (
+                  <Pressable
+                    key={template.id}
+                    accessibilityRole="button"
+                    onPress={() => updateDraft({
+                      followUp: template.buildTitle(formatPeopleNames(draft.people) || draft.personName),
+                      followUpChannels: [template.channel],
+                      followUpType: template.channel,
+                      dueAt: template.dueAt(),
+                    })}
+                    style={styles.templateChip}>
+                    <Text style={styles.templateChipText}>{template.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.label}>{selectedCommitmentKeys.length ? 'Add another follow-up' : 'Reviewed commitment'}</Text>
+              <Text style={styles.fieldHint}>{selectedCommitmentKeys.length ? 'Optional. Add a task that was not found in the conversation.' : 'Confirm or edit the concrete next step AfterMeet found in your context.'}</Text>
+              <TextInput
+                value={draft.followUp}
+                onChangeText={(value) => updateDraft({ followUp: value })}
+                placeholder="Send the proposal on Friday"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
               {(draft.people ?? []).length > 1 ? (
                 <View style={styles.followUpPeopleWrap}>
                   <Text style={styles.label}>Applies to everyone</Text>
@@ -743,7 +1186,7 @@ export default function CaptureWizardScreen() {
                 style={[styles.input, styles.textarea]}
               />
               <Text style={styles.label}>Follow-up channels</Text>
-              <Text style={styles.fieldHint}>Pick as many as you'd like. Each channel becomes its own action.</Text>
+              <Text style={styles.fieldHint}>Pick as many as you&apos;d like. Each channel becomes its own action.</Text>
               <View style={styles.channelRow}>
                 {FOLLOW_UP_CHANNELS.map((channel) => {
                   const selected = draft.followUpChannels.includes(channel.id);
@@ -774,7 +1217,16 @@ export default function CaptureWizardScreen() {
             </View>
           ) : null}
 
-          {message ? <Text style={styles.success}>{message}</Text> : null}
+          {message ? (
+            <View style={styles.syncMessage}>
+              <Text style={syncConflict ? styles.error : styles.success}>{message}</Text>
+              {syncConflict ? (
+                <Button variant="secondary" onPress={() => void reloadLatestRemoteCapture()}>
+                  Load latest capture
+                </Button>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -785,7 +1237,7 @@ export default function CaptureWizardScreen() {
           ) : null}
           {draft.step === 0 ? (
             <>
-              {draft.consent && recorder.recordingState === 'idle' && !recorder.recordingUri ? (
+              {draft.captureMode === 'recording' && draft.consent && recorder.recordingState === 'idle' && !recorder.recordingUri ? (
                 <Button variant="secondary" style={{ flex: 1 }} onPress={() => void continueFromInteraction(true)}>
                   Skip recording
                 </Button>
@@ -795,11 +1247,11 @@ export default function CaptureWizardScreen() {
                 onPress={() => void continueFromInteraction(false)}
                 loading={isTranscribing}
                 disabled={
-                  !draft.consent
+                  (draft.captureMode === 'recording' && !draft.consent)
                   || !hasValidGatherPeople(draft.people ?? [])
                   || isTranscribing
                 }>
-                {isTranscribing ? 'Transcribing…' : 'Next'}
+                {isTranscribing ? 'Transcribing…' : draft.captureMode === 'quick_context' ? 'Add context' : 'Next'}
               </Button>
             </>
           ) : null}
@@ -918,6 +1370,45 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   followUpPersonChipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
+  templateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
+  commitmentPanel: {
+    gap: spacing.x2,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceMuted,
+  },
+  commitmentTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  commitmentOption: {
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
+  },
+  commitmentOptionSelected: {
+    borderColor: colors.ink,
+    backgroundColor: '#E3F6D7',
+  },
+  commitmentToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3, padding: spacing.x3 },
+  commitmentAssignment: { gap: spacing.x2, paddingHorizontal: spacing.x3, paddingBottom: spacing.x3 },
+  commitmentAssignmentLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  commitmentAssignmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
+  assignmentChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: radius.round, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  assignmentChipSelected: { borderColor: colors.ink, backgroundColor: colors.accent },
+  assignmentChipText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  commitmentCopy: { flex: 1, gap: 3 },
+  commitmentOptionTitle: { color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '800' },
+  commitmentMeta: { color: colors.muted, fontSize: 11, lineHeight: 16, textTransform: 'capitalize' },
+  commitmentUse: { color: colors.ink, fontSize: 12, fontWeight: '900' },
+  templateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: radius.round,
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  templateChipText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   channelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   channelChip: {
     paddingHorizontal: 12,
@@ -930,6 +1421,7 @@ const styles = StyleSheet.create({
   channelTextActive: { fontWeight: '900' },
   success: { color: '#2F5711', fontSize: 13, lineHeight: 18 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
+  syncMessage: { gap: spacing.x2, alignItems: 'flex-start' },
   footer: {
     flexDirection: 'row',
     flexWrap: 'wrap',

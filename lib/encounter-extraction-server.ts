@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   buildHeuristicDraft,
+  normalizeExtractionCommitments,
   type EncounterExtractionDraft,
   type ExtractionOwnerContext,
 } from "./encounter-extraction";
@@ -17,7 +18,14 @@ const extractionSchema = z.object({
   sharedSummary: z.string().describe("3-6 intelligent sentences summarizing what was discussed, decided, and who owns what next. Safe to share with everyone in the meeting."),
   privateNotes: z.string().describe("Leave empty."),
   followUp: z.string().describe("One concrete next action sentence, or empty if none"),
-  followUpType: z.enum(["email", "linkedin", "call", "meeting", "send", "whatsapp", "other"]),
+  followUpType: z.enum(["email", "linkedin", "call", "meeting", "send", "whatsapp", "instagram", "x", "tiktok", "other"]),
+  commitments: z.array(z.object({
+    title: z.string().describe("A concrete action phrased as something that can be completed"),
+    owner: z.enum(["me", "guest"]).describe("me when the recording owner owns it; guest when an attendee owns it"),
+    ownerName: z.string().describe("The named owner, or Me when the recording owner owns it"),
+    channel: z.enum(["email", "linkedin", "call", "meeting", "send", "whatsapp", "instagram", "x", "tiktok", "other"]),
+    dueAt: z.string().describe("Explicit due date as YYYY-MM-DD, or empty when no date was agreed"),
+  })).describe("Every explicit promise or next action in the conversation. Do not invent actions."),
   uncertainFields: z.array(z.string()).describe("Field names where the transcript is ambiguous"),
 });
 
@@ -48,7 +56,7 @@ function buildExtractionSystemPrompt(context?: ExtractionOwnerContext) {
 
   return [
     "You are AfterMeet's meeting intelligence engine.",
-    "The transcript is from a live conversation recorded by the owner (me). There is no speaker diarization. Infer who said what from introductions, names, and first-person cues.",
+    "The transcript is from a live conversation recorded by the owner (me). When speaker labels are present, preserve their attribution and use the confirmed attendee list to resolve identities. When labels are absent, infer who said what from introductions, names, and first-person cues.",
     `Treat I/me/my as ${ownerLabel} unless the transcript clearly indicates otherwise.`,
     "",
     "The owner already captured attendees separately. Focus on a strong meeting title and an intelligent share summary.",
@@ -77,6 +85,14 @@ function buildExtractionSystemPrompt(context?: ExtractionOwnerContext) {
     "",
     "PRIVATE NOTES:",
     "- Always return an empty string.",
+    "",
+    "COMMITMENTS:",
+    "- Extract every explicit promise, request accepted, or agreed next action.",
+    "- Keep separate commitments separate; never merge unrelated actions.",
+    "- Set owner to me for the recording owner and guest for an attendee.",
+    "- Use a named owner when supported by the transcript or confirmed speaker labels.",
+    "- Only add a due date when one was explicitly agreed. Otherwise return an empty dueAt.",
+    "- The legacy followUp and followUpType fields should mirror the most important owner action, or be empty when none exists.",
     "",
     "TRANSCRIPT QUALITY:",
     "- Input is raw speech-to-text: missing punctuation, false starts, homophones, and repeated fragments are common.",
@@ -184,6 +200,11 @@ export async function extractEncounterDraft(
         privateNotes: "",
         followUp: output.followUp.trim(),
         followUpType: output.followUpType,
+        commitments: normalizeExtractionCommitments(
+          output.commitments,
+          ownerContext,
+          resolvedPersonName,
+        ),
       },
       source: "ai",
       uncertainFields: output.uncertainFields ?? [],

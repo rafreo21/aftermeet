@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PencilSimpleLineIcon } from "@phosphor-icons/react/dist/csr/PencilSimpleLine";
@@ -25,8 +26,6 @@ import {
   type ConnectionItem,
   type ConnectionSort,
 } from "../../../lib/connections";
-import "../product.css";
-import "../flow.css";
 
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
@@ -62,7 +61,7 @@ export default function ConnectionsPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    void Promise.resolve().then(() => load());
   }, [load]);
 
   useEffect(() => {
@@ -153,30 +152,46 @@ export default function ConnectionsPage() {
         {loading ? (
           <PageSkeleton rows={5} />
         ) : hasConnections ? (
-          <div className="connections-list">
+          <div className="data-table-shell connections-table-shell">
             {enriching ? <p className="connections-enriching">Updating photos…</p> : null}
-            {visibleConnections.map((connection) => (
-              <a
-                className="connections-row"
-                key={connection.id}
-                href={`/app/people/${encodeURIComponent(connection.id)}`}
-              >
-                <img
-                  className="connections-avatar"
-                  src={connection.photoUrl || connectionAvatarUrl(connection)}
-                  alt=""
-                />
-                <div className="connections-copy">
-                  <strong>{connection.name}</strong>
-                  <span>{connection.subtitle}</span>
-                  <small>
-                    {connectionSourceLabel(connection.source)}
-                    {connection.connectedAt ? ` · ${formatConnectionDate(connection.connectedAt)}` : ""}
-                  </small>
-                </div>
-                <CaretRightIcon size={16} weight="bold" />
-              </a>
-            ))}
+            {visibleConnections.length ? (
+              <table className="data-table connections-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Person</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Added</th>
+                    <th scope="col"><span className="sr-only">Open</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleConnections.map((connection) => (
+                    <tr key={connection.id}>
+                      <td data-label="Person">
+                        <Link className="table-person" href={`/app/people/${encodeURIComponent(connection.id)}`} prefetch={false}>
+                          <img
+                            className="connections-avatar"
+                            src={connection.photoUrl || connectionAvatarUrl(connection)}
+                            alt=""
+                          />
+                          <span>
+                            <strong>{connection.name}</strong>
+                            <small>{connection.subtitle}</small>
+                          </span>
+                        </Link>
+                      </td>
+                      <td data-label="Source"><span className="table-chip">{connectionSourceLabel(connection.source)}</span></td>
+                      <td data-label="Added">{connection.connectedAt ? formatConnectionDate(connection.connectedAt) : "—"}</td>
+                      <td className="table-open-cell">
+                        <Link className="table-open-link" href={`/app/people/${encodeURIComponent(connection.id)}`} prefetch={false} aria-label={`Open ${connection.name}`}>
+                          <span>View</span><CaretRightIcon size={16} weight="bold" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
             {!visibleConnections.length ? (
               <p className="connections-empty-search">No connections match your search.</p>
             ) : null}

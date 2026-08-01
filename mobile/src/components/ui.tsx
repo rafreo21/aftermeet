@@ -124,15 +124,22 @@ export function PageHeader({
   title,
   titleStyle,
   onBack,
+  rightAction,
+  showBack = true,
 }: {
   eyebrow?: string;
   title: string;
   titleStyle?: StyleProp<TextStyle>;
   onBack?: () => void;
+  rightAction?: ReactNode;
+  showBack?: boolean;
 }) {
   return (
     <View style={styles.pageHeader}>
-      <BackButton onPress={onBack} />
+      <View style={styles.pageHeaderTopRow}>
+        {showBack ? <BackButton onPress={onBack} /> : <View style={styles.pageHeaderSpacer} />}
+        {rightAction ? <View style={styles.pageHeaderAction}>{rightAction}</View> : null}
+      </View>
       <View style={styles.pageHeaderCopy}>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
         <Text style={[styles.title, styles.pageHeaderTitle, titleStyle]}>{title}</Text>
@@ -149,6 +156,32 @@ type ButtonProps = {
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
 };
+
+export function HeaderActionButton({
+  accessibilityLabel,
+  children,
+  onPress,
+  style,
+}: PropsWithChildren<{
+  accessibilityLabel: string;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}>) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={4}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.headerActionButton,
+        style,
+        pressed && styles.headerActionButtonPressed,
+      ]}>
+      {children}
+    </Pressable>
+  );
+}
 
 function flattenButtonChildren(children: ReactNode): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -223,9 +256,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignSelf: 'flex-start',
   },
+  headerActionButton: {
+    width: 42,
+    height: 42,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  headerActionButtonPressed: { backgroundColor: colors.surfaceMuted },
   pageHeader: {
     gap: spacing.x3,
   },
+  pageHeaderTopRow: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pageHeaderAction: { marginLeft: 'auto' },
+  pageHeaderSpacer: { width: 42, height: 42 },
   pageHeaderCopy: { gap: spacing.x2 },
   pageHeaderTitle: { fontSize: 32, lineHeight: 34, letterSpacing: -1.1 },
 });

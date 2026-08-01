@@ -8,6 +8,7 @@ export type FollowUpItem = {
   channel: EncounterAction["channel"];
   dueAt: string;
   status: EncounterAction["status"];
+  completedAt?: string;
   owner: EncounterAction["owner"];
   personName: string;
   personEmail: string;
@@ -17,6 +18,14 @@ export type FollowUpItem = {
   exchangeId?: string;
   encounterTitle: string;
   startedAt: string;
+  contactMethods?: FollowUpContactMethod[];
+};
+
+export type FollowUpContactMethod = {
+  id: string;
+  type: "email" | "phone" | "linkedin" | "whatsapp" | "instagram" | "x" | "tiktok";
+  value: string;
+  label: string;
 };
 
 /**
@@ -40,6 +49,7 @@ export function flattenOpenFollowUps(encounters: Encounter[]): FollowUpItem[] {
         channel: action.channel,
         dueAt: action.dueAt || "",
         status: action.status,
+        completedAt: action.completedAt,
         owner: action.owner ?? "me",
         personName: action.assigneeName?.trim() || encounter.personName,
         personEmail: action.assigneeEmail?.trim() || encounter.personEmail,
@@ -83,6 +93,9 @@ export function dueDateBucket(dueAt: string, now = new Date()): "overdue" | "tod
 export function sortFollowUps(items: FollowUpItem[]): FollowUpItem[] {
   const bucketOrder = { overdue: 0, today: 1, week: 2, future: 3, none: 4 } as const;
   return [...items].sort((left, right) => {
+    if (left.status === "completed" && right.status === "completed") {
+      return (right.completedAt || right.startedAt).localeCompare(left.completedAt || left.startedAt);
+    }
     const leftBucket = bucketOrder[dueDateBucket(left.dueAt)];
     const rightBucket = bucketOrder[dueDateBucket(right.dueAt)];
     if (leftBucket !== rightBucket) return leftBucket - rightBucket;
@@ -118,30 +131,55 @@ export function encountersForConnection(
   encounters: Encounter[],
   input: { connectionId?: string; sourceId?: string; email?: string; exchangeId?: string },
 ): Encounter[] {
+  return encounters.filter((encounter) => encounterMatchesConnection(encounter, input));
+}
+
+export function encounterMatchesConnection(
+  encounter: Encounter,
+  input: { connectionId?: string; sourceId?: string; email?: string; exchangeId?: string },
+): boolean {
   const email = input.email?.trim().toLowerCase() || "";
   const exchangeId = input.exchangeId?.trim() || "";
   const sourceId = input.sourceId?.trim() || "";
   const connectionId = input.connectionId?.trim() || "";
 
-  return encounters.filter((encounter) => {
-    if (connectionId && encounter.contactId === connectionId) return true;
-    if (sourceId && encounter.contactId === sourceId) return true;
-    if (exchangeId && encounter.exchangeId === exchangeId) return true;
-    if (email && encounter.personEmail.trim().toLowerCase() === email) return true;
-    return false;
-  });
+  if (connectionId && encounter.contactId === connectionId) return true;
+  if (sourceId && encounter.contactId === sourceId) return true;
+  if (exchangeId && encounter.exchangeId === exchangeId) return true;
+  if (email && encounter.personEmail.trim().toLowerCase() === email) return true;
+
+  return encounter.participants.some((participant) => (
+    (sourceId && (participant.id === sourceId || participant.exchangeId === sourceId))
+    || (exchangeId && participant.exchangeId === exchangeId)
+    || (email && participant.email.trim().toLowerCase() === email)
+  ));
 }
 
 export function followUpsForConnection(items: FollowUpItem[], input: Parameters<typeof encountersForConnection>[1]) {
-  const encounterIds = new Set(encountersForConnection(
-    items.map((item) => ({
-      id: item.encounterId,
-      contactId: item.contactId,
-      exchangeId: item.exchangeId,
-      personEmail: item.personEmail,
-    } as Encounter)),
-    input,
-  ).map((encounter) => encounter.id));
+  const email = input.email?.trim().toLowerCase() || "";
+  const exchangeId = input.exchangeId?.trim() || "";
+  const sourceId = input.sourceId?.trim() || "";
+  const connectionId = input.connectionId?.trim() || "";
 
-  return items.filter((item) => encounterIds.has(item.encounterId));
+  return items.filter((item) => {
+    if (email && item.personEmail.trim().toLowerCase() === email) return true;
+    if (sourceId && item.participantId === sourceId) return true;
+
+    const targetParticipant = item.participantId
+      ? item.participants.find((participant) => participant.id === item.participantId)
+      : undefined;
+    if (targetParticipant) {
+      if (email && targetParticipant.email.trim().toLowerCase() === email) return true;
+      if (exchangeId && targetParticipant.exchangeId === exchangeId) return true;
+      if (sourceId && targetParticipant.exchangeId === sourceId) return true;
+      return false;
+    }
+
+    // Legacy actions did not identify their relationship target. Preserve
+    // primary-person matching until those records are repaired on save.
+    if (connectionId && item.contactId === connectionId) return true;
+    if (sourceId && item.contactId === sourceId) return true;
+    if (exchangeId && item.exchangeId === exchangeId) return true;
+    return false;
+  });
 }

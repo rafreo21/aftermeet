@@ -283,7 +283,11 @@ export function buildFollowUp(input: { topics: string[]; transcript: string; own
 }
 
 export function inferFollowUpType(text: string) {
+  if (/\b(?:whatsapp|wa\.me)\b/i.test(text)) return "whatsapp" as const;
   if (/\blinkedin\b/i.test(text)) return "linkedin" as const;
+  if (/\binstagram\b|instagram\.com/i.test(text)) return "instagram" as const;
+  if (/\b(?:twitter|on x)\b|(?:^|\s)x\.com/i.test(text)) return "x" as const;
+  if (/\btiktok\b|tiktok\.com/i.test(text)) return "tiktok" as const;
   if (/\b(?:call|phone|ring)\b/i.test(text)) return "call" as const;
   if (/\b(?:schedule|book|meeting|coffee)\b/i.test(text)) return "meeting" as const;
   if (/\b(?:email|mail)\b/i.test(text)) return "email" as const;

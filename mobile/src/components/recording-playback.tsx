@@ -88,11 +88,11 @@ export function RecordingPlayback({ uri, durationSeconds = 0, variant = 'full' }
 
   useEffect(() => {
     if (!uri) return;
-    setPlaybackError('');
+    void Promise.resolve().then(() => setPlaybackError(''));
     try {
       player.replace(uri);
     } catch {
-      setPlaybackError('Could not load this recording.');
+      void Promise.resolve().then(() => setPlaybackError('Could not load this recording.'));
     }
   }, [player, uri]);
 

@@ -30,14 +30,14 @@ const PROVIDERS: ProviderRow[] = [
   {
     id: 'google',
     name: 'Google',
-    description: 'Send approved drafts through Gmail and schedule in Google Calendar.',
+    description: 'One connection for Gmail, Calendar, and recording storage in Drive.',
     icon: <GoogleLogo size={20} color={colors.ink} weight="bold" />,
     connectable: true,
   },
   {
     id: 'microsoft',
     name: 'Microsoft',
-    description: 'Send approved drafts through Outlook and schedule in Outlook Calendar.',
+    description: 'One connection for Outlook, Calendar, and recording storage in OneDrive.',
     icon: <EnvelopeSimple size={20} color={colors.ink} weight="bold" />,
     connectable: true,
   },
@@ -59,6 +59,7 @@ const PROVIDERS: ProviderRow[] = [
 
 export default function ConnectedAccountsScreen() {
   const { session } = useAuth();
+  const accessToken = session?.access_token ?? null;
   const params = useLocalSearchParams<{ integration?: string | string[] }>();
   const [status, setStatus] = useState<ConnectedAccountStatus | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -67,39 +68,42 @@ export default function ConnectedAccountsScreen() {
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!session?.access_token) {
+    if (!accessToken) {
+      await Promise.resolve();
       setInitialLoading(false);
       return;
     }
-    const next = await fetchConnectedAccounts(session.access_token);
+    const next = await fetchConnectedAccounts(accessToken);
     setStatus(next);
     setInitialLoading(false);
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   useEffect(() => {
-    void refresh();
+    void Promise.resolve().then(refresh);
   }, [refresh]);
 
   useEffect(() => {
     const integration = Array.isArray(params.integration) ? params.integration[0] : params.integration;
     if (!integration) return;
-    if (integration.endsWith('-connected')) {
-      setMessage(integration.startsWith('google')
-        ? 'Google account connected.'
-        : 'Microsoft account connected.');
-      return;
-    }
-    if (integration.endsWith('-error')) {
-      setError('We couldn’t connect that account. Try again.');
-      return;
-    }
-    if (integration.endsWith('-unconfigured')) {
-      setError('Integration credentials are not configured yet.');
-    }
+    void Promise.resolve().then(() => {
+      if (integration.endsWith('-connected')) {
+        setMessage(integration.startsWith('google')
+          ? 'Google connected. Gmail, Calendar, and Drive are now available from one account.'
+          : 'Microsoft connected. Outlook, Calendar, and OneDrive are now available from one account.');
+        return;
+      }
+      if (integration.endsWith('-error')) {
+        setError('We couldn’t connect that account. Try again.');
+        return;
+      }
+      if (integration.endsWith('-unconfigured')) {
+        setError('Integration credentials are not configured yet.');
+      }
+    });
   }, [params.integration]);
 
   async function connectProvider(provider: 'google' | 'microsoft') {
-    if (!session?.access_token) {
+    if (!accessToken) {
       router.push('/auth');
       return;
     }
@@ -116,7 +120,7 @@ export default function ConnectedAccountsScreen() {
 
     try {
       const callbackUrl = Linking.createURL('integrations/callback');
-      const connectUrl = `${env.publicCardBaseUrl}/api/integrations/${provider}/connect?return_to=${encodeURIComponent(callbackUrl)}&access_token=${encodeURIComponent(session.access_token)}`;
+      const connectUrl = `${env.publicCardBaseUrl}/api/integrations/${provider}/connect?return_to=${encodeURIComponent(callbackUrl)}&access_token=${encodeURIComponent(accessToken)}`;
       const result = await WebBrowser.openAuthSessionAsync(connectUrl, callbackUrl);
       if (result.type === 'success' && result.url) {
         handleCallbackUrl(result.url);
@@ -133,8 +137,8 @@ export default function ConnectedAccountsScreen() {
     const integration = new URL(url).searchParams.get('integration') || '';
     if (integration.endsWith('-connected')) {
       setMessage(integration.startsWith('google')
-        ? 'Google account connected.'
-        : 'Microsoft account connected.');
+        ? 'Google connected. Gmail, Calendar, and Drive are now available from one account.'
+        : 'Microsoft connected. Outlook, Calendar, and OneDrive are now available from one account.');
       return;
     }
     if (integration.endsWith('-error')) {
@@ -147,12 +151,12 @@ export default function ConnectedAccountsScreen() {
   }
 
   async function disconnect(provider: 'google' | 'microsoft') {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setBusyProvider(provider);
     setError('');
     setMessage('');
     try {
-      await disconnectIntegration(session.access_token, provider);
+      await disconnectIntegration(accessToken, provider);
       setMessage(`${provider === 'google' ? 'Google' : 'Microsoft'} disconnected.`);
       await refresh();
     } catch {
@@ -205,6 +209,34 @@ export default function ConnectedAccountsScreen() {
                   <Text style={styles.cardDescription}>
                     {connected && account?.email ? account.email : provider.description}
                   </Text>
+                  {provider.id === 'google' && connected ? (
+                    <View style={styles.capabilities}>
+                      {(['gmail', 'calendar', 'drive'] as const).map((capability) => {
+                        const enabled = status?.google.capabilities[capability] ?? false;
+                        return (
+                          <View key={capability} style={[styles.capability, enabled && styles.capabilityEnabled]}>
+                            <Text style={styles.capabilityText}>
+                              {capability === 'gmail' ? 'Gmail' : capability === 'calendar' ? 'Calendar' : 'Drive'}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                  {provider.id === 'microsoft' && connected ? (
+                    <View style={styles.capabilities}>
+                      {(['outlook', 'calendar', 'onedrive'] as const).map((capability) => {
+                        const enabled = status?.microsoft.capabilities[capability] ?? false;
+                        return (
+                          <View key={capability} style={[styles.capability, enabled && styles.capabilityEnabled]}>
+                            <Text style={styles.capabilityText}>
+                              {capability === 'outlook' ? 'Outlook' : capability === 'calendar' ? 'Calendar' : 'OneDrive'}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                 </View>
               </View>
               {!provider.connectable ? (
@@ -212,9 +244,17 @@ export default function ConnectedAccountsScreen() {
               ) : loading ? (
                 <ActivityIndicator color={colors.ink} />
               ) : connected ? (
-                <Button variant="secondary" onPress={() => void disconnect(provider.id as 'google' | 'microsoft')}>
-                  Disconnect
-                </Button>
+                <View style={styles.connectedActions}>
+                  {provider.id === 'google' && !status?.google.capabilities.drive ? (
+                    <Button onPress={() => void connectProvider('google')}>Reconnect for Drive</Button>
+                  ) : null}
+                  {provider.id === 'microsoft' && !status?.microsoft.capabilities.onedrive ? (
+                    <Button onPress={() => void connectProvider('microsoft')}>Reconnect for OneDrive</Button>
+                  ) : null}
+                  <Button variant="secondary" onPress={() => void disconnect(provider.id as 'google' | 'microsoft')}>
+                    Disconnect
+                  </Button>
+                </View>
               ) : (
                 <Button onPress={() => void connectProvider(provider.id as 'google' | 'microsoft')}>
                   Connect {provider.name}
@@ -244,6 +284,19 @@ const styles = StyleSheet.create({
   cardCopy: { flex: 1, gap: 4 },
   cardTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   cardDescription: { color: colors.muted, fontSize: 13, lineHeight: 19 },
+  capabilities: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2, marginTop: spacing.x2 },
+  capability: {
+    paddingHorizontal: spacing.x3,
+    paddingVertical: spacing.x1,
+    borderRadius: 999,
+    backgroundColor: colors.canvas,
+    borderWidth: 1,
+    borderColor: colors.line,
+    opacity: 0.55,
+  },
+  capabilityEnabled: { backgroundColor: colors.surfaceMuted, opacity: 1 },
+  capabilityText: { color: colors.ink, fontSize: 11, fontWeight: '800' },
+  connectedActions: { gap: spacing.x2 },
   panelTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   panelCopy: { marginTop: 6, color: colors.muted, fontSize: 13, lineHeight: 19 },
   message: { color: colors.ink, fontSize: 13, lineHeight: 19 },

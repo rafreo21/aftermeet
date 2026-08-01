@@ -3,40 +3,30 @@ import { NavigationBar } from 'expo-navigation-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import { useEffect } from 'react';
+import { AppState, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AuthProvider, useAuth } from '@/features/auth/auth-context';
+import { AuthProvider } from '@/features/auth/auth-context';
 import { CardProvider } from '@/features/card/card-context';
 import { NotificationManager } from '@/features/notifications/notification-manager';
+import { ActiveCaptureBanner } from '@/components/active-capture-banner';
 import { colors } from '@/theme/tokens';
 
 function applyAndroidNavigationBar() {
   NavigationBar.setStyle('dark');
 }
 
-SplashScreen.preventAutoHideAsync().catch(() => {
-  // Splash may already be hidden after a fast reload.
+SplashScreen.setOptions({
+  duration: 250,
+  fade: true,
 });
 
 function RootNavigator() {
-  const { loading } = useAuth();
-  const [splashHidden, setSplashHidden] = useState(false);
-
   useEffect(() => {
-    if (loading || splashHidden) return;
-    void SplashScreen.hideAsync().finally(() => setSplashHidden(true));
-  }, [loading, splashHidden]);
-
-  useEffect(() => {
-    if (splashHidden) return;
-    const timer = setTimeout(() => {
-      void SplashScreen.hideAsync().finally(() => setSplashHidden(true));
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, [splashHidden]);
+    SplashScreen.hide();
+  }, []);
 
   return (
     <Stack
@@ -52,11 +42,14 @@ function RootNavigator() {
       <Stack.Screen name="scanner" options={{ presentation: 'fullScreenModal' }} />
       <Stack.Screen name="edit-card" />
       <Stack.Screen name="capture" />
+      <Stack.Screen name="quick-follow-up" />
       <Stack.Screen name="card-tools" />
+      <Stack.Screen name="program-nfc" />
       <Stack.Screen name="connections" />
       <Stack.Screen name="connections/[id]" />
       <Stack.Screen name="settings/connected-accounts" />
       <Stack.Screen name="settings/follow-ups" />
+      <Stack.Screen name="settings/follow-ups-history" />
       <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="integrations/callback" options={{ presentation: 'modal', headerShown: false }} />
@@ -91,7 +84,10 @@ export default function RootLayout() {
           <CardProvider>
             <StatusBar style="dark" />
             {Platform.OS === 'android' ? <NavigationBar style="dark" /> : null}
-            <RootNavigator />
+            <View style={{ flex: 1 }}>
+              <RootNavigator />
+              <ActiveCaptureBanner />
+            </View>
           </CardProvider>
         </AuthProvider>
       </SafeAreaProvider>

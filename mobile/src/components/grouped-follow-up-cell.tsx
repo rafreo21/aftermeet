@@ -1,4 +1,4 @@
-import { CaretRight, Check, CheckCircle } from 'phosphor-react-native';
+import { ArrowCounterClockwise, CaretRight, Check } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { channelLabel } from '@/features/follow-ups/action-links';
@@ -11,6 +11,7 @@ type GroupedFollowUpCellProps = {
   group: FollowUpGroup;
   onPress: () => void;
   onComplete: () => void;
+  onReopen?: () => void;
   completing?: boolean;
 };
 
@@ -22,6 +23,7 @@ export function GroupedFollowUpCell({
   group,
   onPress,
   onComplete,
+  onReopen,
   completing,
 }: GroupedFollowUpCellProps) {
   const isCompleted = group.items.every((item) => item.status === 'completed');
@@ -53,7 +55,7 @@ export function GroupedFollowUpCell({
           ) : null}
         </View>
         {isCompleted ? (
-          <Text style={styles.dueCompleted}>Completed</Text>
+          <Text style={styles.dueCompleted}>{completedLabel(group.completedAt)}</Text>
         ) : dueLabel ? (
           <Text style={[
             styles.due,
@@ -69,9 +71,14 @@ export function GroupedFollowUpCell({
       </Pressable>
       {group.items.length === 1 ? (
         isCompleted ? (
-          <View style={styles.check} accessibilityLabel="Follow-up completed">
-            <CheckCircle size={18} color={colors.ink} weight="fill" />
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reopen completed follow-up"
+            disabled={completing || !onReopen}
+            onPress={onReopen}
+            style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
+            <ArrowCounterClockwise size={18} color={colors.ink} weight="bold" />
+          </Pressable>
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -87,15 +94,24 @@ export function GroupedFollowUpCell({
   );
 }
 
+function completedLabel(value?: string) {
+  if (!value) return 'Completed';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Completed';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function GroupedFollowUpActions({
   group,
   onPressItem,
   onCompleteItem,
+  onReopenItem,
   completingId,
 }: {
   group: FollowUpGroup;
   onPressItem: (actionId: string) => void;
   onCompleteItem: (actionId: string) => void;
+  onReopenItem?: (actionId: string) => void;
   completingId?: string | null;
 }) {
   return (
@@ -112,9 +128,14 @@ export function GroupedFollowUpActions({
             </Text>
           </Pressable>
           {item.status === 'completed' ? (
-            <View style={actionStyles.check} accessibilityLabel="Follow-up completed">
-              <CheckCircle size={18} color={colors.ink} weight="fill" />
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reopen completed follow-up"
+              disabled={!onReopenItem}
+              onPress={() => onReopenItem?.(item.actionId)}
+              style={({ pressed }) => [actionStyles.check, pressed && actionStyles.pressed]}>
+              <ArrowCounterClockwise size={18} color={colors.ink} weight="bold" />
+            </Pressable>
           ) : (
             <Pressable
               accessibilityRole="button"

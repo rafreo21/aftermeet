@@ -6,7 +6,9 @@ export type FollowUpChannel =
   | 'meeting'
   | 'instagram'
   | 'x'
-  | 'tiktok';
+  | 'tiktok'
+  | 'send'
+  | 'other';
 
 export const FOLLOW_UP_CHANNELS: Array<{ id: FollowUpChannel; label: string }> = [
   { id: 'email', label: 'Email' },
@@ -17,6 +19,8 @@ export const FOLLOW_UP_CHANNELS: Array<{ id: FollowUpChannel; label: string }> =
   { id: 'instagram', label: 'Instagram' },
   { id: 'x', label: 'X' },
   { id: 'tiktok', label: 'TikTok' },
+  { id: 'send', label: 'Send a file' },
+  { id: 'other', label: 'Other' },
 ];
 
 export function defaultFollowUpTitle(channel: FollowUpChannel) {
@@ -29,6 +33,8 @@ export function defaultFollowUpTitle(channel: FollowUpChannel) {
     case 'instagram': return 'Connect on Instagram';
     case 'x': return 'Connect on X';
     case 'tiktok': return 'Connect on TikTok';
+    case 'send': return 'Send the promised file';
+    case 'other': return 'Complete the next step';
     default: return 'Follow up';
   }
 }

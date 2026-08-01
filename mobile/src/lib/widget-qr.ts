@@ -2,6 +2,7 @@ import { File, Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import QRCode from 'qrcode';
 import { Platform } from 'react-native';
+import logoAsset from '../../assets/images/splash-icon.png';
 
 const IOS_APP_GROUP = 'group.com.aftermeet.app';
 function qrFileName(fileKey: string) {
@@ -9,7 +10,7 @@ function qrFileName(fileKey: string) {
   return `quick-share-qr-${safeKey}.png`;
 }
 
-export const QR_LOGO = require('../../assets/images/splash-icon.png');
+export const QR_LOGO = logoAsset;
 
 export async function buildWidgetQrFileUri(cardUrl: string, fileKey = 'primary') {
   const QR_FILE_NAME = qrFileName(fileKey);

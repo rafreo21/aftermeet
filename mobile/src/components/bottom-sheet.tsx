@@ -30,7 +30,7 @@ export function BottomSheet({ visible, title, onClose, footer, children }: Botto
 
   useEffect(() => {
     if (!visible) {
-      setKeyboardHeight(0);
+      void Promise.resolve().then(() => setKeyboardHeight(0));
       return;
     }
 

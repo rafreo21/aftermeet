@@ -20,6 +20,7 @@ type MeetingDetailSheetProps = {
   onClose: () => void;
   onPressFollowUp: (item: FollowUpItem) => void;
   onCompleteFollowUp: (item: FollowUpItem) => void;
+  onReopenFollowUp?: (item: FollowUpItem) => void;
 };
 
 type DetailTab = 'summary' | 'transcript';
@@ -32,6 +33,7 @@ export function MeetingDetailSheet({
   onClose,
   onPressFollowUp,
   onCompleteFollowUp,
+  onReopenFollowUp,
 }: MeetingDetailSheetProps) {
   const [tab, setTab] = useState<DetailTab>('summary');
 
@@ -120,6 +122,7 @@ export function MeetingDetailSheet({
                 item={item}
                 onPress={() => onPressFollowUp(item)}
                 onComplete={() => onCompleteFollowUp(item)}
+                onReopen={onReopenFollowUp ? () => onReopenFollowUp(item) : undefined}
               />
             ))}
           </View>

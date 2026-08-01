@@ -27,6 +27,10 @@ function contactPayloadFromConnection(connection: ConnectionItem, card?: MobileC
   const email = card?.methods.find((method) => method.type === 'email')?.value || connection.email || '';
   const phone = card?.methods.find((method) => method.type === 'phone' || method.type === 'whatsapp')?.value || connection.phone || '';
   const linkedinUrl = card?.methods.find((method) => method.type === 'linkedin')?.value;
+  const whatsappUrl = card?.methods.find((method) => method.type === 'whatsapp')?.value;
+  const instagramUrl = card?.methods.find((method) => method.type === 'instagram')?.value;
+  const xUrl = card?.methods.find((method) => method.type === 'x')?.value;
+  const tiktokUrl = card?.methods.find((method) => method.type === 'tiktok')?.value;
 
   const id = connectionDirectoryLegacyId(connection, card?.slug || connection.cardSlug);
 
@@ -37,6 +41,10 @@ function contactPayloadFromConnection(connection: ConnectionItem, card?: MobileC
     email,
     phone: phone || undefined,
     linkedinUrl: linkedinUrl || undefined,
+    whatsappUrl: whatsappUrl || undefined,
+    instagramUrl: instagramUrl || undefined,
+    xUrl: xUrl || undefined,
+    tiktokUrl: tiktokUrl || undefined,
     company: card?.company || connection.company || '',
     role: card?.role || connection.role || '',
     context: connection.subtitle,

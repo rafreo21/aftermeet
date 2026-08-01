@@ -7,7 +7,7 @@ import {
   Trash,
   UserCircle,
 } from 'phosphor-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -17,25 +17,27 @@ import {
   View,
 } from 'react-native';
 
-import { Body, Button, PageHeader, ScreenFrame } from '@/components/ui';
+import { BottomSheet } from '@/components/bottom-sheet';
+import { Body, Button, HeaderActionButton, PageHeader, ScreenFrame } from '@/components/ui';
 import { GreenHeroCard } from '@/components/green-hero-card';
+import { HistoryToolbar } from '@/components/history-toolbar';
 import { CaptureDeleteSheet } from '@/components/capture-delete-sheet';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import {
   createFreshCaptureDraft,
+  captureDraftFromRemote,
   deleteCaptureDraft,
   listCaptureDrafts,
   writeCaptureDraft,
   type CaptureDraftSummary,
 } from '@/features/encounters/capture-draft';
-import { deleteEncounter, fetchEncounters, type EncounterSummary } from '@/features/encounters/encounter-api';
+import { deleteEncounter, fetchCaptureSessions, fetchEncounters, type EncounterSummary } from '@/features/encounters/encounter-api';
 import { deleteLocalRecording } from '@/features/encounters/local-recordings';
-import { formatBuildLabel } from '@/lib/build-info';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-type HomeTab = 'drafts' | 'previous';
+type CaptureSort = 'recent' | 'oldest' | 'az';
 
 function formatWhen(iso: string) {
   if (!iso) return '';
@@ -89,10 +91,18 @@ function draftTitle(draft: CaptureDraftSummary) {
   return 'Untitled capture';
 }
 
-export default function CaptureHomeScreen() {
+function draftStateLabel(draft: CaptureDraftSummary) {
+  if (draft.sessionStatus === 'failed') return 'Recording interrupted';
+  if (draft.sessionStatus === 'paused') return 'Recording paused';
+  if (draft.sessionStatus === 'recording') return 'Recording';
+  if (draft.sessionStatus === 'processing') return 'Preparing review';
+  if (draft.sessionStatus === 'review_ready') return 'Ready to review';
+  return stepLabel(draft.step);
+}
+
+export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boolean }) {
   const params = useLocalSearchParams<{ exchange?: string; slug?: string }>();
   const { session } = useAuth();
-  const [tab, setTab] = useState<HomeTab>('drafts');
   const [encounters, setEncounters] = useState<EncounterSummary[]>([]);
   const [drafts, setDrafts] = useState<CaptureDraftSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +111,24 @@ export default function CaptureHomeScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<EncounterSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<CaptureSort>('recent');
+  const [sortOpen, setSortOpen] = useState(false);
+
+  const visibleEncounters = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const filtered = needle
+      ? encounters.filter((encounter) => [encounter.personName, encounter.title, encounter.status]
+        .some((value) => value?.toLowerCase().includes(needle)))
+      : [...encounters];
+    filtered.sort((left, right) => {
+      if (sort === 'az') return (left.personName || left.title).localeCompare(right.personName || right.title);
+      const leftTime = new Date(left.startedAt || left.endedAt || 0).getTime();
+      const rightTime = new Date(right.startedAt || right.endedAt || 0).getTime();
+      return sort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
+    });
+    return filtered;
+  }, [encounters, query, sort]);
 
   useEffect(() => {
     if (params.exchange || params.slug) {
@@ -125,8 +153,18 @@ export default function CaptureHomeScreen() {
       setDrafts(draftList);
 
       if (session?.access_token) {
-        const rows = await fetchEncounters(session.access_token);
+        const [rows, remoteSessions] = await Promise.all([
+          fetchEncounters(session.access_token),
+          fetchCaptureSessions(session.access_token),
+        ]);
         setEncounters(rows);
+        const localById = new Map(draftList.map((item) => [item.encounterId, item]));
+        for (const remoteSession of remoteSessions) {
+          const local = localById.get(remoteSession.encounterId);
+          if (local && new Date(local.updatedAt).getTime() >= new Date(remoteSession.updatedAt).getTime()) continue;
+          await writeCaptureDraft(captureDraftFromRemote(remoteSession));
+        }
+        setDrafts(await listCaptureDrafts());
       } else {
         setEncounters([]);
       }
@@ -137,7 +175,7 @@ export default function CaptureHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session?.access_token]);
+  }, [session]);
 
   useFocusEffect(
     useCallback(() => {
@@ -195,10 +233,15 @@ export default function CaptureHomeScreen() {
       <View style={styles.page}>
         <View style={styles.header}>
           <PageHeader
-            eyebrow="Capture"
-            title="Context & follow-ups"
+            eyebrow={historyOnly ? 'History' : 'Capture'}
+            title={historyOnly ? 'Previous captures' : 'Context & follow-ups'}
             titleStyle={styles.title}
             onBack={goBack}
+            rightAction={!historyOnly ? (
+              <HeaderActionButton accessibilityLabel="Open capture history" onPress={() => router.push('/capture/history')}>
+                <ClockCounterClockwise size={21} color={colors.ink} weight="bold" />
+              </HeaderActionButton>
+            ) : undefined}
           />
         </View>
 
@@ -206,11 +249,11 @@ export default function CaptureHomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[1]}
+          stickyHeaderIndices={historyOnly ? [0] : undefined}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void loadHome(true)} tintColor={colors.ink} />
           }>
-          <View style={styles.heroBlock}>
+          {!historyOnly ? <View style={styles.heroBlock}>
             <GreenHeroCard
               icon={<Microphone size={28} color={colors.white} weight="fill" />}
               title="Capture while it is fresh"
@@ -224,33 +267,21 @@ export default function CaptureHomeScreen() {
             {!session && drafts.length ? (
               <Text style={styles.localNote}>Saved on this device only · Sign in to sync across devices</Text>
             ) : null}
-          </View>
-
-          <View style={styles.tabsSticky}>
-            <View style={styles.tabs}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setTab('drafts')}
-                style={[styles.tab, tab === 'drafts' && styles.tabActive]}>
-                <Text style={[styles.tabLabel, tab === 'drafts' && styles.tabLabelActive]}>
-                  Drafts{drafts.length ? ` (${drafts.length})` : ''}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setTab('previous')}
-                style={[styles.tab, tab === 'previous' && styles.tabActive]}>
-                <Text style={[styles.tabLabel, tab === 'previous' && styles.tabLabelActive]}>
-                  Previous{encounters.length ? ` (${encounters.length})` : ''}
-                </Text>
-              </Pressable>
+          </View> : (
+            <View style={styles.historyTools}>
+              <HistoryToolbar
+                query={query}
+                placeholder="Search capture history"
+                onChangeQuery={setQuery}
+                onPressSort={() => setSortOpen(true)}
+              />
             </View>
-          </View>
+          )}
 
           <View style={styles.listBlock}>
             {loading ? <CaptureListSkeleton count={4} /> : null}
 
-          {tab === 'drafts' ? (
+          {!historyOnly ? (
             <>
               {!loading && drafts.length === 0 ? (
                 <View style={styles.emptyCard}>
@@ -275,9 +306,13 @@ export default function CaptureHomeScreen() {
                     </View>
                     <Text style={styles.when}>{formatRelative(draft.updatedAt)}</Text>
                   </View>
-                  <Text style={styles.draftMeta}>{stepLabel(draft.step)}</Text>
+                  <Text style={[styles.draftMeta, draft.sessionStatus === 'failed' && styles.draftMetaInterrupted]}>
+                    {draftStateLabel(draft)}
+                  </Text>
                   <View style={styles.cardFooter}>
-                    <Text style={styles.statusChip}>Draft</Text>
+                    <Text style={[styles.statusChip, draft.sessionStatus === 'failed' && styles.statusChipInterrupted]}>
+                      {draft.sessionStatus === 'failed' ? 'Safe draft' : 'Draft'}
+                    </Text>
                     <View style={styles.draftActions}>
                       <Pressable
                         accessibilityRole="button"
@@ -311,7 +346,7 @@ export default function CaptureHomeScreen() {
                 </View>
               ) : null}
 
-              {encounters.map((encounter) => (
+              {visibleEncounters.map((encounter) => (
                 <Pressable
                   key={encounter.id}
                   accessibilityRole="button"
@@ -349,10 +384,12 @@ export default function CaptureHomeScreen() {
                   </View>
                 </Pressable>
               ))}
+              {!loading && encounters.length > 0 && visibleEncounters.length === 0 ? (
+                <Body style={styles.emptySearch}>No captures match your search.</Body>
+              ) : null}
             </>
           )}
 
-          <Text style={styles.buildLabel}>{formatBuildLabel()}</Text>
           </View>
         </ScrollView>
       </View>
@@ -373,9 +410,19 @@ export default function CaptureHomeScreen() {
           setErrorMessage('');
         }}
       />
+
+      <BottomSheet visible={sortOpen} title="Sort history" onClose={() => setSortOpen(false)}>
+        <View style={styles.sortOptions}>
+          <Button variant={sort === 'recent' ? 'primary' : 'secondary'} onPress={() => { setSort('recent'); setSortOpen(false); }}>Most recent</Button>
+          <Button variant={sort === 'oldest' ? 'primary' : 'secondary'} onPress={() => { setSort('oldest'); setSortOpen(false); }}>Oldest first</Button>
+          <Button variant={sort === 'az' ? 'primary' : 'secondary'} onPress={() => { setSort('az'); setSortOpen(false); }}>Person A–Z</Button>
+        </View>
+      </BottomSheet>
     </ScreenFrame>
   );
 }
+
+export default CaptureHomeScreen;
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
@@ -390,15 +437,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.x2,
     gap: spacing.x3,
   },
-  tabsSticky: {
-    paddingHorizontal: spacing.x5,
-    paddingVertical: spacing.x2,
-    backgroundColor: colors.canvas,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
   listBlock: {
     paddingHorizontal: spacing.x5,
+    paddingTop: spacing.x3,
     gap: spacing.x3,
   },
   localNote: {
@@ -407,32 +448,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  tabs: {
+  historyTools: {
+    zIndex: 2,
+    paddingHorizontal: spacing.x5,
+    paddingTop: spacing.x2,
+    paddingBottom: spacing.x3,
     flexDirection: 'row',
-    gap: spacing.x2,
-    padding: 4,
-    borderRadius: radius.large,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  tab: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.x3,
-    borderRadius: radius.medium,
+    gap: spacing.x2,
+    backgroundColor: colors.canvas,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
   },
-  tabActive: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  tabLabel: { color: colors.muted, fontSize: 13, fontWeight: '800' },
-  tabLabelActive: { color: colors.ink },
+  sortOptions: { gap: spacing.x2 },
+  emptySearch: { textAlign: 'center', color: colors.muted, paddingVertical: spacing.x4 },
   emptyCard: {
     alignItems: 'flex-start',
-    gap: spacing.x3,
-    padding: spacing.x6,
+    gap: spacing.x2,
+    padding: spacing.x5,
     borderRadius: radius.large,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -462,6 +495,7 @@ const styles = StyleSheet.create({
   personName: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   when: { color: colors.muted, fontSize: 12 },
   draftMeta: { color: colors.muted, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  draftMetaInterrupted: { color: colors.warning },
   captureTitle: { color: colors.ink, fontSize: 18, fontWeight: '800', lineHeight: 24 },
   summaryBlock: {
     gap: 4,
@@ -500,17 +534,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textTransform: 'uppercase',
   },
+  statusChipInterrupted: { color: colors.warning },
   draftActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.x4 },
   discardButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   discardText: { color: colors.danger, fontSize: 12, fontWeight: '800' },
   openRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   openText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
-  buildLabel: {
-    marginTop: spacing.x6,
-    marginBottom: spacing.x2,
-    textAlign: 'center',
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '600',
-  },
 });

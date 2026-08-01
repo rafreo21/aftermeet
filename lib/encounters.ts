@@ -7,6 +7,7 @@ export type EncounterAction = {
   owner: "me" | "guest";
   dueAt: string;
   status: "open" | "completed" | "snoozed";
+  completedAt?: string;
   assigneeName?: string;
   assigneeEmail?: string;
   participantId?: string;
@@ -22,6 +23,83 @@ export type EncounterParticipant = {
   linkedIn: string;
   exchangeId?: string;
 };
+
+const ACTION_CHANNELS = new Set<EncounterAction["channel"]>([
+  "email", "linkedin", "call", "meeting", "send", "whatsapp", "instagram", "x", "tiktok", "other",
+]);
+const ACTION_STATUSES = new Set<EncounterAction["status"]>(["open", "completed", "snoozed"]);
+
+function normalizedMatch(value: unknown) {
+  return typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
+}
+
+/**
+ * Canonicalizes the action JSON shared by web, iOS, and Android.
+ * `owner` describes who must act; `participantId` describes which relationship
+ * the action belongs to. They are intentionally independent.
+ */
+export function normalizeEncounterActions(
+  input: unknown,
+  participants: EncounterParticipant[],
+  fallbackPerson?: { name?: string; email?: string },
+): EncounterAction[] {
+  if (!Array.isArray(input)) return [];
+
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id.trim().slice(0, 120) : "";
+    const title = typeof record.title === "string" ? record.title.trim().slice(0, 500) : "";
+    if (!id || !title) return [];
+
+    const requestedParticipantId = typeof record.participantId === "string"
+      ? record.participantId.trim()
+      : "";
+    const requestedName = normalizedMatch(record.assigneeName);
+    const requestedEmail = normalizedMatch(record.assigneeEmail);
+    const participant = participants.find((person) => person.id === requestedParticipantId)
+      ?? participants.find((person) => requestedEmail && normalizedMatch(person.email) === requestedEmail)
+      ?? participants.find((person) => requestedName && normalizedMatch(person.name) === requestedName)
+      ?? participants[0];
+
+    const owner: EncounterAction["owner"] = record.owner === "guest" ? "guest" : "me";
+    const channel = ACTION_CHANNELS.has(record.channel as EncounterAction["channel"])
+      ? record.channel as EncounterAction["channel"]
+      : "other";
+    const status = ACTION_STATUSES.has(record.status as EncounterAction["status"])
+      ? record.status as EncounterAction["status"]
+      : "open";
+    const assigneeName = participant?.name.trim()
+      || (typeof record.assigneeName === "string" ? record.assigneeName.trim().slice(0, 160) : "")
+      || fallbackPerson?.name?.trim().slice(0, 160)
+      || undefined;
+    const assigneeEmail = participant?.email.trim()
+      || (typeof record.assigneeEmail === "string" ? record.assigneeEmail.trim().slice(0, 320) : "")
+      || fallbackPerson?.email?.trim().slice(0, 320)
+      || undefined;
+
+    return [{
+      id,
+      title,
+      channel,
+      owner,
+      dueAt: typeof record.dueAt === "string" ? record.dueAt.trim().slice(0, 40) : "",
+      status,
+      completedAt: typeof record.completedAt === "string" && record.completedAt.trim()
+        ? record.completedAt.trim()
+        : undefined,
+      assigneeName,
+      assigneeEmail,
+      participantId: participant?.id || requestedParticipantId || undefined,
+      groupId: typeof record.groupId === "string" && record.groupId.trim()
+        ? record.groupId.trim().slice(0, 120)
+        : undefined,
+      outboundDraft: record.outboundDraft && typeof record.outboundDraft === "object"
+        ? record.outboundDraft as OutboundDraft
+        : undefined,
+    } satisfies EncounterAction];
+  });
+}
 
 export type OutboundDraft = {
   subject: string;
@@ -76,7 +154,16 @@ const STORAGE_KEY = "aftermeet-encounters-v1";
 export function readEncounters(): Encounter[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as Encounter[];
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as Encounter[];
+    return stored.map((encounter) => ({
+      ...encounter,
+      participants: Array.isArray(encounter.participants) ? encounter.participants : [],
+      actions: normalizeEncounterActions(
+        encounter.actions,
+        Array.isArray(encounter.participants) ? encounter.participants : [],
+        { name: encounter.personName, email: encounter.personEmail },
+      ),
+    }));
   } catch {
     return [];
   }
@@ -131,6 +218,7 @@ type EncounterRow = {
 
 export function encounterFromApi(row: EncounterRow | Record<string, unknown>): Encounter {
   const record = row as EncounterRow;
+  const participants = Array.isArray(record.participants) ? record.participants : [];
   return {
     id: String(record.id),
     title: record.title ?? "",
@@ -147,8 +235,11 @@ export function encounterFromApi(row: EncounterRow | Record<string, unknown>): E
     privateNotes: record.private_notes ?? "",
     sharedSummary: record.shared_summary ?? "",
     recording: record.recording_metadata ?? undefined,
-    actions: Array.isArray(record.actions) ? record.actions : [],
-    participants: Array.isArray(record.participants) ? record.participants : [],
+    actions: normalizeEncounterActions(record.actions, participants, {
+      name: record.person_name,
+      email: record.person_email,
+    }),
+    participants,
     status: record.status ?? "draft",
     shareToken: record.share_token,
     guestFollowUp: record.guest_follow_up ?? undefined,
@@ -158,6 +249,9 @@ export function encounterFromApi(row: EncounterRow | Record<string, unknown>): E
 
 export function encounterFromSharedPayload(payload: Record<string, unknown>): Encounter | null {
   if (!payload || typeof payload.id !== "string") return null;
+  const participants = Array.isArray(payload.participants)
+    ? payload.participants as EncounterParticipant[]
+    : [];
   return {
     id: payload.id,
     title: String(payload.title ?? ""),
@@ -191,8 +285,11 @@ export function encounterFromSharedPayload(payload: Record<string, unknown>): En
             : null,
         }
       : undefined,
-    actions: Array.isArray(payload.actions) ? payload.actions as EncounterAction[] : [],
-    participants: Array.isArray(payload.participants) ? payload.participants as EncounterParticipant[] : [],
+    actions: normalizeEncounterActions(payload.actions, participants, {
+      name: String(payload.personName ?? ""),
+      email: String(payload.personEmail ?? ""),
+    }),
+    participants,
     status: "shared",
     shareToken: String(payload.shareToken ?? ""),
     guestFollowUp: payload.guestFollowUp && typeof payload.guestFollowUp === "object"

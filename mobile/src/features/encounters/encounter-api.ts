@@ -15,7 +15,7 @@ import {
   type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
 
-export type FollowUpChannelId = FollowUpChannel | 'send' | 'other';
+export type FollowUpChannelId = FollowUpChannel;
 
 export type EncounterDraft = {
   title: string;
@@ -24,6 +24,15 @@ export type EncounterDraft = {
   privateNotes: string;
   followUp: string;
   followUpType: FollowUpChannelId;
+  commitments?: EncounterExtractionCommitment[];
+};
+
+export type EncounterExtractionCommitment = {
+  title: string;
+  owner: 'me' | 'guest';
+  ownerName: string;
+  channel: FollowUpChannelId;
+  dueAt: string;
 };
 
 export type EncounterAction = {
@@ -33,6 +42,7 @@ export type EncounterAction = {
   owner: 'me' | 'guest';
   dueAt: string;
   status: 'open' | 'completed' | 'snoozed';
+  completedAt?: string;
   assigneeName?: string;
   assigneeEmail?: string;
   participantId?: string;
@@ -139,6 +149,51 @@ export async function fetchEncounters(accessToken: string) {
   return (payload.encounters ?? []).map(mapEncounterSummary);
 }
 
+export type RemoteCaptureSession = {
+  encounterId: string;
+  sessionStatus: 'draft' | 'recording' | 'paused' | 'processing' | 'review_ready' | 'failed';
+  step: number;
+  durationSeconds: number;
+  deviceId?: string;
+  deviceLabel?: string;
+  updatedAt: string;
+  failureReason?: string;
+  [key: string]: unknown;
+};
+
+export class CaptureSessionConflictError extends Error {
+  currentStatus?: string;
+
+  constructor(message: string, currentStatus?: string) {
+    super(message);
+    this.name = 'CaptureSessionConflictError';
+    this.currentStatus = currentStatus;
+  }
+}
+
+export async function fetchCaptureSessions(accessToken: string) {
+  const response = await mobileFetch('/api/capture-sessions', accessToken);
+  const payload = await response.json() as { sessions?: RemoteCaptureSession[]; error?: string };
+  if (!response.ok) throw new Error(payload.error || 'Could not load active captures.');
+  return payload.sessions ?? [];
+}
+
+export async function syncCaptureSession(accessToken: string, snapshot: RemoteCaptureSession) {
+  const response = await mobileFetch('/api/capture-sessions', accessToken, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  });
+  const payload = await response.json() as { ok?: boolean; error?: string; currentStatus?: string };
+  if (response.status === 409) {
+    throw new CaptureSessionConflictError(
+      payload.error || 'This capture changed on another device.',
+      payload.currentStatus,
+    );
+  }
+  if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not sync this capture.');
+}
+
 export async function extractEncounterDraft(
   accessToken: string,
   transcript: string,
@@ -195,8 +250,10 @@ export function buildEncounterPayload(input: {
   followUp?: string;
   followUpType?: FollowUpChannelId;
   followUpChannels?: FollowUpChannel[];
+  commitments?: EncounterExtractionCommitment[];
   dueAt?: string;
   consentMethod?: 'verbal' | 'written';
+  consentConfirmed?: boolean;
   status?: EncounterPayload['status'];
   shareToken?: string;
   durationSeconds?: number;
@@ -237,15 +294,39 @@ export function buildEncounterPayload(input: {
         exchangeId: input.exchangeId || undefined,
       }];
 
+  const selectedCommitments = (input.commitments ?? []).filter((commitment) => commitment.title.trim());
   const actions: EncounterAction[] = [];
+  for (const commitment of selectedCommitments) {
+    const assignee = assignees.find((person) => (
+      person.name.trim().toLocaleLowerCase() === commitment.ownerName.trim().toLocaleLowerCase()
+    )) ?? assignees[0];
+    if (!assignee?.name.trim()) continue;
+    actions.push({
+      id: createId(),
+      title: commitment.title.trim(),
+      channel: commitment.channel,
+      owner: commitment.owner,
+      dueAt: commitment.dueAt.trim(),
+      status: 'open',
+      assigneeName: assignee.name,
+      assigneeEmail: assignee.email,
+      participantId: assignee.id,
+    });
+  }
   if (channels.length) {
     for (const assignee of assignees) {
       if (!assignee.name.trim()) continue;
       const groupId = createId();
       for (const channel of channels) {
+        const displayTitle = displayFollowUpTitle(sanitizedFollowUpTitle, channel);
+        const duplicatesSuggestion = selectedCommitments.some((commitment) => (
+          commitment.title.trim().toLocaleLowerCase() === displayTitle.toLocaleLowerCase()
+          && commitment.channel === channel
+        ));
+        if (duplicatesSuggestion) continue;
         actions.push({
           id: createId(),
-          title: displayFollowUpTitle(sanitizedFollowUpTitle, channel),
+          title: displayTitle,
           channel,
           owner: 'me',
           dueAt: input.dueAt?.trim() || '',
@@ -270,7 +351,7 @@ export function buildEncounterPayload(input: {
     endedAt: now,
     durationSeconds,
     consent: {
-      confirmed: true,
+      confirmed: input.consentConfirmed ?? true,
       method: input.consentMethod || 'verbal',
       confirmedAt: now,
       scriptVersion: '2026-07-26',
@@ -326,6 +407,15 @@ type TranscribePayload = {
   source?: 'ai' | 'unavailable';
   unavailable?: string;
   error?: string;
+  diarized?: boolean;
+  speakers?: string[];
+  segments?: Array<{
+    id: string;
+    speaker: string;
+    text: string;
+    start?: number;
+    end?: number;
+  }>;
 };
 
 function transcribeFailureMessage(status: number, payload: TranscribePayload, raw: string) {
@@ -359,6 +449,9 @@ async function parseTranscribeResponse(response: Response) {
     transcript: payload.transcript?.trim() || '',
     source: payload.source || 'unavailable' as const,
     unavailable: payload.unavailable,
+    diarized: payload.diarized ?? false,
+    speakers: payload.speakers ?? [],
+    segments: payload.segments ?? [],
   };
 }
 
@@ -454,6 +547,60 @@ export async function uploadEncounterRecording(
   return payload.recording;
 }
 
+export async function uploadEncounterRecordingToDrive(
+  accessToken: string,
+  encounterId: string,
+  uri: string,
+) {
+  const formData = new FormData();
+  formData.append('encounterId', encounterId);
+  formData.append('audio', new File(uri) as unknown as Blob, guessRecordingFileName(uri));
+
+  const response = await mobileFetch('/api/integrations/google/drive/recording', accessToken, {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await response.json() as {
+    ok?: boolean;
+    error?: string;
+    code?: string;
+    recording?: LocalRecordingMetadata;
+  };
+  if (!response.ok || !payload.ok || !payload.recording) {
+    const error = new Error(payload.error || 'Could not save this recording to Google Drive.');
+    (error as Error & { code?: string }).code = payload.code;
+    throw error;
+  }
+  return payload.recording;
+}
+
+export async function uploadEncounterRecordingToOneDrive(
+  accessToken: string,
+  encounterId: string,
+  uri: string,
+) {
+  const formData = new FormData();
+  formData.append('encounterId', encounterId);
+  formData.append('audio', new File(uri) as unknown as Blob, guessRecordingFileName(uri));
+
+  const response = await mobileFetch('/api/integrations/microsoft/onedrive/recording', accessToken, {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await response.json() as {
+    ok?: boolean;
+    error?: string;
+    code?: string;
+    recording?: LocalRecordingMetadata;
+  };
+  if (!response.ok || !payload.ok || !payload.recording) {
+    const error = new Error(payload.error || 'Could not save this recording to OneDrive.');
+    (error as Error & { code?: string }).code = payload.code;
+    throw error;
+  }
+  return payload.recording;
+}
+
 export async function saveEncounter(accessToken: string, encounter: EncounterPayload) {
   const response = await mobileFetch('/api/encounters', accessToken, {
     method: 'POST',
@@ -489,6 +636,10 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
             storagePath: encounter.recording.storagePath,
             sharedAudioUrl: encounter.recording.sharedAudioUrl,
             cloudExpiresAt: encounter.recording.cloudExpiresAt ?? null,
+            driveFileId: encounter.recording.driveFileId,
+            driveWebViewUrl: encounter.recording.driveWebViewUrl,
+            oneDriveItemId: encounter.recording.oneDriveItemId,
+            oneDriveWebUrl: encounter.recording.oneDriveWebUrl,
           }
         : null,
     }),

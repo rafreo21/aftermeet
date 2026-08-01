@@ -3,6 +3,15 @@ export type EncounterTranscriptionResult = {
   source: "ai" | "unavailable";
   unavailable?: string;
   error?: string;
+  diarized?: boolean;
+  speakers?: string[];
+  segments?: Array<{
+    id: string;
+    speaker: string;
+    text: string;
+    start?: number;
+    end?: number;
+  }>;
 };
 
 export async function transcribeEncounterAudioBlob(

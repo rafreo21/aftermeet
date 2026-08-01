@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
@@ -26,8 +25,6 @@ import {
 } from "../../../lib/qr-camera-scan";
 import { readActiveCampaignId } from "../../../lib/campaigns";
 import { parseVcardSingle } from "../../../lib/vcard";
-import "../product.css";
-import "../flow.css";
 
 type PublicCard = {
   slug: string;
@@ -37,6 +34,10 @@ type PublicCard = {
   email: string;
   phone: string;
   linkedinUrl: string;
+  whatsappUrl: string;
+  instagramUrl: string;
+  xUrl: string;
+  tiktokUrl: string;
 };
 
 function contactFromScanTarget(target: ScanTarget, card?: PublicCard | null): Contact | null {
@@ -138,21 +139,27 @@ export default function ScanPage() {
   useEffect(() => {
     if (mode !== "camera" || target) return;
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setCameraState("unsupported");
-      setCameraError("Camera access isn’t available in this browser. Paste the QR content instead.");
+      void Promise.resolve().then(() => {
+        setCameraState("unsupported");
+        setCameraError("Camera access isn’t available in this browser. Paste the QR content instead.");
+      });
       return;
     }
 
     const scanEngine = availableQrScanEngine();
     if (!scanEngine) {
-      setCameraState("unsupported");
-      setCameraError("QR scanning isn’t available in this browser. Paste the QR content instead.");
+      void Promise.resolve().then(() => {
+        setCameraState("unsupported");
+        setCameraError("QR scanning isn’t available in this browser. Paste the QR content instead.");
+      });
       return;
     }
 
     let active = true;
-    setCameraState("starting");
-    setCameraError("");
+    void Promise.resolve().then(() => {
+      setCameraState("starting");
+      setCameraError("");
+    });
     if (!canvasRef.current) canvasRef.current = document.createElement("canvas");
 
     void navigator.mediaDevices
@@ -237,11 +244,7 @@ export default function ScanPage() {
       active="home"
       title="Scan badge"
       subtitle="Point your camera at a badge QR, AfterMeet card, or LinkedIn code."
-      actions={
-        <LinkButton size="small" variant="ghost" href="/app/people">
-          <ArrowLeftIcon size={16} weight="bold" />Back
-        </LinkButton>
-      }
+      backHref="/app/people"
     >
       <div className="flow-page scan-page">
         {!target ? (

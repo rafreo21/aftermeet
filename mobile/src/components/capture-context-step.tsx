@@ -1,7 +1,7 @@
 import type { CaptureWizardDraft } from '@/features/encounters/capture-draft';
 import { Body, Button } from '@/components/ui';
 import { colors, radius, spacing } from '@/theme/tokens';
-import { Sparkle, TextAlignLeft } from 'phosphor-react-native';
+import { CheckCircle, Sparkle, TextAlignLeft } from 'phosphor-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -57,13 +57,28 @@ export function CaptureContextStep({
       {tab === 'context' ? (
         <View style={styles.block}>
           <Body>
-            We draft a meeting title and share summary from your transcript. Edit either field before you continue.
+            {draft.captureMode === 'quick_context'
+              ? 'Write or paste what mattered. AfterMeet turns it into a reviewed summary and concrete follow-up.'
+              : 'We draft a meeting title and share summary from your transcript. Edit either field before you continue.'}
           </Body>
 
           {waitingForDraft ? (
             <View style={styles.statusRow}>
               <ActivityIndicator color={colors.ink} size="small" />
-              <Text style={styles.statusCopy}>Drafting title and summary…</Text>
+              <View style={styles.statusText}>
+                <Text style={styles.statusTitle}>Turning the conversation into context…</Text>
+                <Text style={styles.statusCopy}>Identifying the summary, commitments, and likely follow-ups.</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {!waitingForDraft && (draft.title.trim() || draft.sharedSummary.trim()) ? (
+            <View style={[styles.statusRow, styles.readyRow]}>
+              <CheckCircle size={20} color={colors.ink} weight="fill" />
+              <View style={styles.statusText}>
+                <Text style={styles.statusTitle}>Context ready to review</Text>
+                <Text style={styles.statusCopy}>{draft.title.trim() || 'Confirm the suggested summary below.'}</Text>
+              </View>
             </View>
           ) : null}
 
@@ -115,9 +130,9 @@ export function CaptureContextStep({
         </View>
       ) : (
         <View style={styles.block}>
-          <Body>
-            This is your private meeting record. Edit it if names or details need correcting before sharing context.
-          </Body>
+          <Body>{draft.captureMode === 'quick_context'
+            ? 'Add rough notes, copied messages, or a short recap. This stays private unless you approve a shared summary.'
+            : 'This is your private meeting record. Edit it if names or details need correcting before sharing context.'}</Body>
           {isTranscribing ? (
             <View style={styles.statusRow}>
               <ActivityIndicator color={colors.ink} size="small" />
@@ -127,7 +142,9 @@ export function CaptureContextStep({
           <TextInput
             value={draft.transcript}
             onChangeText={(value) => onDraftChange({ transcript: value })}
-            placeholder="Transcript appears here after recording or import…"
+            placeholder={draft.captureMode === 'quick_context'
+              ? 'What happened, what was promised, and what should happen next?'
+              : 'Transcript appears here after recording…'}
             placeholderTextColor={colors.muted}
             multiline
             scrollEnabled
@@ -207,7 +224,10 @@ const styles = StyleSheet.create({
   summaryField: { minHeight: 180, maxHeight: 260, paddingTop: spacing.x3, textAlignVertical: 'top' },
   transcriptField: { minHeight: 280, maxHeight: 400, paddingTop: spacing.x3, textAlignVertical: 'top' },
   uncertain: { color: colors.danger, fontSize: 12, lineHeight: 18 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  readyRow: { padding: spacing.x3, borderRadius: radius.medium, backgroundColor: colors.surfaceMuted },
+  statusText: { flex: 1, gap: 2 },
+  statusTitle: { color: colors.ink, fontSize: 13, fontWeight: '800' },
   statusCopy: { color: colors.muted, fontSize: 13 },
   errorBox: {
     gap: spacing.x1,

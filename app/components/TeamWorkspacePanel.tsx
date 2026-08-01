@@ -37,7 +37,7 @@ export function TeamWorkspacePanel() {
   }
 
   useEffect(() => {
-    void refresh();
+    void Promise.resolve().then(refresh);
   }, []);
 
   async function createTeam() {

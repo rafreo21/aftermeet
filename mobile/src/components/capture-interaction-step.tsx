@@ -4,8 +4,11 @@ import {
   CaretRight,
   CaretUp,
   CheckCircle,
+  CloudArrowUp,
+  DeviceMobile,
   IdentificationCard,
   Microphone,
+  NotePencil,
   PencilSimple,
   QrCode,
   Scan,
@@ -55,6 +58,9 @@ type CaptureInteractionStepProps = {
   onEnsureAuth: () => Promise<string | null>;
   getPriorMeetingCount?: (email: string) => number;
   knownConnectionEmails?: string[];
+  googleDriveReady?: boolean;
+  oneDriveReady?: boolean;
+  onOpenConnectedAccounts?: () => void;
 };
 
 function metBeforeLabelForPerson(
@@ -217,6 +223,9 @@ export function CaptureInteractionStep({
   onEnsureAuth,
   getPriorMeetingCount,
   knownConnectionEmails = [],
+  googleDriveReady = false,
+  oneDriveReady = false,
+  onOpenConnectedAccounts,
 }: CaptureInteractionStepProps) {
   const { card, publicUrl } = useCard();
   const [consentSheetOpen, setConsentSheetOpen] = useState(false);
@@ -327,6 +336,33 @@ export function CaptureInteractionStep({
 
   return (
     <View style={styles.stack}>
+      <View style={styles.modeCard}>
+        <Text style={styles.modeTitle}>How do you want to capture this?</Text>
+        <Text style={styles.modeHint}>Record the conversation, or write the useful context without recording.</Text>
+        <View style={styles.modeRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: draft.captureMode === 'recording' }}
+            onPress={() => onDraftChange({ captureMode: 'recording' })}
+            style={[styles.modeOption, draft.captureMode === 'recording' && styles.modeOptionActive]}>
+            <Microphone size={19} color={colors.ink} weight="bold" />
+            <Text style={styles.modeOptionTitle}>Record</Text>
+            <Text style={styles.modeOptionHint}>Audio + transcript</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: draft.captureMode === 'quick_context' }}
+            onPress={() => onDraftChange({ captureMode: 'quick_context' })}
+            style={[styles.modeOption, draft.captureMode === 'quick_context' && styles.modeOptionActive]}>
+            <NotePencil size={19} color={colors.ink} weight="bold" />
+            <Text style={styles.modeOptionTitle}>Quick context</Text>
+            <Text style={styles.modeOptionHint}>No recording</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {draft.captureMode === 'recording' ? (
+      <>
       <Pressable
         accessibilityRole="button"
         onPress={() => setConsentSheetOpen(true)}
@@ -449,8 +485,55 @@ export function CaptureInteractionStep({
             </View>
           ) : null}
 
+          <View style={styles.destinationWrap}>
+            <Text style={styles.destinationTitle}>Where should the recording live?</Text>
+            <View style={styles.destinationList}>
+              {([
+                { id: 'local_only', label: 'Only on this device', detail: 'Private local copy', icon: DeviceMobile },
+                { id: 'shared_3_days', label: 'Share online for 3 days', detail: 'Participant can listen or download', icon: CloudArrowUp },
+                { id: 'google_drive', label: 'Keep in Google Drive', detail: googleDriveReady ? 'Uses your connected Google account' : 'Reconnect Google to enable Drive', icon: CloudArrowUp },
+                { id: 'onedrive', label: 'Keep in OneDrive', detail: oneDriveReady ? 'Uses your connected Microsoft account' : 'Reconnect Microsoft to enable OneDrive', icon: CloudArrowUp },
+              ] as const).map((destination) => {
+                const selected = draft.recordingDestination === destination.id;
+                const Icon = destination.icon;
+                return (
+                  <Pressable
+                    key={destination.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => {
+                      if ((destination.id === 'google_drive' && !googleDriveReady)
+                        || (destination.id === 'onedrive' && !oneDriveReady)) {
+                        onOpenConnectedAccounts?.();
+                        return;
+                      }
+                      onDraftChange({ recordingDestination: destination.id });
+                    }}
+                    style={[styles.destinationOption, selected && styles.destinationOptionActive]}>
+                    <Icon size={18} color={colors.ink} weight="bold" />
+                    <View style={styles.destinationCopy}>
+                      <Text style={styles.destinationLabel}>{destination.label}</Text>
+                      <Text style={styles.destinationDetail}>{destination.detail}</Text>
+                    </View>
+                    <View style={[styles.radio, selected && styles.radioActive]} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
         </View>
       ) : null}
+      </>
+      ) : (
+        <View style={styles.quickContextBanner}>
+          <NotePencil size={20} color={colors.ink} weight="bold" />
+          <View style={styles.quickContextCopy}>
+            <Text style={styles.quickContextTitle}>No microphone needed</Text>
+            <Text style={styles.quickContextHint}>Add who you met below, then write or paste what mattered on the next step.</Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.peopleSection}>
         <View style={styles.sectionHead}>
@@ -647,6 +730,63 @@ export function CaptureInteractionStep({
 
 const styles = StyleSheet.create({
   stack: { gap: spacing.x5 },
+  modeCard: {
+    padding: spacing.x5,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    gap: spacing.x3,
+  },
+  modeTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  modeHint: { color: colors.muted, fontSize: 13, lineHeight: 19 },
+  modeRow: { flexDirection: 'row', gap: spacing.x2 },
+  modeOption: {
+    flex: 1,
+    minHeight: 94,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.canvas,
+    gap: 4,
+  },
+  modeOptionActive: { borderColor: colors.ink, backgroundColor: colors.surfaceMuted },
+  modeOptionTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  modeOptionHint: { color: colors.muted, fontSize: 11 },
+  quickContextBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.x3,
+    padding: spacing.x5,
+    borderRadius: radius.large,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  quickContextCopy: { flex: 1, gap: 3 },
+  quickContextTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  quickContextHint: { color: colors.muted, fontSize: 13, lineHeight: 19 },
+  destinationWrap: { gap: spacing.x3 },
+  destinationTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  destinationList: { gap: spacing.x2 },
+  destinationOption: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    padding: spacing.x3,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.canvas,
+  },
+  destinationOptionActive: { borderColor: colors.ink, backgroundColor: colors.surfaceMuted },
+  destinationCopy: { flex: 1, gap: 2 },
+  destinationLabel: { color: colors.ink, fontSize: 13, fontWeight: '800' },
+  destinationDetail: { color: colors.muted, fontSize: 11, lineHeight: 15 },
+  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: colors.line },
+  radioActive: { borderColor: colors.ink, backgroundColor: colors.accent },
   consentChip: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { BellIcon } from "@phosphor-icons/react/dist/csr/Bell";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { LinkButton } from "./Button";
+import { BROWSER_NOTIFICATION_CHANGE_EVENT, BROWSER_NOTIFICATION_KEY } from "./NotificationPreferences";
 
 type FollowUpAlert = {
   encounterId: string;
@@ -18,6 +20,7 @@ type FollowUpAlert = {
 };
 
 const READ_KEY = "aftermeet-read-notifications-v1";
+const SHOWN_KEY = "aftermeet-shown-browser-notifications-v1";
 
 function startOfToday() {
   const today = new Date();
@@ -56,6 +59,7 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
+  const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -72,11 +76,44 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
   }, []);
 
   useEffect(() => {
-    setReadIds(readStoredIds());
-    void load();
+    void Promise.resolve().then(() => setReadIds(readStoredIds()));
+    const syncBrowserPreference = () => setBrowserNotificationsEnabled(
+      "Notification" in window
+      && Notification.permission === "granted"
+      && localStorage.getItem(BROWSER_NOTIFICATION_KEY) === "enabled",
+    );
+    void Promise.resolve().then(syncBrowserPreference);
+    window.addEventListener(BROWSER_NOTIFICATION_CHANGE_EVENT, syncBrowserPreference);
+    void Promise.resolve().then(load);
     const interval = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(BROWSER_NOTIFICATION_CHANGE_EVENT, syncBrowserPreference);
+    };
   }, [load]);
+
+  useEffect(() => {
+    if (!browserNotificationsEnabled || !("Notification" in window)) return;
+    let shown = new Set<string>();
+    try {
+      const stored = JSON.parse(localStorage.getItem(SHOWN_KEY) || "[]");
+      if (Array.isArray(stored)) shown = new Set(stored.filter((value): value is string => typeof value === "string"));
+    } catch {}
+    const nextAlerts = alerts.filter((alert) => !shown.has(alertId(alert)));
+    for (const alert of nextAlerts) {
+      const notification = new Notification(alert.title, {
+        body: `${alert.personName || alert.encounterTitle} · ${alertUrgency(alert.dueAt) === "overdue" ? "Overdue" : "Due today"}`,
+        tag: alertId(alert),
+      });
+      notification.onclick = () => {
+        window.focus();
+        window.location.assign(`/app/encounters/${alert.encounterId}`);
+        notification.close();
+      };
+      shown.add(alertId(alert));
+    }
+    localStorage.setItem(SHOWN_KEY, JSON.stringify(Array.from(shown).slice(-200)));
+  }, [alerts, browserNotificationsEnabled]);
 
   useEffect(() => {
     onActionableCountChange?.(alerts.length);
@@ -133,11 +170,11 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
               const urgency = alertUrgency(alert.dueAt);
               const isUnread = !readIds.has(alertId(alert));
               return (
-                <a className={`notification-item ${isUnread ? "is-unread" : ""}`} href={`/app/encounters/${alert.encounterId}`} key={alertId(alert)} onClick={() => markRead(alert)}>
+                <Link className={`notification-item ${isUnread ? "is-unread" : ""}`} href={`/app/encounters/${alert.encounterId}`} key={alertId(alert)} prefetch={false} onClick={() => markRead(alert)}>
                   <span className={`notification-status ${urgency}`}><ClockIcon size={17} weight="bold" /></span>
                   <span><strong>{alert.title}</strong><small>{alert.personName || alert.encounterTitle}</small><em>{urgency === "overdue" ? "Overdue" : "Due today"}</em></span>
                   {isUnread ? <i aria-label="Unread" /> : null}
-                </a>
+                </Link>
               );
             }) : (
               <div className="notification-empty"><span><CheckIcon size={22} weight="bold" /></span><strong>You&apos;re all caught up</strong><p>New due-date alerts and meeting activity will appear here.</p></div>

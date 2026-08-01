@@ -1,8 +1,18 @@
 import { mobileFetch } from '@/lib/mobile-api';
 
 export type ConnectedAccountStatus = {
-  google: { connected: boolean; email: string };
-  microsoft: { connected: boolean; email: string };
+  google: {
+    connected: boolean;
+    email: string;
+    scopes: string[];
+    capabilities: { gmail: boolean; calendar: boolean; drive: boolean };
+  };
+  microsoft: {
+    connected: boolean;
+    email: string;
+    scopes: string[];
+    capabilities: { outlook: boolean; calendar: boolean; onedrive: boolean };
+  };
   configured?: { google: boolean; microsoft: boolean };
 };
 
@@ -13,8 +23,18 @@ export async function fetchConnectedAccounts(accessToken: string): Promise<Conne
   }
   const payload = await response.json() as { status?: ConnectedAccountStatus };
   return payload.status ?? {
-    google: { connected: false, email: '' },
-    microsoft: { connected: false, email: '' },
+    google: {
+      connected: false,
+      email: '',
+      scopes: [],
+      capabilities: { gmail: false, calendar: false, drive: false },
+    },
+    microsoft: {
+      connected: false,
+      email: '',
+      scopes: [],
+      capabilities: { outlook: false, calendar: false, onedrive: false },
+    },
   };
 }
 

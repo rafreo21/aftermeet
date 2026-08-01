@@ -46,6 +46,10 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
   const email = methods.find((method) => method.type === "email")?.value ?? "";
   const phone = methods.find((method) => ["phone", "whatsapp"].includes(method.type))?.value ?? "";
   const linkedinUrl = methods.find((method) => method.type === "linkedin")?.value ?? "";
+  const whatsappUrl = methods.find((method) => method.type === "whatsapp")?.value ?? "";
+  const instagramUrl = methods.find((method) => method.type === "instagram")?.value ?? "";
+  const xUrl = methods.find((method) => method.type === "x")?.value ?? "";
+  const tiktokUrl = methods.find((method) => method.type === "tiktok")?.value ?? "";
 
   return NextResponse.json({
     card: {
@@ -63,6 +67,10 @@ export async function GET(_request: Request, context: { params: Promise<{ slug: 
       email,
       phone,
       linkedinUrl,
+      whatsappUrl,
+      instagramUrl,
+      xUrl,
+      tiktokUrl,
       methods,
     },
   }, { headers: { "Cache-Control": "public, max-age=60" } });

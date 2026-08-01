@@ -6,6 +6,10 @@ export type ActionLinkContact = {
   email: string;
   phone?: string;
   linkedinUrl?: string;
+  whatsappUrl?: string;
+  instagramUrl?: string;
+  xUrl?: string;
+  tiktokUrl?: string;
 };
 
 export type ActionLinkContext = {
@@ -14,6 +18,9 @@ export type ActionLinkContext = {
   phone?: string;
   linkedinUrl?: string;
   whatsappUrl?: string;
+  instagramUrl?: string;
+  xUrl?: string;
+  tiktokUrl?: string;
   encounterTitle?: string;
 };
 
@@ -32,20 +39,42 @@ export function channelLabel(channel: EncounterAction["channel"]) {
     case "meeting": return "Meeting";
     case "send": return "Send file";
     case "whatsapp": return "WhatsApp";
+    case "instagram": return "Instagram";
+    case "x": return "X";
+    case "tiktok": return "TikTok";
+    case "other": return "Other";
     default: return "Follow-up";
   }
 }
 
 export function buildActionLinkContext(
-  encounter: Pick<Encounter, "personName" | "personEmail" | "title">,
+  encounter: Pick<Encounter, "personName" | "personEmail" | "title"> & Partial<Pick<Encounter, "participants">>,
   contact?: ActionLinkContact | null,
+  action?: Pick<EncounterAction, "participantId"> | null,
 ): ActionLinkContext {
+  const participant = action?.participantId
+    ? encounter.participants?.find((person) => person.id === action.participantId)
+    : null;
+
+  if (participant) {
+    return {
+      personName: participant.name.trim(),
+      personEmail: participant.email.trim(),
+      phone: participant.phone.trim() || undefined,
+      linkedinUrl: participant.linkedIn.trim() || undefined,
+      encounterTitle: encounter.title,
+    };
+  }
+
   return {
     personName: encounter.personName || (contact ? `${contact.firstName} ${contact.lastName}`.trim() : ""),
     personEmail: contact?.email || encounter.personEmail || "",
     phone: contact?.phone,
     linkedinUrl: contact?.linkedinUrl,
-    whatsappUrl: contact && "whatsappUrl" in contact ? String(contact.whatsappUrl || "") : undefined,
+    whatsappUrl: contact?.whatsappUrl,
+    instagramUrl: contact?.instagramUrl,
+    xUrl: contact?.xUrl,
+    tiktokUrl: contact?.tiktokUrl,
     encounterTitle: encounter.title,
   };
 }
@@ -59,6 +88,17 @@ function normalizeLinkedInUrl(url: string) {
   if (!trimmed) return "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed.replace(/^\/\//, "")}`;
+}
+
+function normalizeProfileUrl(value: string, platform: "instagram" | "x" | "tiktok") {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const handle = trimmed.replace(/^@/, "").replace(/^\/+|\/+$/g, "");
+  if (!handle) return "";
+  if (platform === "instagram") return `https://instagram.com/${handle}`;
+  if (platform === "x") return `https://x.com/${handle}`;
+  return `https://tiktok.com/@${handle}`;
 }
 
 function linkedInSearchUrl(personName: string) {
@@ -171,6 +211,24 @@ export function resolveActionLink(
         };
       }
       return { href, label: "Open WhatsApp", external: true };
+    }
+    case "instagram": {
+      const href = normalizeProfileUrl(context.instagramUrl ?? "", "instagram");
+      return href
+        ? { href, label: "Open Instagram", external: true }
+        : { href: "", label: "Instagram", external: true, unavailableReason: "Add their Instagram profile on the People record." };
+    }
+    case "x": {
+      const href = normalizeProfileUrl(context.xUrl ?? "", "x");
+      return href
+        ? { href, label: "Open X", external: true }
+        : { href: `https://x.com/search?q=${encodeURIComponent(context.personName.trim() || body)}`, label: "Search on X", external: true };
+    }
+    case "tiktok": {
+      const href = normalizeProfileUrl(context.tiktokUrl ?? "", "tiktok");
+      return href
+        ? { href, label: "Open TikTok", external: true }
+        : { href: "", label: "TikTok", external: true, unavailableReason: "Add their TikTok profile on the People record." };
     }
     case "send": {
       const sendBody = `${body}\n\nAttach your file in Gmail, or open Google Drive to share it.`;

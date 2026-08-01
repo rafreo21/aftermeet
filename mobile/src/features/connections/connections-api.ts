@@ -59,6 +59,10 @@ type ContactRow = {
   exchangeId?: string;
   legacyId?: string;
   linkedinUrl?: string;
+  whatsappUrl?: string;
+  instagramUrl?: string;
+  xUrl?: string;
+  tiktokUrl?: string;
 };
 
 function subtitle(role?: string, company?: string, fallback = 'Connected through AfterMeet') {
@@ -94,6 +98,10 @@ export async function fetchContacts(accessToken: string): Promise<SavedDirectory
     email: contact.email?.trim() || '',
     phone: contact.phone?.trim() || undefined,
     linkedinUrl: contact.linkedinUrl?.trim() || undefined,
+    whatsappUrl: contact.whatsappUrl?.trim() || undefined,
+    instagramUrl: contact.instagramUrl?.trim() || undefined,
+    xUrl: contact.xUrl?.trim() || undefined,
+    tiktokUrl: contact.tiktokUrl?.trim() || undefined,
     company: contact.company?.trim() || '',
     role: contact.role?.trim() || '',
     exchangeId: contact.exchangeId,

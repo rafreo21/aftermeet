@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../../../../lib/auth/api-request";
-import { encounterFromApi, type EncounterAction } from "../../../../../../lib/encounters";
+import { encounterFromApi, normalizeEncounterActions, type EncounterAction } from "../../../../../../lib/encounters";
+import { fetchParticipantsByEncounter } from "../../../../../../lib/encounter-participants-server";
 
 const allowedStatuses = new Set(["open", "completed", "snoozed"]);
 
@@ -32,7 +33,7 @@ export async function PATCH(
   const supabase = await createApiSupabaseClient(request);
   const { data, error } = await supabase
     .from("encounters")
-    .select("actions")
+    .select("*")
     .eq("id", id)
     .eq("workspace_id", user.workspaceId)
     .maybeSingle();
@@ -47,13 +48,31 @@ export async function PATCH(
     return NextResponse.json({ error: "Follow-up not found." }, { status: 404 });
   }
 
-  const nextActions = actions.map((action, actionIndex) => (
+  const mergedActions = actions.map((action, actionIndex) => (
     actionIndex === index
       ? body.action
-        ? { ...action, ...body.action, id: action.id }
-        : { ...action, status }
+        ? {
+            ...action,
+            ...body.action,
+            id: action.id,
+            completedAt: body.action.status === "completed"
+              ? body.action.completedAt || action.completedAt || new Date().toISOString()
+              : undefined,
+          }
+        : {
+            ...action,
+            status,
+            completedAt: status === "completed"
+              ? action.completedAt || new Date().toISOString()
+              : undefined,
+          }
       : action
   ));
+  const participants = (await fetchParticipantsByEncounter(supabase, [id])).get(id) ?? [];
+  const nextActions = normalizeEncounterActions(mergedActions, participants, {
+    name: typeof data.person_name === "string" ? data.person_name : "",
+    email: typeof data.person_email === "string" ? data.person_email : "",
+  });
 
   const { error: updateError } = await supabase
     .from("encounters")
@@ -65,5 +84,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Could not update this follow-up." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, encounter: encounterFromApi({ ...data, actions: nextActions }) });
+  return NextResponse.json({
+    ok: true,
+    encounter: encounterFromApi({ ...data, actions: nextActions, participants }),
+  });
 }

@@ -16,8 +16,7 @@ test("environment validation names missing values", () => {
   assert.equal(result.config, null);
   assert.deepEqual(result.missing, [
     "NEXT_PUBLIC_SUPABASE_URL",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    "NEXT_PUBLIC_APP_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   ]);
 });
 

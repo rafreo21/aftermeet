@@ -15,6 +15,7 @@ type FollowUpsSheetProps = {
   onClose: () => void;
   onPressItem: (item: FollowUpItem) => void;
   onCompleteItem: (item: FollowUpItem) => void;
+  onReopenItem?: (item: FollowUpItem) => void;
   completingId?: string | null;
 };
 
@@ -27,6 +28,7 @@ export function FollowUpsSheet({
   onClose,
   onPressItem,
   onCompleteItem,
+  onReopenItem,
   completingId,
 }: FollowUpsSheetProps) {
   const [query, setQuery] = useState('');
@@ -99,6 +101,10 @@ export function FollowUpsSheet({
                   const item = group.items[0];
                   if (item) onCompleteItem(item);
                 }}
+                onReopen={onReopenItem ? () => {
+                  const item = group.items[0];
+                  if (item) onReopenItem(item);
+                } : undefined}
                 completing={group.items.length === 1 && completingId === `${group.items[0]?.encounterId}-${group.items[0]?.actionId}`}
               />
             ))}
@@ -124,6 +130,10 @@ export function FollowUpsSheet({
               const item = activeGroup.items.find((entry) => entry.actionId === actionId);
               if (item) onCompleteItem(item);
             }}
+            onReopenItem={onReopenItem ? (actionId) => {
+              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              if (item) onReopenItem(item);
+            } : undefined}
           />
         ) : null}
       </BottomSheet>

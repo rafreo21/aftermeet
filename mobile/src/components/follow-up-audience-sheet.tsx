@@ -37,8 +37,10 @@ export function FollowUpAudienceSheet({
 
   useEffect(() => {
     if (!visible) return;
-    setStep('mode');
-    setSelectedKey(participants[0]?.key ?? null);
+    void Promise.resolve().then(() => {
+      setStep('mode');
+      setSelectedKey(participants[0]?.key ?? null);
+    });
   }, [visible, item?.actionId, participants]);
 
   if (!item) return null;

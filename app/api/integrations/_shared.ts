@@ -40,7 +40,7 @@ export function clearIntegrationStateCookie(response: NextResponse) {
 
 export function sanitizeMobileReturnTo(value: string | null | undefined) {
   const trimmed = value?.trim() ?? "";
-  if (!trimmed.startsWith("aftermeet://")) return "";
+  if (!trimmed.startsWith("aftermeet://") && !trimmed.startsWith("/app")) return "";
   return trimmed;
 }
 
@@ -84,7 +84,7 @@ export async function resolveIntegrationUser(request: Request) {
   const { resolveApiUser } = await import("../../../lib/auth/api-request");
   const { getAppUserFromRequest } = await import("../../../lib/auth/mobile-api-auth");
 
-  let user = await resolveApiUser(request);
+  const user = await resolveApiUser(request);
   if (user) return user;
 
   const url = new URL(request.url);

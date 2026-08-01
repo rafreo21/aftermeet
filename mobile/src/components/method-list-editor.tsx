@@ -48,11 +48,14 @@ function MethodRow({
   const pan = Gesture.Pan()
     .activeOffsetY([-8, 8])
     .onUpdate((event) => {
+      // Reanimated shared values are intentionally mutable on the UI thread.
+      // eslint-disable-next-line react-hooks/immutability
       offsetY.value = event.translationY;
     })
     .onEnd((event) => {
       if (event.translationY < -36 && index > 0) runOnJS(onMove)(index, -1);
       else if (event.translationY > 36 && index < total - 1) runOnJS(onMove)(index, 1);
+      // eslint-disable-next-line react-hooks/immutability
       offsetY.value = withSpring(0);
     });
 

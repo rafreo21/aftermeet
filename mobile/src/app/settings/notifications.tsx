@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { Bell, BellSlash, CheckCircle, Trash } from 'phosphor-react-native';
+import { Bell, BellSlash, Trash } from 'phosphor-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -10,26 +10,22 @@ import {
   notificationPermissionGranted,
   readNotificationHistory,
   markAllNotificationsRead,
-  scheduledFollowUpCount,
   type NotificationHistoryItem,
 } from '@/features/notifications/notification-service';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function NotificationsScreen() {
   const [history, setHistory] = useState<NotificationHistoryItem[]>([]);
-  const [scheduled, setScheduled] = useState(0);
   const [enabled, setEnabled] = useState(false);
   const [granted, setGranted] = useState(false);
 
   const load = useCallback(async () => {
-    const [nextHistory, nextScheduled, nextEnabled, nextGranted] = await Promise.all([
+    const [nextHistory, nextEnabled, nextGranted] = await Promise.all([
       readNotificationHistory(),
-      scheduledFollowUpCount(),
       deviceNotificationsEnabled(),
       notificationPermissionGranted(),
     ]);
     setHistory(nextHistory);
-    setScheduled(nextScheduled);
     setEnabled(nextEnabled);
     setGranted(nextGranted);
     if (nextHistory.some((item) => !item.readAt)) {
@@ -56,23 +52,17 @@ export default function NotificationsScreen() {
         <Body>Time-sensitive reminders live here. Open Follow-ups to do the work.</Body>
       </View>
 
-      <Panel style={styles.summary}>
-        <View style={[styles.summaryIcon, enabled && granted && styles.summaryIconOn]}>
-          {enabled && granted
-            ? <CheckCircle size={24} color={colors.ink} weight="fill" />
-            : <BellSlash size={24} color={colors.muted} weight="bold" />}
-        </View>
-        <View style={styles.summaryCopy}>
-          <Text style={styles.summaryTitle}>
-            {enabled && granted ? 'Device reminders are on' : 'Device reminders are off'}
-          </Text>
-          <Text style={styles.summaryDetail}>
-            {enabled && granted
-              ? `${scheduled} follow-up ${scheduled === 1 ? 'reminder' : 'reminders'} scheduled.`
-              : 'Turn them on from Settings to get due-date alerts.'}
-          </Text>
-        </View>
-      </Panel>
+      {!enabled || !granted ? (
+        <Panel style={styles.summary}>
+          <View style={styles.summaryIcon}>
+            <BellSlash size={24} color={colors.muted} weight="bold" />
+          </View>
+          <View style={styles.summaryCopy}>
+            <Text style={styles.summaryTitle}>Device reminders are off</Text>
+            <Text style={styles.summaryDetail}>Turn them on from Settings to get due-date alerts.</Text>
+          </View>
+        </Panel>
+      ) : null}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent alerts</Text>
@@ -117,7 +107,6 @@ const styles = StyleSheet.create({
   header: { gap: spacing.x3 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.x4 },
   summaryIcon: { width: 48, height: 48, borderRadius: radius.round, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
-  summaryIconOn: { backgroundColor: colors.accent },
   summaryCopy: { flex: 1, gap: spacing.x1 },
   summaryTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
   summaryDetail: { color: colors.muted, fontSize: 13, lineHeight: 18 },

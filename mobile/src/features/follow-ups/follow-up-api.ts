@@ -1,6 +1,7 @@
 import type { EncounterAction, EncounterParticipant, EncounterPayload } from '@/features/encounters/encounter-api';
 import { mobileFetch } from '@/lib/mobile-api';
 import { sortFollowUps } from '@/lib/due-date';
+import type { ContactMethod } from '@/features/card/types';
 
 export type FollowUpItem = {
   encounterId: string;
@@ -10,6 +11,7 @@ export type FollowUpItem = {
   channel: EncounterAction['channel'];
   dueAt: string;
   status: EncounterAction['status'];
+  completedAt?: string;
   owner: EncounterAction['owner'];
   personName: string;
   personEmail: string;
@@ -19,10 +21,41 @@ export type FollowUpItem = {
   exchangeId?: string;
   encounterTitle: string;
   startedAt: string;
+  contactMethods: ContactMethod[];
 };
 
-export async function fetchFollowUps(accessToken: string) {
-  const response = await mobileFetch('/api/follow-ups', accessToken);
+const followUpMethodTypes = new Set<ContactMethod['type']>([
+  'email', 'phone', 'linkedin', 'whatsapp', 'instagram', 'x', 'tiktok',
+]);
+
+function mapContactMethods(value: unknown): ContactMethod[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const row = candidate as Record<string, unknown>;
+    const type = String(row.type ?? '') as ContactMethod['type'];
+    const methodValue = String(row.value ?? '').trim();
+    if (!followUpMethodTypes.has(type) || !methodValue) return [];
+    return [{
+      id: String(row.id ?? `${type}-${methodValue}`),
+      type,
+      value: methodValue,
+      label: String(row.label ?? type),
+    }];
+  });
+}
+
+export async function fetchFollowUps(
+  accessToken: string,
+  connection?: { connectionId: string; sourceId: string; email?: string; exchangeId?: string },
+) {
+  const params = new URLSearchParams();
+  if (connection?.connectionId) params.set('contactId', connection.connectionId);
+  if (connection?.sourceId) params.set('sourceId', connection.sourceId);
+  if (connection?.email?.trim()) params.set('email', connection.email.trim());
+  if (connection?.exchangeId?.trim()) params.set('exchangeId', connection.exchangeId.trim());
+  const query = params.toString();
+  const response = await mobileFetch(`/api/follow-ups${query ? `?${query}` : ''}`, accessToken);
   const payload = await response.json() as { followUps?: Array<Record<string, unknown>>; error?: string };
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load follow-ups.');
@@ -35,6 +68,7 @@ export async function fetchFollowUps(accessToken: string) {
     channel: row.channel as FollowUpItem['channel'],
     dueAt: String(row.dueAt ?? ''),
     status: row.status as FollowUpItem['status'],
+    completedAt: typeof row.completedAt === 'string' ? row.completedAt : undefined,
     owner: (row.owner as FollowUpItem['owner']) ?? 'me',
     personName: String(row.personName ?? ''),
     personEmail: String(row.personEmail ?? ''),
@@ -44,6 +78,7 @@ export async function fetchFollowUps(accessToken: string) {
     exchangeId: typeof row.exchangeId === 'string' ? row.exchangeId : undefined,
     encounterTitle: String(row.encounterTitle ?? ''),
     startedAt: String(row.startedAt ?? ''),
+    contactMethods: mapContactMethods(row.contactMethods),
   })));
 }
 
@@ -56,6 +91,18 @@ export async function completeFollowUp(accessToken: string, encounterId: string,
   const payload = await response.json() as { ok?: boolean; error?: string };
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not complete this follow-up.');
+  }
+}
+
+export async function reopenFollowUp(accessToken: string, encounterId: string, actionId: string) {
+  const response = await mobileFetch(`/api/encounters/${encounterId}/actions/${actionId}`, accessToken, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'open' }),
+  });
+  const payload = await response.json() as { ok?: boolean; error?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || 'Could not reopen this follow-up.');
   }
 }
 

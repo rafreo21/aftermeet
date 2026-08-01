@@ -8,7 +8,7 @@ import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { GreenHeroCard } from '@/components/green-hero-card';
 import { CardGridSkeleton } from '@/components/skeleton';
 
-import { Body, Button, Eyebrow, Title } from '@/components/ui';
+import { Body, Button, Eyebrow, HeaderActionButton, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { MAX_CARDS } from '@/features/card/card-library';
 import { useCard } from '@/features/card/card-context';
@@ -56,13 +56,11 @@ export default function CardLibraryScreen() {
                     : 'Build your card locally, then sign in when you are ready to publish and share it.'}
               </Body>
             </View>
-            <Pressable
-              accessibilityRole="button"
+            <HeaderActionButton
               accessibilityLabel="Scan QR code"
-              onPress={() => router.push('/scanner')}
-              style={styles.scanButton}>
+              onPress={() => router.push('/scanner')}>
               <Scan size={22} color={colors.ink} weight="bold" />
-            </Pressable>
+            </HeaderActionButton>
           </View>
         </View>
 
@@ -156,17 +154,6 @@ const styles = StyleSheet.create({
   },
   headerCopy: { flex: 1, gap: spacing.x3 },
   title: { fontSize: 32, lineHeight: 34, letterSpacing: -1.1 },
-  scanButton: {
-    width: 44,
-    height: 44,
-    marginTop: spacing.x2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.round,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
   scroll: { flex: 1, marginTop: spacing.x2 },
   scrollContent: {
     paddingHorizontal: spacing.x5,

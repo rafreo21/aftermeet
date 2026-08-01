@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { AppShell } from "../../../components/AppShell";
 import { PageSkeleton, StatusMessage } from "../../../components/AsyncState";
@@ -16,8 +18,6 @@ import {
   fetchAllConnectionsMerged,
   type ConnectionItem,
 } from "../../../../lib/connections";
-import "../../product.css";
-import "../../flow.css";
 
 type Meeting = {
   id: string;
@@ -36,7 +36,13 @@ type FollowUp = {
   personEmail: string;
   status: string;
   dueAt?: string;
+  completedAt?: string;
+  encounterTitle?: string;
 };
+
+type TimelineItem =
+  | { id: string; kind: "meeting"; occurredAt: string; title: string; copy?: string; encounterId: string }
+  | { id: string; kind: "completed"; occurredAt: string; title: string; copy?: string; encounterId: string };
 
 function formatMeetingDate(value?: string) {
   if (!value) return "";
@@ -56,8 +62,8 @@ export default function ConnectionDetailPage() {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     setError("");
     try {
       const connections = await fetchAllConnectionsMerged();
@@ -71,14 +77,14 @@ export default function ConnectionDetailPage() {
       }
 
       const query = new URLSearchParams();
-      query.set("contactId", match.id);
       query.set("sourceId", match.sourceId);
+      if (match.source === "contact") query.set("contactId", match.sourceId);
       if (match.email) query.set("email", match.email);
       if (match.source === "inbound") query.set("exchangeId", match.sourceId);
 
       const [meetingsRes, followUpsRes] = await Promise.all([
         fetch(`/api/encounters?${query.toString()}`, { cache: "no-store" }),
-        fetch("/api/follow-ups", { cache: "no-store" }),
+        fetch(`/api/follow-ups?${query.toString()}`, { cache: "no-store" }),
       ]);
 
       if (meetingsRes.ok) {
@@ -90,13 +96,7 @@ export default function ConnectionDetailPage() {
 
       if (followUpsRes.ok) {
         const payload = await followUpsRes.json() as { followUps?: FollowUp[] };
-        const name = match.name.trim().toLowerCase();
-        const email = (match.email || "").trim().toLowerCase();
-        setFollowUps((payload.followUps ?? []).filter((item) => {
-          if (item.status === "completed" || item.status === "done") return false;
-          if (email && item.personEmail?.trim().toLowerCase() === email) return true;
-          return item.personName?.trim().toLowerCase() === name;
-        }));
+        setFollowUps(payload.followUps ?? []);
       } else {
         setFollowUps([]);
       }
@@ -109,11 +109,48 @@ export default function ConnectionDetailPage() {
   }, [connectionId]);
 
   useEffect(() => {
-    void load();
+    void Promise.resolve().then(() => load());
   }, [load]);
 
-  const meetingPreview = useMemo(() => meetings.slice(0, 3), [meetings]);
-  const followUpPreview = useMemo(() => followUps.slice(0, 2), [followUps]);
+  useEffect(() => {
+    function refreshWhenVisible() {
+      if (document.visibilityState !== "hidden") void load(true);
+    }
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(interval);
+    };
+  }, [load]);
+
+  const openFollowUps = useMemo(
+    () => followUps.filter((item) => item.status !== "completed" && item.status !== "done"),
+    [followUps],
+  );
+  const followUpPreview = useMemo(() => openFollowUps.slice(0, 2), [openFollowUps]);
+  const timeline = useMemo<TimelineItem[]>(() => [
+    ...meetings.map((meeting): TimelineItem => ({
+      id: `meeting-${meeting.id}`,
+      kind: "meeting",
+      occurredAt: meeting.startedAt,
+      title: meeting.title?.trim() || "Meeting",
+      copy: meeting.sharedSummary?.trim(),
+      encounterId: meeting.id,
+    })),
+    ...followUps
+      .filter((item) => (item.status === "completed" || item.status === "done") && item.completedAt)
+      .map((item): TimelineItem => ({
+        id: `follow-up-${item.encounterId}-${item.actionId}`,
+        kind: "completed",
+        occurredAt: item.completedAt || "",
+        title: item.title,
+        copy: item.encounterTitle ? `From ${item.encounterTitle}` : undefined,
+        encounterId: item.encounterId,
+      })),
+  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings]);
 
   async function confirmDelete() {
     if (!connection) return;
@@ -129,17 +166,20 @@ export default function ConnectionDetailPage() {
   }
 
   const captureHref = connection
-    ? `/app/encounters/new?personName=${encodeURIComponent(connection.name)}${connection.email ? `&personEmail=${encodeURIComponent(connection.email)}` : ""}${connection.source === "contact" ? `&contact=${encodeURIComponent(connection.sourceId)}` : ""}`
+    ? `/app/encounters/new?personName=${encodeURIComponent(connection.name)}&sourceId=${encodeURIComponent(connection.sourceId)}${connection.email ? `&personEmail=${encodeURIComponent(connection.email)}` : ""}${connection.source === "contact" ? `&contact=${encodeURIComponent(connection.sourceId)}` : ""}${connection.source === "inbound" ? `&exchangeId=${encodeURIComponent(connection.sourceId)}` : ""}`
     : "/app/encounters/new";
+  const followUpHref = connection
+    ? `/app/followups/new?personName=${encodeURIComponent(connection.name)}&sourceId=${encodeURIComponent(connection.sourceId)}${connection.email ? `&personEmail=${encodeURIComponent(connection.email)}` : ""}${connection.source === "contact" ? `&contactId=${encodeURIComponent(connection.sourceId)}` : ""}${connection.source === "inbound" ? `&exchangeId=${encodeURIComponent(connection.sourceId)}` : ""}`
+    : "/app/followups/new";
 
   return (
     <AppShell
       active="people"
       title={connection?.name || "Connection"}
       subtitle={connection ? connectionSourceLabel(connection.source) : "People you’ve met"}
+      backHref="/app/people"
       actions={
         <div className="header-actions-row">
-          <LinkButton size="small" variant="ghost" href="/app/people"><ArrowLeftIcon size={16} />Back</LinkButton>
           {connection ? (
             <Button size="small" variant="ghost" onClick={() => void confirmDelete()} disabled={deleting} aria-label="Remove connection">
               <TrashIcon size={16} weight="bold" />
@@ -164,24 +204,30 @@ export default function ConnectionDetailPage() {
                   </small>
                 ) : null}
               </div>
-              <LinkButton href={captureHref}><MicrophoneIcon size={16} weight="fill" />Capture</LinkButton>
+              <div className="flow-heading-actions">
+                <LinkButton variant="secondary" href={followUpHref}><PlusIcon size={16} weight="bold" />Follow-up</LinkButton>
+                <LinkButton href={captureHref}><MicrophoneIcon size={16} weight="fill" />Capture</LinkButton>
+              </div>
             </div>
 
-            <section className="connections-section">
+            <section className="connections-section relationship-timeline">
               <div className="connections-section-head">
-                <h2>Meetings</h2>
+                <h2>Relationship timeline</h2>
               </div>
-              {meetingPreview.length ? (
+              {timeline.length ? (
                 <div className="connections-list">
-                  {meetingPreview.map((meeting) => (
-                    <a className="connections-row" key={meeting.id} href={`/app/encounters/${meeting.id}`}>
+                  {timeline.map((item) => (
+                    <Link className="connections-row timeline-row" key={item.id} href={`/app/encounters/${item.encounterId}`} prefetch={false}>
+                      <span className={`timeline-marker ${item.kind}`} aria-hidden="true">
+                        {item.kind === "completed" ? <CheckCircleIcon size={16} weight="fill" /> : <MicrophoneIcon size={16} weight="fill" />}
+                      </span>
                       <div className="connections-copy">
-                        <strong>{meeting.title?.trim() || "Meeting"}</strong>
-                        <span>{formatMeetingDate(meeting.startedAt)}</span>
-                        {meeting.sharedSummary?.trim() ? <small>{meeting.sharedSummary.trim()}</small> : null}
+                        <strong>{item.title}</strong>
+                        <span>{item.kind === "completed" ? "Follow-up completed" : "Meeting"} · {formatMeetingDate(item.occurredAt)}</span>
+                        {item.copy ? <small>{item.copy}</small> : null}
                       </div>
                       <CaretRightIcon size={16} weight="bold" />
-                    </a>
+                    </Link>
                   ))}
                 </div>
               ) : (
@@ -196,17 +242,17 @@ export default function ConnectionDetailPage() {
               <section className="connections-section">
                 <div className="connections-section-head">
                   <h2>Follow-ups</h2>
-                  {followUps.length > 2 ? <LinkButton size="small" variant="ghost" href="/app/followups">View all</LinkButton> : null}
+                  {openFollowUps.length > 2 ? <LinkButton size="small" variant="ghost" href="/app/followups">View all</LinkButton> : null}
                 </div>
                 <div className="connections-list">
                   {followUpPreview.map((item) => (
-                    <a className="connections-row" key={`${item.encounterId}-${item.actionId}`} href="/app/followups">
+                    <Link className="connections-row" key={`${item.encounterId}-${item.actionId}`} href="/app/followups" prefetch={false}>
                       <div className="connections-copy">
                         <strong>{item.title}</strong>
                         <span>{item.dueAt ? `Due ${item.dueAt}` : "No due date"}</span>
                       </div>
                       <CaretRightIcon size={16} weight="bold" />
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </section>

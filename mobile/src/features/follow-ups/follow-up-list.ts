@@ -39,7 +39,9 @@ export function sortFollowUpGroups(groups: FollowUpGroup[], sort: FollowUpSort) 
     return next;
   }
   if (sort === 'recent') {
-    next.sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+    next.sort((left, right) => (
+      (right.completedAt || right.startedAt).localeCompare(left.completedAt || left.startedAt)
+    ));
     return next;
   }
   const flattened = sortFollowUps(next.flatMap((group) => group.items));

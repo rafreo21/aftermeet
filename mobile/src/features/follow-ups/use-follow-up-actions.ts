@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
-import { completeFollowUp } from '@/features/follow-ups/follow-up-api';
+import { completeFollowUp, reopenFollowUp } from '@/features/follow-ups/follow-up-api';
 import {
   applyAudienceToContext,
   contactContextFromCard,
@@ -64,7 +64,7 @@ export function useFollowUpActions(
 
   useEffect(() => {
     if (!accessToken) {
-      setCalendarProvider(null);
+      void Promise.resolve().then(() => setCalendarProvider(null));
       return;
     }
     void fetchConnectedAccounts(accessToken)
@@ -150,6 +150,21 @@ export function useFollowUpActions(
     }
   }, [accessToken]);
 
+  const markOpen = useCallback(async (
+    item: FollowUpItem,
+    onUpdated?: () => void,
+  ) => {
+    if (!accessToken) return;
+    const key = `${item.encounterId}-${item.actionId}`;
+    setCompletingId(key);
+    try {
+      await reopenFollowUp(accessToken, item.encounterId, item.actionId);
+      onUpdated?.();
+    } finally {
+      setCompletingId(null);
+    }
+  }, [accessToken]);
+
   const closeMissing = useCallback(() => {
     setMissingOpen(false);
     setMissingExecution(null);
@@ -184,6 +199,7 @@ export function useFollowUpActions(
   return {
     runFollowUp,
     markComplete,
+    markOpen,
     completingId,
     missingOpen,
     missingExecution,

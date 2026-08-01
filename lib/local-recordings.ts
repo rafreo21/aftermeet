@@ -9,10 +9,14 @@ export type LocalRecordingMetadata = {
   retention: AudioRetention;
   expiresAt: string | null;
   createdAt: string;
-  audioLocation?: "user_device" | "server";
+  audioLocation?: "user_device" | "server" | "google_drive" | "onedrive";
   storagePath?: string;
   sharedAudioUrl?: string;
   cloudExpiresAt?: string | null;
+  driveFileId?: string;
+  driveWebViewUrl?: string;
+  oneDriveItemId?: string;
+  oneDriveWebUrl?: string;
 };
 
 const DATABASE_NAME = "aftermeet-private-audio";

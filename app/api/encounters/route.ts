@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createApiSupabaseClient, resolveApiUser } from "../../../lib/auth/api-request";
-import { encounterFromApi, type EncounterParticipant } from "../../../lib/encounters";
+import { encounterFromApi, normalizeEncounterActions, type EncounterParticipant } from "../../../lib/encounters";
 import { fetchParticipantsByEncounter } from "../../../lib/encounter-participants-server";
 import { fetchGuestFollowUpsByEncounter } from "../../../lib/encounter-guest-follow-ups-server";
+import { encounterMatchesConnection } from "../../../lib/follow-ups-server";
 import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
@@ -92,13 +93,12 @@ export async function GET(request: Request) {
     guest_follow_ups: guestFollowUpsByEncounter.get(row.id as string) ?? [],
   }));
   if (contactId || sourceId || exchangeId || email) {
-    encounters = encounters.filter((encounter) => {
-      if (contactId && encounter.contactId === contactId) return true;
-      if (sourceId && encounter.contactId === sourceId) return true;
-      if (exchangeId && encounter.exchangeId === exchangeId) return true;
-      if (email && encounter.personEmail.trim().toLowerCase() === email) return true;
-      return false;
-    });
+    encounters = encounters.filter((encounter) => encounterMatchesConnection(encounter, {
+      connectionId: contactId,
+      sourceId,
+      exchangeId,
+      email,
+    }));
   }
 
   return NextResponse.json({
@@ -135,6 +135,9 @@ export async function POST(request: Request) {
     : null;
 
   const recordingMetadata = mergeRecordingMetadataForSave(recording, existingRecording);
+  if (recordingMetadata?.captureSession && body.status !== "draft") {
+    recordingMetadata.captureSession = null;
+  }
 
   const participants = parseIncomingParticipants(body.participants);
   const projection = participants.length
@@ -143,6 +146,10 @@ export async function POST(request: Request) {
         personName: typeof body.personName === "string" ? body.personName.trim() : "",
         personEmail: typeof body.personEmail === "string" ? body.personEmail.trim() : "",
       };
+  const actions = normalizeEncounterActions(body.actions, participants, {
+    name: projection.personName,
+    email: projection.personEmail,
+  });
 
   const { error } = await supabase.from("encounters").upsert({
     id: body.id,
@@ -161,7 +168,7 @@ export async function POST(request: Request) {
     transcript: typeof body.transcript === "string" ? body.transcript : "",
     private_notes: typeof body.privateNotes === "string" ? body.privateNotes : "",
     shared_summary: typeof body.sharedSummary === "string" ? body.sharedSummary : "",
-    actions: Array.isArray(body.actions) ? body.actions : [],
+    actions,
     recording_metadata: recordingMetadata,
     status: typeof body.status === "string" && allowedStatuses.has(body.status) ? body.status : "draft",
     share_token: typeof body.shareToken === "string" ? body.shareToken : crypto.randomUUID().replaceAll("-", ""),
@@ -172,9 +179,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The encounter was saved on this device but could not sync." }, { status: 500 });
   }
 
-  if (participants.length) {
-    await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
-  }
+  await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
 
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -1,37 +1,38 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { AppShell } from "../components/AppShell";
 import { LinkButton } from "../components/Button";
-import "./product.css";
-import "./flow.css";
 
-type FollowUpNudge = { openCount: number };
-
+type FollowUpNudge = { openCount: number; completedCount: number; completionRate: number };
 export default function HomeDashboard() {
-  const [nudge, setNudge] = useState<FollowUpNudge>({ openCount: 0 });
+  const [nudge, setNudge] = useState<FollowUpNudge>({ openCount: 0, completedCount: 0, completionRate: 0 });
 
-  function loadNudge() {
-    return fetch("/api/follow-ups", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const payload = await response.json() as { followUps?: Array<{ status?: string }> };
-        const openCount = (payload.followUps ?? []).filter((item) => item.status !== "done").length;
-        setNudge({ openCount });
-      })
-      .catch(() => undefined);
+  function loadDashboard() {
+    return fetch("/api/follow-ups", { cache: "no-store" }).then(async (followUpsResponse) => {
+      if (followUpsResponse.ok) {
+        const payload = await followUpsResponse.json() as { followUps?: Array<{ status?: string }> };
+        const items = payload.followUps ?? [];
+        const completedCount = items.filter((item) => item.status === "completed").length;
+        const openCount = items.filter((item) => item.status !== "completed").length;
+        const completionRate = items.length ? Math.round((completedCount / items.length) * 100) : 0;
+        setNudge({ openCount, completedCount, completionRate });
+      }
+    }).catch(() => undefined);
   }
 
   useEffect(() => {
-    void loadNudge();
+    void loadDashboard();
     function refreshWhenVisible() {
-      if (document.visibilityState !== "hidden") void loadNudge();
+      if (document.visibilityState !== "hidden") void loadDashboard();
     }
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
@@ -58,9 +59,10 @@ export default function HomeDashboard() {
             <p>Same loop as mobile: show QR first, capture what mattered, then finish the follow-up.</p>
           </div>
           <div className="dashboard-score">
-            <strong>{nudge.openCount}</strong>
-            <span>open follow-ups</span>
-            <small>{nudge.openCount ? "Finish what’s waiting." : "You’re clear — share or capture next."}</small>
+            <strong>{nudge.completedCount}</strong>
+            <span>follow-ups completed</span>
+            <small>{nudge.completedCount ? `${nudge.completionRate}% completion rate · ${nudge.openCount} still open` : nudge.openCount ? `${nudge.openCount} ready to complete` : "Complete your first follow-up."}</small>
+            <LinkButton size="small" variant="secondary" href="/app/followups/new"><PlusIcon size={15} weight="bold" />Add follow-up</LinkButton>
           </div>
         </section>
 
@@ -79,12 +81,12 @@ export default function HomeDashboard() {
               ["03", UsersThreeIcon, "Connections", "People who shared with you and cards you saved.", "/app/people"],
               ["04", PaperPlaneTiltIcon, "Follow-ups", "Finish the next promised action.", "/app/followups"],
             ].map(([number, Icon, title, text, href]) => (
-              <a className="journey-step" href={String(href)} key={String(number)}>
+              <Link className="journey-step" href={String(href)} key={String(number)} prefetch={false}>
                 <span>{String(number)}</span>
                 <Icon size={23} weight="bold" />
                 <div><h3>{String(title)}</h3><p>{String(text)}</p></div>
                 <ArrowRightIcon size={17} weight="bold" />
-              </a>
+              </Link>
             ))}
           </div>
         </section>

@@ -1,4 +1,5 @@
 import {
+  ArrowCounterClockwise,
   CalendarBlank,
   Check,
   CheckCircle,
@@ -23,6 +24,7 @@ type FollowUpCellProps = {
   item: FollowUpItem;
   onPress: () => void;
   onComplete: () => void;
+  onReopen?: () => void;
   completing?: boolean;
 };
 
@@ -41,7 +43,7 @@ function channelIcon(channel: FollowUpItem['channel']): ReactNode {
   }
 }
 
-export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUpCellProps) {
+export function FollowUpCell({ item, onPress, onComplete, onReopen, completing }: FollowUpCellProps) {
   const isCompleted = item.status === 'completed';
   const dueLabel = formatDueLabel(item.dueAt);
   const tone = isCompleted ? 'default' : dueTone(item.dueAt);
@@ -69,7 +71,7 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
           ) : null}
         </View>
         {isCompleted ? (
-          <Text style={styles.dueCompleted}>Completed</Text>
+          <Text style={styles.dueCompleted}>{completedLabel(item.completedAt)}</Text>
         ) : dueLabel ? (
           <Text style={[
             styles.due,
@@ -81,9 +83,20 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
         ) : null}
       </Pressable>
       {isCompleted ? (
-        <View style={styles.check} accessibilityLabel="Follow-up completed">
-          <CheckCircle size={18} color={colors.ink} weight="fill" />
-        </View>
+        onReopen ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reopen completed follow-up"
+            disabled={completing}
+            onPress={onReopen}
+            style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
+            <ArrowCounterClockwise size={18} color={colors.ink} weight="bold" />
+          </Pressable>
+        ) : (
+          <View style={styles.check}>
+            <CheckCircle size={18} color={colors.muted} weight="fill" />
+          </View>
+        )
       ) : (
         <Pressable
           accessibilityRole="button"
@@ -96,6 +109,13 @@ export function FollowUpCell({ item, onPress, onComplete, completing }: FollowUp
       )}
     </View>
   );
+}
+
+function completedLabel(value?: string) {
+  if (!value) return 'Completed';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Completed';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 const styles = StyleSheet.create({

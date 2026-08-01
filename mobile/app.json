@@ -104,7 +104,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow AfterMeet to record meetings you choose to capture."
+          "microphonePermission": "Allow AfterMeet to record meetings you choose to capture.",
+          "enableBackgroundRecording": true
         }
       ],
       [

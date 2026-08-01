@@ -9,6 +9,10 @@ export type SavedDirectoryContact = {
   email: string;
   phone?: string;
   linkedinUrl?: string;
+  whatsappUrl?: string;
+  instagramUrl?: string;
+  xUrl?: string;
+  tiktokUrl?: string;
   company: string;
   role: string;
   exchangeId?: string;
@@ -25,7 +29,7 @@ export type DirectoryFieldSnapshot = {
   methods: string[];
 };
 
-const CONTACT_METHOD_TYPES = new Set(['email', 'phone', 'whatsapp', 'linkedin', 'instagram', 'website', 'x']);
+const CONTACT_METHOD_TYPES = new Set(['email', 'phone', 'whatsapp', 'linkedin', 'instagram', 'website', 'x', 'tiktok']);
 
 function normalizeValue(value: string) {
   return value.trim().toLowerCase();
@@ -86,6 +90,10 @@ export function directorySnapshotFromContact(contact: SavedDirectoryContact): Di
   if (contact.email.trim()) methods.push(`email:${normalizeValue(contact.email)}`);
   if (contact.phone?.trim()) methods.push(`phone:${normalizeValue(contact.phone)}`);
   if (contact.linkedinUrl?.trim()) methods.push(`linkedin:${normalizeValue(contact.linkedinUrl)}`);
+  if (contact.whatsappUrl?.trim()) methods.push(`whatsapp:${normalizeValue(contact.whatsappUrl)}`);
+  if (contact.instagramUrl?.trim()) methods.push(`instagram:${normalizeValue(contact.instagramUrl)}`);
+  if (contact.xUrl?.trim()) methods.push(`x:${normalizeValue(contact.xUrl)}`);
+  if (contact.tiktokUrl?.trim()) methods.push(`tiktok:${normalizeValue(contact.tiktokUrl)}`);
 
   return {
     name: `${contact.firstName} ${contact.lastName}`.trim(),

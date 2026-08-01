@@ -9,6 +9,10 @@ export type ContactRow = {
   email: string;
   phone: string;
   linkedin_url: string;
+  whatsapp_url: string;
+  instagram_url: string;
+  x_url: string;
+  tiktok_url: string;
   company: string;
   role: string;
   company_website: string;
@@ -36,6 +40,10 @@ export function contactFromRow(row: ContactRow): Contact {
     email: row.email,
     phone: row.phone || undefined,
     linkedinUrl: row.linkedin_url || undefined,
+    whatsappUrl: row.whatsapp_url || undefined,
+    instagramUrl: row.instagram_url || undefined,
+    xUrl: row.x_url || undefined,
+    tiktokUrl: row.tiktok_url || undefined,
     company: row.company,
     role: row.role,
     companyWebsite: row.company_website || undefined,
@@ -64,6 +72,10 @@ export function contactToRow(
     email: contact.email.trim(),
     phone: contact.phone?.trim() ?? "",
     linkedin_url: contact.linkedinUrl?.trim() ?? "",
+    whatsapp_url: contact.whatsappUrl?.trim() ?? "",
+    instagram_url: contact.instagramUrl?.trim() ?? "",
+    x_url: contact.xUrl?.trim() ?? "",
+    tiktok_url: contact.tiktokUrl?.trim() ?? "",
     company: contact.company.trim(),
     role: contact.role.trim(),
     company_website: contact.companyWebsite?.trim() ?? "",

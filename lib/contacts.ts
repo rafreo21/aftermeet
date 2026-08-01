@@ -9,6 +9,10 @@ export type Contact = {
   personalEmail?: string;
   phone?: string;
   linkedinUrl?: string;
+  whatsappUrl?: string;
+  instagramUrl?: string;
+  xUrl?: string;
+  tiktokUrl?: string;
   company: string;
   role: string;
   companyWebsite?: string;
@@ -132,6 +136,10 @@ export function contactFromPublicCard(
     email?: string;
     phone?: string;
     linkedinUrl?: string;
+    whatsappUrl?: string;
+    instagramUrl?: string;
+    xUrl?: string;
+    tiktokUrl?: string;
   },
   source: Extract<ContactSource, "badge" | "scan"> = "scan",
 ): Contact {
@@ -143,6 +151,10 @@ export function contactFromPublicCard(
     email: card.email ?? "",
     phone: card.phone || undefined,
     linkedinUrl: card.linkedinUrl || undefined,
+    whatsappUrl: card.whatsappUrl || undefined,
+    instagramUrl: card.instagramUrl || undefined,
+    xUrl: card.xUrl || undefined,
+    tiktokUrl: card.tiktokUrl || undefined,
     company: card.company ?? "",
     role: card.role ?? "",
     context: `Met via ${source === "badge" ? "badge scan" : "QR scan"}.`,

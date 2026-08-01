@@ -78,6 +78,7 @@ function withoutPreviewCards(items: MobileCard[]) {
 
 export function CardProvider({ children }: PropsWithChildren) {
   const { session } = useAuth();
+  const accessToken = session?.access_token;
   const [cards, setCards] = useState<MobileCard[]>([]);
   const [activeCardId, setActiveCardIdState] = useState('');
   const [loading, setLoading] = useState(true);
@@ -88,8 +89,10 @@ export function CardProvider({ children }: PropsWithChildren) {
   const cardsRef = useRef(cards);
   const activeCardIdRef = useRef(activeCardId);
   const dirtyCardIdsRef = useRef(new Set<string>());
-  cardsRef.current = cards;
-  activeCardIdRef.current = activeCardId;
+  useEffect(() => {
+    cardsRef.current = cards;
+    activeCardIdRef.current = activeCardId;
+  }, [activeCardId, cards]);
 
   const visibleCards = useMemo(() => withoutPreviewCards(cards), [cards]);
 
@@ -151,15 +154,16 @@ export function CardProvider({ children }: PropsWithChildren) {
       const env = readEnv();
       const urlForCard = (target: MobileCard) =>
         `${env?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`;
-      await syncCardToolsForCard(normalized, urlForCard, session?.access_token, active);
+      await syncCardToolsForCard(normalized, urlForCard, accessToken, active);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const saveRemoteCard = useCallback(async (card: MobileCard, options?: { strictImages?: boolean }) => {
-    if (!session?.access_token) return card;
+    if (!accessToken) return card;
+    const token = accessToken;
 
     async function persistPayload(payload: MobileCard) {
-      const response = await mobileFetch('/api/cards', session!.access_token!, {
+      const response = await mobileFetch('/api/cards', token, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mobileCardToLibraryPayload(payload)),
@@ -180,7 +184,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     if (!payload.id) return payload;
 
     try {
-      const uploaded = await uploadCardImagesForPublish(session.access_token, payload.id, {
+      const uploaded = await uploadCardImagesForPublish(token, payload.id, {
         photo: payload.photo || '',
         coverPhoto: payload.coverPhoto || '',
         companyLogo: payload.showCompanyDetails !== false ? (payload.companyLogo || '') : '',
@@ -198,7 +202,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     }
 
     return payload;
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const sync = useCallback(async () => {
     const supabase = getSupabase();
@@ -309,7 +313,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     const nextCards = [...currentCards, card];
     await persistCards(nextCards, card.id!);
     await setCardDirty(card.id!, true);
-    if (session?.access_token) {
+    if (accessToken) {
       try {
         const saved = await saveRemoteCard(card);
         const syncedCards = nextCards.map((item) => (item.id === card.id ? saved : item));
@@ -321,7 +325,7 @@ export function CardProvider({ children }: PropsWithChildren) {
       }
     }
     return card;
-  }, [persistCards, saveRemoteCard, session?.access_token, setCardDirty]);
+  }, [accessToken, persistCards, saveRemoteCard, setCardDirty]);
 
   const updateCardById = useCallback(async (id: string, changes: Partial<MobileCard>) => {
     const current = cardsRef.current.find((item) => item.id === id);
@@ -330,7 +334,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     const nextCards = cardsRef.current.map((item) => (item.id === id ? nextCard : item));
     await persistCards(nextCards);
     await setCardDirty(id, true);
-    if (session?.access_token) {
+    if (accessToken) {
       try {
         const saved = await saveRemoteCard(nextCard);
         if (saved) {
@@ -346,12 +350,12 @@ export function CardProvider({ children }: PropsWithChildren) {
         await syncCardToolsForCard(
           cardsRef.current,
           (target) => `${readEnv()?.publicCardBaseUrl || 'http://localhost:3000'}/c/${target.slug}`,
-          session.access_token,
+          accessToken,
           synced,
         );
       }
     }
-  }, [persistCards, saveRemoteCard, session?.access_token, setCardDirty]);
+  }, [accessToken, persistCards, saveRemoteCard, setCardDirty]);
 
   const cardPublicUrl = useCallback((target: MobileCard) => {
     const env = readEnv();

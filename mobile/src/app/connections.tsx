@@ -63,6 +63,7 @@ function ConnectionRow({ connection, onPress }: { connection: ConnectionItem; on
 
 export function ConnectionsScreen({ showBack = true }: { showBack?: boolean }) {
   const { session } = useAuth();
+  const accessToken = session?.access_token;
   const insets = useAppInsets();
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +90,7 @@ export function ConnectionsScreen({ showBack = true }: { showBack?: boolean }) {
   }, []);
 
   const load = useCallback(async (background = false) => {
-    if (!session?.access_token) {
+    if (!accessToken) {
       setConnections([]);
       setLoading(false);
       setEnriching(false);
@@ -99,11 +100,11 @@ export function ConnectionsScreen({ showBack = true }: { showBack?: boolean }) {
     setErrorSheetOpen(false);
     setErrorMessage('');
     try {
-      const merged = await fetchAllConnectionsMerged(session.access_token);
+      const merged = await fetchAllConnectionsMerged(accessToken);
       setConnections(merged);
       setLoading(false);
       setEnriching(true);
-      void enrichConnectionPhotos(session.access_token, merged)
+      void enrichConnectionPhotos(accessToken, merged)
         .then(setConnections)
         .finally(() => setEnriching(false));
     } catch (caught) {
@@ -112,7 +113,7 @@ export function ConnectionsScreen({ showBack = true }: { showBack?: boolean }) {
       setLoading(false);
       setEnriching(false);
     }
-  }, [session?.access_token, showError]);
+  }, [accessToken, showError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,13 +129,13 @@ export function ConnectionsScreen({ showBack = true }: { showBack?: boolean }) {
   );
 
   async function saveManualContact(input: { name: string; email: string; role: string; company: string }) {
-    if (!session?.access_token) {
+    if (!accessToken) {
       showError('Sign in to add connections.');
       return;
     }
     setSavingManual(true);
     try {
-      await createManualContact(session.access_token, input);
+      await createManualContact(accessToken, input);
       setManualOpen(false);
       setAddOpen(false);
       showSuccess(`${input.name.trim()} was added to your connections.`);

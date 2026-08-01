@@ -8,7 +8,7 @@ import { MakePrimarySheet } from '@/components/make-primary-sheet';
 import { OnlyCardPrimarySheet } from '@/components/only-card-primary-sheet';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { MobileCardPreview } from '@/components/mobile-card';
-import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
+import { BackButton, Button, Eyebrow, HeaderActionButton } from '@/components/ui';
 import { cardDisplayLabel } from '@/features/card/card-display';
 import { useCard } from '@/features/card/card-context';
 import { useAppInsets, useTabBarHeight } from '@/lib/safe-area';
@@ -114,20 +114,17 @@ export default function CardDetailScreen() {
           <View style={styles.headerRow}>
             <BackButton onPress={() => router.back()} />
             <View style={styles.headerActions}>
-              <Pressable
-                accessibilityRole="button"
+              <HeaderActionButton
                 accessibilityLabel="Edit card"
-                onPress={() => router.push(`/edit-card?id=${selected.id}`)}
-                style={styles.headerIconButton}>
+                onPress={() => router.push(`/edit-card?id=${selected.id}`)}>
                 <PencilSimple size={20} color={colors.ink} weight="bold" />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
+              </HeaderActionButton>
+              <HeaderActionButton
                 accessibilityLabel="Delete card"
                 onPress={() => setDeleteOpen(true)}
-                style={[styles.headerIconButton, styles.headerIconButtonDanger]}>
+                style={styles.headerIconButtonDanger}>
                 <Trash size={20} color={colors.danger} weight="bold" />
-              </Pressable>
+              </HeaderActionButton>
             </View>
           </View>
           <View style={styles.headerCopy}>
@@ -241,17 +238,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.x2,
   },
-  headerIconButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.round,
-    backgroundColor: colors.surface,
-  },
   headerIconButtonDanger: {
-    borderWidth: 1,
-    borderColor: colors.line,
+    backgroundColor: colors.surface,
   },
   headerCopy: { gap: spacing.x2 },
   detailTitle: {

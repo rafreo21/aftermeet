@@ -21,7 +21,16 @@ export type EncounterExtractionDraft = {
   privateNotes: string;
   followUp: string;
   followUpType: Encounter["actions"][number]["channel"];
+  commitments?: EncounterExtractionCommitment[];
   uncertainFields?: string[];
+};
+
+export type EncounterExtractionCommitment = {
+  title: string;
+  owner: "me" | "guest";
+  ownerName: string;
+  channel: Encounter["actions"][number]["channel"];
+  dueAt: string;
 };
 
 export type ExtractionOwnerContext = {
@@ -33,6 +42,55 @@ export type ExtractionOwnerContext = {
     sharedSummarySample?: string;
   }>;
 };
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
+export function normalizeExtractionCommitments(
+  commitments: EncounterExtractionCommitment[],
+  ownerContext?: ExtractionOwnerContext,
+  fallbackGuestName = "",
+): EncounterExtractionCommitment[] {
+  const ownerNames = new Set(
+    (ownerContext?.ownerNames ?? [])
+      .map((name) => name.trim().toLocaleLowerCase())
+      .filter(Boolean),
+  );
+  const seen = new Set<string>();
+
+  return commitments.flatMap((commitment) => {
+    const title = commitment.title.trim();
+    if (!title) return [];
+
+    const suppliedOwnerName = commitment.ownerName.trim();
+    const suppliedOwnerIsMe = suppliedOwnerName.toLocaleLowerCase() === "me"
+      || ownerNames.has(suppliedOwnerName.toLocaleLowerCase());
+    const owner = suppliedOwnerIsMe ? "me" : commitment.owner;
+    const ownerName = owner === "me"
+      ? (ownerContext?.ownerNames[0]?.trim() || "Me")
+      : (suppliedOwnerName || fallbackGuestName.trim() || "Guest");
+    const dueAt = isValidIsoDate(commitment.dueAt.trim()) ? commitment.dueAt.trim() : "";
+    const key = [title, owner, ownerName, commitment.channel]
+      .map((value) => value.toLocaleLowerCase())
+      .join("|");
+    if (seen.has(key)) return [];
+    seen.add(key);
+
+    return [{
+      title,
+      owner,
+      ownerName,
+      channel: commitment.channel,
+      dueAt,
+    }];
+  });
+}
 
 export function buildHeuristicDraft(
   transcript: string,
@@ -78,6 +136,13 @@ export function buildHeuristicDraft(
     privateNotes,
     followUp,
     followUpType: inferFollowUpType(`${followUp} ${clean}`),
+    commitments: followUp ? [{
+      title: followUp,
+      owner: "me",
+      ownerName: ownerNames[0] || "Me",
+      channel: inferFollowUpType(`${followUp} ${clean}`),
+      dueAt: "",
+    }] : [],
   };
 }
 

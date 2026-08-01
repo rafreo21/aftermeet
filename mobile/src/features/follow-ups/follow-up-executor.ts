@@ -38,10 +38,16 @@ export function contactContextFromCard(
 }
 
 export function contactContextFromFollowUp(item: FollowUpItem): ActionContactContext {
+  const methods = item.contactMethods ?? [];
   return {
     personName: item.personName,
-    personEmail: item.personEmail,
-    methods: [],
+    personEmail: item.personEmail.trim()
+      || methods.find((method) => method.type === 'email')?.value?.trim()
+      || '',
+    phone: methods.find((method) => method.type === 'phone')?.value?.trim()
+      || methods.find((method) => method.type === 'whatsapp')?.value?.trim()
+      || '',
+    methods,
     encounterTitle: item.encounterTitle,
   };
 }

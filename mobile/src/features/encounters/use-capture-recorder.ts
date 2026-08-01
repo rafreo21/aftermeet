@@ -61,6 +61,7 @@ type UseCaptureRecorderOptions = {
  */
 const RECORDING_OPTIONS: RecordingOptions = {
   extension: '.m4a',
+  directory: 'document',
   sampleRate: 16000,
   numberOfChannels: 1,
   bitRate: 32000,
@@ -123,12 +124,14 @@ export function useCaptureRecorder({
   const transcribeFromServerRef = useRef(transcribeFromServer);
   const captureModeRef = useRef<SpeechCaptureMode>(captureMode);
 
-  onErrorRef.current = onError;
-  onImportReadyRef.current = onImportReady;
-  onImportStartedRef.current = onImportStarted;
-  onTranscriptFinalizedRef.current = onTranscriptFinalized;
-  transcribeFromServerRef.current = transcribeFromServer;
-  captureModeRef.current = captureMode;
+  useEffect(() => {
+    onErrorRef.current = onError;
+    onImportReadyRef.current = onImportReady;
+    onImportStartedRef.current = onImportStarted;
+    onTranscriptFinalizedRef.current = onTranscriptFinalized;
+    transcribeFromServerRef.current = transcribeFromServer;
+    captureModeRef.current = captureMode;
+  }, [captureMode, onError, onImportReady, onImportStarted, onTranscriptFinalized, transcribeFromServer]);
 
   const liveTranscript = useLiveTranscript({ transcript, onTranscriptChange });
 
@@ -181,6 +184,7 @@ export function useCaptureRecorder({
     void setAudioModeAsync({
       allowsRecording: true,
       playsInSilentMode: true,
+      allowsBackgroundRecording: true,
     }).catch(() => {});
   }, [usingSpeechCapture]);
 
@@ -307,6 +311,7 @@ export function useCaptureRecorder({
     await setAudioModeAsync({
       allowsRecording: true,
       playsInSilentMode: true,
+      allowsBackgroundRecording: true,
     });
     await audioRecorder.prepareToRecordAsync(RECORDING_OPTIONS);
     audioRecorder.record();
@@ -481,7 +486,9 @@ export function useCaptureRecorder({
     usingSpeechCapture,
   ]);
 
-  stopRecordingRef.current = stopRecording;
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  }, [stopRecording]);
 
   const awaitPendingFinish = useCallback(async () => {
     if (finishPromiseRef.current) await finishPromiseRef.current;

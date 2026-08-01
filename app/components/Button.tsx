@@ -1,4 +1,5 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
+import Link from "next/link";
 
 type SharedButtonProps = {
   children: ReactNode;
@@ -34,7 +35,7 @@ function buttonClasses(
   return [
     "inline-flex items-center justify-center gap-2 rounded-md font-bold",
     "outline-none transition-colors focus-visible:ring-4",
-    "disabled:cursor-not-allowed disabled:bg-[#e7eae5] disabled:text-[#858b82] disabled:shadow-none",
+    "disabled:cursor-not-allowed disabled:bg-[#e7eae5] disabled:text-[#5f675c] disabled:shadow-none aria-disabled:cursor-not-allowed aria-disabled:bg-[#e7eae5] aria-disabled:text-[#5f675c] aria-disabled:shadow-none",
     variants[variant],
     sizes[size],
     fullWidth ? "w-full" : "",
@@ -85,6 +86,13 @@ export function LinkButton({
       </span>
     );
   }
+  if (href.startsWith("/")) {
+    return (
+      <Link {...props} href={href} prefetch={false} className={classes}>
+        {children}
+      </Link>
+    );
+  }
   return (
     <a {...props} href={href} className={classes}>
       {children}
@@ -123,14 +131,22 @@ export function IconLinkButton({
   "aria-label": ariaLabel,
   ...props
 }: Omit<LinkButtonProps, "fullWidth"> & { "aria-label": string }) {
+  const classes = buttonClasses(variant, size, false, [
+    size === "small" ? "h-9 w-9 min-h-9 p-0" : "h-11 w-11 min-h-11 p-0",
+    className,
+  ].join(" "));
+  if (typeof props.href === "string" && props.href.startsWith("/")) {
+    return (
+      <Link {...props} href={props.href} prefetch={false} aria-label={ariaLabel} className={classes}>
+        {children}
+      </Link>
+    );
+  }
   return (
     <a
       {...props}
       aria-label={ariaLabel}
-      className={buttonClasses(variant, size, false, [
-        size === "small" ? "h-9 w-9 min-h-9 p-0" : "h-11 w-11 min-h-11 p-0",
-        className,
-      ].join(" "))}
+      className={classes}
     >
       {children}
     </a>

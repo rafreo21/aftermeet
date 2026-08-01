@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
@@ -42,11 +43,10 @@ import { themeCoverBadgeStyle, themeForegroundColor, themeSurfaceStyle } from ".
 import { hydrateCardLibraryFromServer, queueCardSync } from "../../../lib/card-library-sync";
 import { applyCardTemplate } from "../../../lib/card-templates";
 import type { CardTemplate } from "../../../lib/workspace/types";
-import "../product.css";
-import "../flow.css";
 
 type Method = { id: string; type: string; value: string; label: string };
 type Profile = LibraryCard & { email: string; website: string };
+type ShareTool = "qr" | "signature" | "background" | "watch" | "widgets" | "wallet";
 const fallback: Profile = {
   id: "primary-card", slug: "alex-morgan", label: "My primary card",
   name: "Alex Morgan", role: "Independent Consultant", company: "Northstar Advisory",
@@ -60,6 +60,7 @@ const fallback: Profile = {
 };
 
 export default function CardsPage() {
+  const router = useRouter();
   const user = useAppUser();
   const [profile, setProfile] = useState(fallback);
   const [cards, setCards] = useState<LibraryCard[]>([]);
@@ -78,6 +79,7 @@ export default function CardsPage() {
   const [qrError, setQrError] = useState("");
   const [shareUrl, setShareUrl] = useState("http://localhost:3000/c/alex-morgan");
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareTool, setShareTool] = useState<ShareTool>("qr");
   const cardTheme = useMemo(() => themeSurfaceStyle(profile.theme), [profile.theme]);
 
   function toProfile(card: LibraryCard): Profile {
@@ -163,8 +165,10 @@ export default function CardsPage() {
 
   useEffect(() => {
     if (!profile.slug) {
-      setQr("");
-      setQrSvg("");
+      void Promise.resolve().then(() => {
+        setQr("");
+        setQrSvg("");
+      });
       return;
     }
 
@@ -174,9 +178,11 @@ export default function CardsPage() {
       errorCorrectionLevel: "H",
       color: { dark: "#163300", light: "#ffffff" },
     } as const;
-    setQr("");
-    setQrSvg("");
-    setQrError("");
+    void Promise.resolve().then(() => {
+      setQr("");
+      setQrSvg("");
+      setQrError("");
+    });
     Promise.all([
       fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=900`)
         .then(async (response) => {
@@ -224,7 +230,7 @@ export default function CardsPage() {
     });
     upsertLibraryCard(localStorage, card);
     queueCardSync(card);
-    window.location.href = `/app/card/edit?id=${card.id}`;
+    router.push(`/app/card/edit?id=${card.id}`);
   }
 
   function createCardFromTemplate(template: CardTemplate) {
@@ -236,7 +242,7 @@ export default function CardsPage() {
     });
     upsertLibraryCard(localStorage, card);
     queueCardSync(card);
-    window.location.href = `/app/card/edit?id=${card.id}`;
+    router.push(`/app/card/edit?id=${card.id}`);
   }
 
   function deleteActiveCard() {
@@ -430,6 +436,29 @@ export default function CardsPage() {
             </div>
           </article>
           <section className="inline-qr-panel">
+            <div className="card-tools-tabs" role="tablist" aria-label="Card sharing tools">
+              {([
+                ["qr", "QR code"],
+                ["signature", "Email signature"],
+                ["background", "Background"],
+                ["watch", "Watch"],
+                ["widgets", "Widgets"],
+                ["wallet", "Wallet & NFC"],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={shareTool === id}
+                  className={shareTool === id ? "active" : ""}
+                  onClick={() => setShareTool(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="card-tool-content" role="tabpanel">
+            {shareTool === "qr" ? <>
             <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Let someone scan this card</h2><p>They only need their phone camera. No app or account required.</p></div></div>
             <ol className="scan-steps">
               <li><span>1</span>Open the camera</li>
@@ -451,7 +480,8 @@ export default function CardsPage() {
               {qr && <LinkButton variant="secondary" href={qr} download={qr.startsWith("data:image/svg+xml") ? "aftermeet-qr.svg" : "aftermeet-qr.png"}><DownloadSimpleIcon size={18} weight="bold" />Download QR</LinkButton>}
             </div>
             <Button fullWidth size="small" variant="ghost" disabled={!qrSvg} onClick={copySvg}><CopyIcon size={16} weight="bold" />{svgCopied ? "SVG copied" : qrSvg ? "Copy QR as SVG" : "Generating QR…"}</Button>
-            <section className="signature-panel">
+            </> : null}
+            {shareTool === "signature" ? <section className="signature-panel card-tool-section">
               <div className="inline-qr-head"><span><EnvelopeSimpleIcon size={22} weight="bold" /></span><div><h2>Email signature</h2><p>Square photo, name, title, and contact details. Ready for Gmail or Outlook.</p></div></div>
               <div className="signature-preview-card">
                 <div className="signature-preview-photo">{photo ? <img src={photo} alt="" /> : initials}</div>
@@ -473,8 +503,8 @@ export default function CardsPage() {
                 <Button variant="secondary" onClick={() => void copySignature("html")}><CopyIcon size={18} weight="bold" />{signatureCopied === "html" ? "HTML copied" : "Copy HTML"}</Button>
               </div>
               <small className="signature-note">Use plain text for most clients. HTML keeps phone, email, and card link clickable.</small>
-            </section>
-            <section className="share-surface-panel">
+            </section> : null}
+            {shareTool === "background" ? <section className="share-surface-panel card-tool-section">
               <div className="inline-qr-head"><span><MonitorIcon size={22} weight="bold" /></span><div><h2>Virtual background</h2><p>Meeting background with your name and a scannable QR in the corner.</p></div></div>
               <div className="share-surface-preview virtual-background-preview" style={{ background: cardTheme.backgroundGradient }}>
                 <div className="share-surface-overlay">
@@ -486,8 +516,8 @@ export default function CardsPage() {
                 </div>
               </div>
               <Button variant="secondary" onClick={() => void downloadShareAsset("virtual-background")}><DownloadSimpleIcon size={18} weight="bold" />Download background</Button>
-            </section>
-            <section className="share-surface-panel">
+            </section> : null}
+            {shareTool === "watch" ? <section className="share-surface-panel card-tool-section">
               <div className="inline-qr-head"><span><WatchIcon size={22} weight="bold" /></span><div><h2>Smart watch</h2><p>High-contrast QR for Apple Watch or Wear OS watch faces.</p></div></div>
               <div className="share-surface-preview watch-preview">
                 <span>Personal card</span>
@@ -496,8 +526,8 @@ export default function CardsPage() {
                 </div>
               </div>
               <Button variant="secondary" onClick={() => void downloadShareAsset("watch-face")}><DownloadSimpleIcon size={18} weight="bold" />Download watch QR</Button>
-            </section>
-            <section className="phone-widget-panel">
+            </section> : null}
+            {shareTool === "widgets" ? <section className="phone-widget-panel card-tool-section">
               <div className="phone-widget-head"><span><DeviceMobileIcon size={22} weight="bold" /></span><div><h3>Home-screen widgets</h3><p>Choose QR Scan, Business Card, or Recent Connections when adding a widget.</p></div></div>
               <div className="widget-gallery">
                 <article className="widget-gallery-card">
@@ -550,8 +580,9 @@ export default function CardsPage() {
                 <article><strong>Android</strong><p>Install and open AfterMeet once. Touch and hold an empty part of the Home Screen, tap <b>Widgets</b>, then choose one of the three AfterMeet widgets.</p></article>
                 <small>Refresh widgets from Card Tools in the app after publishing changes or receiving new connections.</small>
               </div>}
-            </section>
-            <WalletSharePanel slug={profile.slug} shareUrl={shareUrl} />
+            </section> : null}
+            {shareTool === "wallet" ? <div className="card-tool-section wallet-tool-section"><WalletSharePanel slug={profile.slug} shareUrl={shareUrl} /></div> : null}
+            </div>
           </section>
             </div>
             <ShareCardModal

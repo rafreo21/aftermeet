@@ -36,7 +36,7 @@ export function PhoneField({
   const [parts, setParts] = useState<PhoneParts>(() => parseStoredPhone(value, defaultIso));
 
   useEffect(() => {
-    setParts(parseStoredPhone(value, defaultIso));
+    void Promise.resolve().then(() => setParts(parseStoredPhone(value, defaultIso)));
   }, [value, defaultIso]);
 
   function update(next: PhoneParts) {

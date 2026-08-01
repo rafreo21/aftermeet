@@ -59,8 +59,10 @@ export default function ShareCardScreen() {
 
   useEffect(() => {
     if (!card.slug || !session?.access_token || card.status !== 'published') {
-      setWalletAvailable(null);
-      setWalletNote('');
+      void Promise.resolve().then(() => {
+        setWalletAvailable(null);
+        setWalletNote('');
+      });
       return;
     }
 

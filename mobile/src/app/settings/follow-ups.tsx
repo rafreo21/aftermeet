@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
-import { ListChecks, MagnifyingGlass, SortAscending } from 'phosphor-react-native';
+import { ClockCounterClockwise, ListChecks, Plus } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { FollowUpAudienceSheet } from '@/components/follow-up-audience-sheet';
@@ -9,10 +9,11 @@ import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
 import { FollowUpSortSheet } from '@/components/follow-up-sheets';
 import { GroupedFollowUpActions, GroupedFollowUpCell } from '@/components/grouped-follow-up-cell';
 import { GreenHeroCard } from '@/components/green-hero-card';
+import { HistoryToolbar } from '@/components/history-toolbar';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
-import { BackButton, Body, Eyebrow } from '@/components/ui';
+import { Body, Button, HeaderActionButton, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import {
@@ -29,18 +30,18 @@ import {
 import type { FollowUpGroup } from '@/features/follow-ups/follow-up-groups';
 import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
 import { useAppInsets } from '@/lib/safe-area';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 
-export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
+export function FollowUpsScreen({ showBack = true, historyOnly = false }: { showBack?: boolean; historyOnly?: boolean }) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
   const insets = useAppInsets();
-  const [scope, setScope] = useState<FollowUpScope>('current');
+  const scope: FollowUpScope = historyOnly ? 'past' : 'current';
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<FollowUpSort>('urgency');
+  const [sort, setSort] = useState<FollowUpSort>(historyOnly ? 'recent' : 'urgency');
   const [sortOpen, setSortOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState<FollowUpGroup | null>(null);
   const [completedMessage, setCompletedMessage] = useState('');
@@ -48,6 +49,7 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
   const {
     runFollowUp,
     markComplete,
+    markOpen,
     completingId,
     missingOpen,
     missingExecution,
@@ -107,16 +109,17 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
 
   const hasFollowUps = scopedGroups.length > 0;
 
-  function changeScope(nextScope: FollowUpScope) {
-    setScope(nextScope);
-    setSort(nextScope === 'past' ? 'recent' : 'urgency');
-  }
-
   function completeAndConfirm(item: FollowUpItem) {
     void markComplete(item, loadFollowUps).then(() => {
       setCompletedMessage(item.owner === 'guest'
         ? `Marked as done for ${item.personName.trim() || 'them'}.`
         : 'Nice — marked as done.');
+    });
+  }
+
+  function reopenAndConfirm(item: FollowUpItem) {
+    void markOpen(item, loadFollowUps).then(() => {
+      setCompletedMessage('Moved back to Current follow-ups.');
     });
   }
 
@@ -132,54 +135,38 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
       <View style={styles.page}>
         <View style={styles.header}>
-          {showBack ? <BackButton onPress={() => router.back()} /> : null}
+          <PageHeader
+            eyebrow={historyOnly ? 'History' : 'Follow-ups'}
+            title={historyOnly ? 'Completed follow-ups' : 'Stay on top of next steps'}
+            titleStyle={styles.title}
+            onBack={() => router.back()}
+            showBack={showBack}
+            rightAction={!historyOnly ? (
+              <HeaderActionButton accessibilityLabel="Open follow-up history" onPress={() => router.push('/settings/follow-ups-history')}>
+                <ClockCounterClockwise size={21} color={colors.ink} weight="bold" />
+              </HeaderActionButton>
+            ) : undefined}
+          />
           <View style={styles.headerCopy}>
-            <Eyebrow>Follow-ups</Eyebrow>
-            <Text style={styles.title}>Stay on top of next steps</Text>
             <Body>
-              {scope === 'current'
-                ? 'Everything left to do — yours and theirs.'
-                : 'Everything that has been checked off.'}
+              {historyOnly ? 'Everything you have checked off.' : 'Everything left to do — yours and theirs.'}
             </Body>
           </View>
 
-          <View style={styles.tabs}>
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: scope === 'current' }}
-              onPress={() => changeScope('current')}
-              style={[styles.tab, scope === 'current' && styles.tabActive]}>
-              <Text style={[styles.tabLabel, scope === 'current' && styles.tabLabelActive]}>Current</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: scope === 'past' }}
-              onPress={() => changeScope('past')}
-              style={[styles.tab, scope === 'past' && styles.tabActive]}>
-              <Text style={[styles.tabLabel, scope === 'past' && styles.tabLabelActive]}>Past</Text>
-            </Pressable>
-          </View>
+          {!historyOnly && session ? (
+            <Button variant="secondary" style={styles.addButton} onPress={() => router.push('/quick-follow-up')}>
+              <Plus size={18} color={colors.ink} weight="bold" />
+              Add follow-up
+            </Button>
+          ) : null}
 
-          {session && hasFollowUps ? (
-            <View style={styles.searchRow}>
-              <View style={styles.searchField}>
-                <MagnifyingGlass size={18} color={colors.muted} />
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search follow-ups"
-                  placeholderTextColor={colors.muted}
-                  style={styles.searchInput}
-                />
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Sort follow-ups"
-                onPress={() => setSortOpen(true)}
-                style={styles.sortButton}>
-                <SortAscending size={20} color={colors.ink} weight="bold" />
-              </Pressable>
-            </View>
+          {historyOnly && session && hasFollowUps ? (
+            <HistoryToolbar
+              query={query}
+              placeholder="Search follow-ups"
+              onChangeQuery={setQuery}
+              onPressSort={() => setSortOpen(true)}
+            />
           ) : null}
         </View>
 
@@ -216,6 +203,10 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
                     const item = group.items[0];
                     if (item) completeAndConfirm(item);
                   }}
+                  onReopen={() => {
+                    const item = group.items[0];
+                    if (item) reopenAndConfirm(item);
+                  }}
                   completing={group.items.length === 1 && completingId === `${group.items[0]?.encounterId}-${group.items[0]?.actionId}`}
                 />
               ))}
@@ -226,11 +217,11 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
           ) : (
             <MiniPromptCard
               icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
-              title={scope === 'current' ? 'No current follow-ups' : 'No past follow-ups yet'}
-              copy={scope === 'current'
-                ? 'Pick follow-up channels in capture and they will show up here.'
-                : 'Completed follow-ups will appear here after you check them off.'}
-              onPress={scope === 'current' ? () => router.push('/capture') : undefined}
+              title={historyOnly ? 'No completed follow-ups yet' : 'No current follow-ups'}
+              copy={historyOnly
+                ? 'Completed follow-ups will appear here after you check them off.'
+                : 'Add a next step directly, or capture a conversation and create one from context.'}
+              onPress={historyOnly ? undefined : () => router.push('/quick-follow-up')}
             />
           )}
         </ScrollView>
@@ -262,13 +253,18 @@ export function FollowUpsScreen({ showBack = true }: { showBack?: boolean }) {
               setActiveGroup(null);
               if (item) completeAndConfirm(item);
             }}
+            onReopenItem={(actionId) => {
+              const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              setActiveGroup(null);
+              if (item) reopenAndConfirm(item);
+            }}
           />
         ) : null}
       </BottomSheet>
 
       <OutcomeSuccessSheet
         visible={Boolean(completedMessage)}
-        title="Follow-up done"
+        title={completedMessage.startsWith('Moved') ? 'Follow-up reopened' : 'Follow-up done'}
         message={completedMessage}
         onClose={() => setCompletedMessage('')}
       />
@@ -299,64 +295,14 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   page: { flex: 1 },
   header: { gap: spacing.x3, paddingHorizontal: spacing.x5 },
-  headerCopy: { gap: spacing.x2, marginBottom: spacing.x1 },
+  headerCopy: { gap: spacing.x2, marginTop: -spacing.x1, marginBottom: spacing.x1 },
+  addButton: { alignSelf: 'flex-start' },
   title: {
     color: colors.ink,
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '700',
     letterSpacing: -1.1,
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: spacing.x2,
-    padding: spacing.x1,
-    borderRadius: radius.round,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.x3,
-    borderRadius: radius.round,
-  },
-  tabActive: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  tabLabel: { color: colors.muted, fontSize: 13, fontWeight: '700' },
-  tabLabelActive: { color: colors.ink, fontWeight: '800' },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.x2,
-  },
-  searchField: {
-    flex: 1,
-    minHeight: 46,
-    paddingHorizontal: spacing.x3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.x2,
-    borderRadius: radius.medium,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  searchInput: { flex: 1, color: colors.ink, fontSize: 15 },
-  sortButton: {
-    width: 46,
-    height: 46,
-    borderRadius: radius.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
   },
   scroll: { flex: 1, marginTop: spacing.x2 },
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3, paddingTop: spacing.x2 },

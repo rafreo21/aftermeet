@@ -1,7 +1,6 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
-
-const logo = require('../../assets/images/splash-icon.png');
+import logo from '../../assets/images/splash-icon.png';
 
 type BrandMarkProps = {
   size?: number;

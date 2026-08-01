@@ -17,7 +17,11 @@ export type LocalRecordingMetadata = {
   storagePath?: string;
   sharedAudioUrl?: string;
   cloudExpiresAt?: string | null;
-  audioLocation?: 'user_device' | 'server';
+  audioLocation?: 'user_device' | 'server' | 'google_drive' | 'onedrive';
+  driveFileId?: string;
+  driveWebViewUrl?: string;
+  oneDriveItemId?: string;
+  oneDriveWebUrl?: string;
 };
 
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}aftermeet-recordings/`;
@@ -67,6 +71,11 @@ async function writeRecordingIndex(metadata: LocalRecordingMetadata) {
     mimeType: metadata.mimeType,
     storagePath: metadata.storagePath,
     sharedAudioUrl: metadata.sharedAudioUrl,
+    audioLocation: metadata.audioLocation,
+    driveFileId: metadata.driveFileId,
+    driveWebViewUrl: metadata.driveWebViewUrl,
+    oneDriveItemId: metadata.oneDriveItemId,
+    oneDriveWebUrl: metadata.oneDriveWebUrl,
   }));
 }
 
@@ -128,6 +137,11 @@ export async function readLocalRecordingMetadata(id: string): Promise<LocalRecor
       expiresAt?: string | null;
       storagePath?: string;
       sharedAudioUrl?: string;
+      audioLocation?: LocalRecordingMetadata['audioLocation'];
+      driveFileId?: string;
+      driveWebViewUrl?: string;
+      oneDriveItemId?: string;
+      oneDriveWebUrl?: string;
     };
     let audioFile = parsed.audioFile ?? (await scanLocalRecordingFile(id)) ?? undefined;
     if (!audioFile) return null;
@@ -150,6 +164,11 @@ export async function readLocalRecordingMetadata(id: string): Promise<LocalRecor
       createdAt: parsed.expiresAt ?? new Date().toISOString(),
       storagePath: parsed.storagePath,
       sharedAudioUrl: parsed.sharedAudioUrl,
+      audioLocation: parsed.audioLocation,
+      driveFileId: parsed.driveFileId,
+      driveWebViewUrl: parsed.driveWebViewUrl,
+      oneDriveItemId: parsed.oneDriveItemId,
+      oneDriveWebUrl: parsed.oneDriveWebUrl,
     };
   } catch {
     return null;

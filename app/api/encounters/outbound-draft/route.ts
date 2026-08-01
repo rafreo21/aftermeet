@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   }
 
   const contact = body.contact && isContact(body.contact) ? body.contact : null;
-  const context = buildActionLinkContext(body.encounter, contact);
+  const context = buildActionLinkContext(body.encounter, contact, body.action);
 
   try {
     const result = await generateOutboundDraft({

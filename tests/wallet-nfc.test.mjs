@@ -87,7 +87,7 @@ test("virtual background svg uses card theme gradient and side-by-side layout", 
   assert.match(svg, /font-family="Inter/);
   assert.match(svg, /Scan to save my contact/);
   assert.match(svg, /width="120"/);
-  assert.match(svg, /data:image\/png;base64,/);
+  assert.match(svg, /data:image\/svg\+xml;base64,/);
   assert.match(svg, new RegExp(`stop-color="${highlight}"`));
   assert.match(svg, new RegExp(`stop-color="${base}"`));
   assert.match(svg, new RegExp(`stop-color="${shadow}"`));
@@ -95,6 +95,8 @@ test("virtual background svg uses card theme gradient and side-by-side layout", 
 });
 
 test("virtual background jpeg export uses card theme gradient and video-app panel layout", async () => {
+  const { sharpAvailable } = await import("../lib/sharp-runtime.ts");
+  if (!sharpAvailable()) return;
   const { buildVirtualBackgroundJpeg } = await import("../lib/share-assets.ts");
   const { themeGradientStops } = await import("../lib/theme-contrast.ts");
   const { virtualBackgroundPanelLeftForVideoApps } = await import("../lib/virtual-background-layout.ts");

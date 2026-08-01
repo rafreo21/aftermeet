@@ -70,10 +70,11 @@ export default function CardToolsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { cards, card: activeCard, getCardById, cardPublicUrl } = useCard();
   const { session } = useAuth();
+  const accessToken = session?.access_token;
   const insets = useAppInsets();
   const card = useMemo(
     () => (id ? getCardById(String(id)) : undefined),
-    [getCardById, id, cards],
+    [getCardById, id],
   );
   const publicUrl = card ? cardPublicUrl(card) : '';
   const showCompany = card ? cardToolShowCompany(card) : false;
@@ -100,20 +101,22 @@ export default function CardToolsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!card || !session?.access_token) return;
-      void syncCardToolsForCard(cards, cardPublicUrl, session.access_token, card);
-    }, [card, cards, cardPublicUrl, session?.access_token]),
+      if (!card || !accessToken) return;
+      void syncCardToolsForCard(cards, cardPublicUrl, accessToken, card);
+    }, [accessToken, card, cards, cardPublicUrl]),
   );
 
   useEffect(() => {
-    if (!card || !session?.access_token || card.status !== 'published' || !card.slug) {
-      setWalletAvailable(null);
-      setWalletNote('');
+    if (!card || !accessToken || card.status !== 'published' || !card.slug) {
+      void Promise.resolve().then(() => {
+        setWalletAvailable(null);
+        setWalletNote('');
+      });
       return;
     }
 
     let cancelled = false;
-    void fetchWalletAvailability(card.slug, session.access_token).then((result) => {
+    void fetchWalletAvailability(card.slug, accessToken).then((result) => {
       if (cancelled) return;
       setWalletAvailable(result.available);
       setWalletNote(result.message);
@@ -122,7 +125,7 @@ export default function CardToolsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [card, session?.access_token]);
+  }, [accessToken, card]);
 
   const initials = card ? cardToolInitials(card) : 'AM';
   const subtitle = card ? [card.role, showCompany ? card.company : ''].filter(Boolean).join(' · ') : '';

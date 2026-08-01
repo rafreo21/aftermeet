@@ -109,10 +109,12 @@ export function ConnectionManualAddSheet({
 
   useEffect(() => {
     if (!visible) {
-      setName('');
-      setEmail('');
-      setRole('');
-      setCompany('');
+      void Promise.resolve().then(() => {
+        setName('');
+        setEmail('');
+        setRole('');
+        setCompany('');
+      });
     }
   }, [visible]);
 

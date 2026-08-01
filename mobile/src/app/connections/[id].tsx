@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { CaretRight, IdentificationCard, Microphone, Trash } from 'phosphor-react-native';
+import { CaretRight, CheckCircle, IdentificationCard, Microphone, Plus, Trash } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -15,7 +15,7 @@ import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { ConnectionDetailSkeleton } from '@/components/skeleton';
-import { BackButton, Body, Eyebrow, Title } from '@/components/ui';
+import { BackButton, Body, Button, Eyebrow, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { loadConnectionLiveCard } from '@/features/connections/connection-card-loader';
 import {
@@ -42,7 +42,6 @@ import { resolveEncounterRecordingUri } from '@/features/encounters/local-record
 import {
   fetchEncountersForConnection,
   fetchFollowUps,
-  followUpsForPerson,
   type FollowUpItem,
 } from '@/features/follow-ups/follow-up-api';
 import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
@@ -53,6 +52,7 @@ import { colors, radius, spacing } from '@/theme/tokens';
 export default function ConnectionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
+  const accessToken = session?.access_token ?? null;
   const insets = useAppInsets();
   const [connection, setConnection] = useState<ConnectionItem | null>(null);
   const [card, setCard] = useState<MobileCard | null>(null);
@@ -79,6 +79,7 @@ export default function ConnectionDetailScreen() {
   const {
     runFollowUp,
     markComplete,
+    markOpen,
     completingId,
     missingOpen,
     missingExecution,
@@ -91,7 +92,7 @@ export default function ConnectionDetailScreen() {
     audienceParticipants,
     confirmAudience,
     closeAudience,
-  } = useFollowUpActions(session?.access_token, {
+  } = useFollowUpActions(accessToken, {
     allFollowUps,
   });
 
@@ -106,14 +107,14 @@ export default function ConnectionDetailScreen() {
   }, []);
 
   const loadConnection = useCallback(async () => {
-    if (!session?.access_token || !id) {
+    if (!accessToken || !id) {
       setConnection(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const connections = await fetchAllConnectionsMerged(session.access_token);
+      const connections = await fetchAllConnectionsMerged(accessToken);
       const match = connections.find((item) => item.id === decodeURIComponent(id));
       setConnection(match || null);
       if (!match) showError('This connection could not be found.');
@@ -123,67 +124,79 @@ export default function ConnectionDetailScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id, session?.access_token, showError]);
+  }, [accessToken, id, showError]);
 
   const loadMeetingsAndFollowUps = useCallback(async (current: ConnectionItem) => {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     try {
       const [nextMeetings, allFollowUps] = await Promise.all([
-        fetchEncountersForConnection(session.access_token, {
+        fetchEncountersForConnection(accessToken, {
           connectionId: current.id,
           sourceId: current.sourceId,
           email: current.email,
           exchangeId: current.source === 'inbound' ? current.sourceId : undefined,
         }),
-        fetchFollowUps(session.access_token),
+        fetchFollowUps(accessToken, {
+          connectionId: current.id,
+          sourceId: current.sourceId,
+          email: current.email,
+          exchangeId: current.source === 'inbound' ? current.sourceId : undefined,
+        }),
       ]);
       setMeetings(nextMeetings);
       setAllFollowUps(allFollowUps);
-      setFollowUps(followUpsForPerson(allFollowUps, current.name, current.email));
+      setFollowUps(allFollowUps);
     } catch {
       setMeetings([]);
       setAllFollowUps([]);
       setFollowUps([]);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const loadCard = useCallback(async (current: ConnectionItem) => {
-    if (!session?.access_token) return;
+    if (!accessToken) return;
     setCardLoading(true);
     try {
-      const result = await loadConnectionLiveCard(current, session.access_token);
+      const result = await loadConnectionLiveCard(current, accessToken);
       setCard(result.card);
       setCardSlug(result.slug);
     } finally {
       setCardLoading(false);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const loadSavedDirectoryContact = useCallback(async (current: ConnectionItem, slug: string | null) => {
-    if (!session?.access_token) {
+    if (!accessToken) {
       setSavedContact(null);
       return;
     }
     setDirectoryLoading(true);
     try {
-      const contacts = await fetchContacts(session.access_token);
+      const contacts = await fetchContacts(accessToken);
       setSavedContact(findSavedDirectoryContact(contacts, current, slug));
     } catch {
       setSavedContact(null);
     } finally {
       setDirectoryLoading(false);
     }
-  }, [session?.access_token]);
+  }, [accessToken]);
 
   const refreshFollowUps = useCallback(async () => {
-    if (!session?.access_token || !connection) return;
+    if (!accessToken || !connection) return;
     try {
-      const allFollowUps = await fetchFollowUps(session.access_token);
-      setFollowUps(followUpsForPerson(allFollowUps, connection.name, connection.email));
+      const nextFollowUps = await fetchFollowUps(accessToken, {
+        connectionId: connection.id,
+        sourceId: connection.sourceId,
+        email: connection.email,
+        exchangeId: connection.source === 'inbound' ? connection.sourceId : undefined,
+      });
+      setAllFollowUps(nextFollowUps);
+      setFollowUps(nextFollowUps);
     } catch {
+      setAllFollowUps([]);
       setFollowUps([]);
     }
-  }, [connection, session?.access_token]);
+  }, [accessToken, connection]);
 
   useFocusEffect(
     useCallback(() => {
@@ -196,6 +209,8 @@ export default function ConnectionDetailScreen() {
       if (!connection) return;
       void loadCard(connection);
       void loadMeetingsAndFollowUps(connection);
+      const interval = setInterval(() => void loadMeetingsAndFollowUps(connection), 30_000);
+      return () => clearInterval(interval);
     }, [connection, loadCard, loadMeetingsAndFollowUps]),
   );
 
@@ -216,14 +231,39 @@ export default function ConnectionDetailScreen() {
     [savedContact, connection, card],
   );
 
-  const meetingPreview = useMemo(() => meetings.slice(0, 3), [meetings]);
-  const followUpPreview = useMemo(() => followUps.slice(0, 2), [followUps]);
+  const openFollowUps = useMemo(
+    () => followUps.filter((item) => item.status !== 'completed'),
+    [followUps],
+  );
+  const followUpPreview = useMemo(() => openFollowUps.slice(0, 2), [openFollowUps]);
+  const timeline = useMemo(() => [
+    ...meetings.map((meeting) => ({
+      id: `meeting-${meeting.id}`,
+      kind: 'meeting' as const,
+      occurredAt: meeting.startedAt,
+      title: meeting.title.trim() || 'Meeting',
+      copy: meeting.sharedSummary.trim(),
+      encounterId: meeting.id,
+      meeting,
+    })),
+    ...followUps
+      .filter((item) => item.status === 'completed' && item.completedAt)
+      .map((item) => ({
+        id: `follow-up-${item.encounterId}-${item.actionId}`,
+        kind: 'completed' as const,
+        occurredAt: item.completedAt || '',
+        title: item.title,
+        copy: item.encounterTitle ? `From ${item.encounterTitle}` : '',
+        encounterId: item.encounterId,
+        meeting: meetings.find((meeting) => meeting.id === item.encounterId) || null,
+      })),
+  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings]);
 
   async function confirmDelete() {
-    if (!session?.access_token || !connection) return;
+    if (!accessToken || !connection) return;
     setDeleting(true);
     try {
-      await deleteConnection(session.access_token, connection);
+      await deleteConnection(accessToken, connection);
       setDeleteOpen(false);
       router.back();
     } catch (caught) {
@@ -235,14 +275,14 @@ export default function ConnectionDetailScreen() {
   }
 
   async function saveToDirectory() {
-    if (!session?.access_token || !connection) return;
+    if (!accessToken || !connection) return;
     setSaving(true);
     try {
       if (directoryState === 'needs_update') {
-        await updateConnectionDirectory(session.access_token, connection, card);
+        await updateConnectionDirectory(accessToken, connection, card);
         showSuccess('Directory updated with the latest card details.');
       } else {
-        await saveConnectionToAfterMeet(session.access_token, connection, card);
+        await saveConnectionToAfterMeet(accessToken, connection, card);
         await saveConnectionToDeviceContacts(connection, card);
         showSuccess('Saved to your directory.');
       }
@@ -297,6 +337,39 @@ export default function ConnectionDetailScreen() {
               <Eyebrow>{connectionSourceLabel(connection.source)}</Eyebrow>
               <Body>{contextLine}</Body>
               {meetings.length ? <Body style={styles.countLine}>{meetingCountLabel}</Body> : null}
+              <View style={styles.relationshipActions}>
+                <Button
+                  style={styles.relationshipAction}
+                  onPress={() => router.push({
+                    pathname: '/capture/new',
+                    params: {
+                      personName: connection.name,
+                      personEmail: connection.email || '',
+                      sourceId: connection.sourceId,
+                      contactId: connection.source === 'contact' ? connection.sourceId : '',
+                      exchange: connection.source === 'inbound' ? connection.sourceId : '',
+                    },
+                  })}>
+                  <Microphone size={18} color={colors.ink} weight="fill" />
+                  Capture
+                </Button>
+                <Button
+                  variant="secondary"
+                  style={styles.relationshipAction}
+                  onPress={() => router.push({
+                    pathname: '/quick-follow-up',
+                    params: {
+                      personName: connection.name,
+                      personEmail: connection.email || '',
+                      sourceId: connection.sourceId,
+                      contactId: connection.source === 'contact' ? connection.sourceId : '',
+                      exchangeId: connection.source === 'inbound' ? connection.sourceId : '',
+                    },
+                  })}>
+                  <Plus size={18} color={colors.ink} weight="bold" />
+                  Follow-up
+                </Button>
+              </View>
             </View>
           ) : null}
         </View>
@@ -311,27 +384,32 @@ export default function ConnectionDetailScreen() {
             <View style={styles.content}>
               <View style={styles.section}>
                 <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>Meetings</Text>
-                  {meetings.length > 3 ? (
+                  <Text style={styles.sectionTitle}>Relationship timeline</Text>
+                  {timeline.length > 3 ? (
                     <Pressable accessibilityRole="button" onPress={() => setMeetingsSheetOpen(true)}>
                       <Text style={styles.viewAll}>View all</Text>
                     </Pressable>
                   ) : null}
                 </View>
-                {meetingPreview.length ? (
-                  meetingPreview.map((meeting) => (
+                {timeline.length ? (
+                  timeline.slice(0, 3).map((item) => (
                     <Pressable
-                      key={meeting.id}
+                      key={item.id}
                       accessibilityRole="button"
-                      onPress={() => void openMeeting(meeting)}
+                      onPress={() => item.meeting ? void openMeeting(item.meeting) : undefined}
                       style={({ pressed }) => [styles.meetingCell, pressed && styles.pressed]}>
+                      <View style={[styles.timelineMarker, item.kind === 'completed' && styles.timelineMarkerCompleted]}>
+                        {item.kind === 'completed'
+                          ? <CheckCircle size={17} color={colors.ink} weight="fill" />
+                          : <Microphone size={17} color={colors.ink} weight="fill" />}
+                      </View>
                       <View style={styles.meetingCopy}>
                         <Text style={styles.meetingTitle} numberOfLines={1}>
-                          {meeting.title.trim() || 'Meeting'}
+                          {item.title}
                         </Text>
-                        <Text style={styles.meetingMeta}>{formatMeetingDate(meeting.startedAt)}</Text>
-                        {meeting.sharedSummary.trim() ? (
-                          <Text style={styles.meetingSummary} numberOfLines={2}>{meeting.sharedSummary.trim()}</Text>
+                        <Text style={styles.meetingMeta}>{item.kind === 'completed' ? 'Follow-up completed' : 'Meeting'} · {formatMeetingDate(item.occurredAt)}</Text>
+                        {item.copy ? (
+                          <Text style={styles.meetingSummary} numberOfLines={2}>{item.copy}</Text>
                         ) : null}
                       </View>
                       <CaretRight size={16} color={colors.muted} weight="bold" />
@@ -342,7 +420,16 @@ export default function ConnectionDetailScreen() {
                     icon={<Microphone size={18} color={colors.ink} weight="bold" />}
                     title="No meetings yet"
                     copy={`Capture a conversation with ${connection.name.split(' ')[0] || 'them'}.`}
-                    onPress={() => router.navigate('/capture')}
+                    onPress={() => router.push({
+                      pathname: '/capture/new',
+                      params: {
+                        personName: connection.name,
+                        personEmail: connection.email || '',
+                        sourceId: connection.sourceId,
+                        contactId: connection.source === 'contact' ? connection.sourceId : '',
+                        exchange: connection.source === 'inbound' ? connection.sourceId : '',
+                      },
+                    })}
                   />
                 )}
               </View>
@@ -351,7 +438,7 @@ export default function ConnectionDetailScreen() {
                 <View style={styles.section}>
                   <View style={styles.sectionHead}>
                     <Text style={styles.sectionTitle}>Follow-ups</Text>
-                    {followUps.length > 2 ? (
+                    {openFollowUps.length > 2 ? (
                       <Pressable accessibilityRole="button" onPress={() => setFollowUpsSheetOpen(true)}>
                         <Text style={styles.viewAll}>View all</Text>
                       </Pressable>
@@ -362,9 +449,10 @@ export default function ConnectionDetailScreen() {
                       <FollowUpCell
                         key={`${item.encounterId}-${item.actionId}`}
                         item={item}
-                        onPress={() => runConnectionFollowUp(item)}
-                        onComplete={() => void markComplete(item, refreshFollowUps)}
-                        completing={completingId === `${item.encounterId}-${item.actionId}`}
+                      onPress={() => runConnectionFollowUp(item)}
+                      onComplete={() => void markComplete(item, refreshFollowUps)}
+                      onReopen={() => void markOpen(item, refreshFollowUps)}
+                      completing={completingId === `${item.encounterId}-${item.actionId}`}
                       />
                     ))}
                   </View>
@@ -403,20 +491,25 @@ export default function ConnectionDetailScreen() {
         onSaveDirectory={() => void saveToDirectory()}
       />
 
-      <BottomSheet visible={meetingsSheetOpen} title="Meetings" onClose={() => setMeetingsSheetOpen(false)}>
+      <BottomSheet visible={meetingsSheetOpen} title="Relationship timeline" onClose={() => setMeetingsSheetOpen(false)}>
         <View style={styles.list}>
-          {meetings.map((meeting) => (
+          {timeline.map((item) => (
             <Pressable
-              key={meeting.id}
+              key={item.id}
               accessibilityRole="button"
               onPress={() => {
                 setMeetingsSheetOpen(false);
-                void openMeeting(meeting);
+                if (item.meeting) void openMeeting(item.meeting);
               }}
               style={({ pressed }) => [styles.meetingCell, pressed && styles.pressed]}>
+              <View style={[styles.timelineMarker, item.kind === 'completed' && styles.timelineMarkerCompleted]}>
+                {item.kind === 'completed'
+                  ? <CheckCircle size={17} color={colors.ink} weight="fill" />
+                  : <Microphone size={17} color={colors.ink} weight="fill" />}
+              </View>
               <View style={styles.meetingCopy}>
-                <Text style={styles.meetingTitle} numberOfLines={1}>{meeting.title.trim() || 'Meeting'}</Text>
-                <Text style={styles.meetingMeta}>{formatMeetingDate(meeting.startedAt)}</Text>
+                <Text style={styles.meetingTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.meetingMeta}>{item.kind === 'completed' ? 'Follow-up completed' : 'Meeting'} · {formatMeetingDate(item.occurredAt)}</Text>
               </View>
               <CaretRight size={16} color={colors.muted} weight="bold" />
             </Pressable>
@@ -435,6 +528,7 @@ export default function ConnectionDetailScreen() {
         }}
         onPressFollowUp={runConnectionFollowUp}
         onCompleteFollowUp={(item) => void markComplete(item, refreshFollowUps)}
+        onReopenFollowUp={(item) => void markOpen(item, refreshFollowUps)}
       />
 
       <FollowUpsSheet
@@ -444,6 +538,7 @@ export default function ConnectionDetailScreen() {
         onClose={() => setFollowUpsSheetOpen(false)}
         onPressItem={runConnectionFollowUp}
         onCompleteItem={(item) => void markComplete(item, refreshFollowUps)}
+        onReopenItem={(item) => void markOpen(item, refreshFollowUps)}
         completingId={completingId}
       />
 
@@ -515,6 +610,8 @@ const styles = StyleSheet.create({
   headerCopy: { gap: spacing.x2 },
   name: { fontSize: 32, lineHeight: 34 },
   countLine: { color: colors.muted, fontSize: 13 },
+  relationshipActions: { flexDirection: 'row', gap: spacing.x2, marginTop: spacing.x1 },
+  relationshipAction: { flex: 1 },
   scroll: { flex: 1, marginTop: spacing.x3 },
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
   content: { gap: spacing.x5 },
@@ -537,6 +634,15 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.surface,
   },
+  timelineMarker: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+  },
+  timelineMarkerCompleted: { backgroundColor: colors.accent },
   pressed: { opacity: 0.86 },
   meetingCopy: { flex: 1, gap: 2 },
   meetingTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
