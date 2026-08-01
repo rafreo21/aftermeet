@@ -26,7 +26,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const supabase = getSupabase();
   const redirectUris = readMobileAuthRedirectUris();
   const redirectUri = redirectUris?.nativeCallbackUri ?? (supabase ? createAuthRedirectUri() : null);
-  const emailRedirectUri = redirectUris?.emailRedirectUri ?? redirectUri;
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(Boolean(supabase));
 
@@ -107,7 +106,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return error ? { error: error.message } : {};
     },
     signOut: async () => { await supabase?.auth.signOut(); },
-  }), [session, loading, supabase, redirectUri, emailRedirectUri]);
+  }), [session, loading, supabase, redirectUri]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -15,7 +15,7 @@ import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import {
   ConnectionsListSkeleton,
 } from '@/components/skeleton';
-import { BackButton, Body, Button, Eyebrow } from '@/components/ui';
+import { BackButton, Body, Eyebrow } from '@/components/ui';
 import { GreenHeroCard } from '@/components/green-hero-card';
 import { useAuth } from '@/features/auth/auth-context';
 import { connectionAvatarUrl } from '@/features/connections/connection-public-card';
@@ -47,7 +47,7 @@ function ConnectionRow({ connection, onPress }: { connection: ConnectionItem; on
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <Image source={avatar} style={styles.avatar} contentFit="cover" />
+      <Image source={avatar} style={styles.avatar} contentFit="cover" alt={`${connection.name} profile photo`} />
       <View style={styles.copy}>
         <Text style={styles.name} numberOfLines={1}>{connection.name}</Text>
         <Text style={styles.subtitle} numberOfLines={1}>{connection.subtitle}</Text>

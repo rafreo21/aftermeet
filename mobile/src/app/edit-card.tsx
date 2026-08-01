@@ -12,7 +12,6 @@ import { Body, Button, PageHeader } from '@/components/ui';
 import { cardDraftSignature, cardNeedsPublish } from '@/lib/card-draft';
 import {
   ensurePublishedBaseline,
-  readPublishedBaseline,
   writePublishedBaseline,
 } from '@/lib/published-baseline';
 import { useAppInsets } from '@/lib/safe-area';

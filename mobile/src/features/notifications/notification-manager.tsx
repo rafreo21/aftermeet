@@ -11,6 +11,12 @@ import {
   recordNotification,
   syncFollowUpNotifications,
 } from '@/features/notifications/notification-service';
+import { addFollowUpNotificationSyncListener } from '@/features/notifications/notification-sync-events';
+
+function openNotificationRoute(notification: Notifications.Notification) {
+  const data = notification.request.content.data as { route?: unknown } | undefined;
+  if (typeof data?.route === 'string') router.push(data.route as '/settings/follow-ups');
+}
 
 export function NotificationManager() {
   const { session } = useAuth();
@@ -24,9 +30,15 @@ export function NotificationManager() {
     });
     const responded = Notifications.addNotificationResponseReceivedListener((response) => {
       void recordNotification(response.notification);
-      const data = response.notification.request.content.data as { route?: unknown } | undefined;
-      if (typeof data?.route === 'string') router.push(data.route as '/settings/follow-ups');
+      openNotificationRoute(response.notification);
     });
+
+    const launchResponse = Notifications.getLastNotificationResponse();
+    if (launchResponse) {
+      void recordNotification(launchResponse.notification);
+      setTimeout(() => openNotificationRoute(launchResponse.notification), 0);
+      Notifications.clearLastNotificationResponse();
+    }
 
     return () => {
       received.remove();
@@ -48,8 +60,10 @@ export function NotificationManager() {
       if (state === 'active') void sync().catch(() => undefined);
     });
     const interval = setInterval(() => void sync().catch(() => undefined), 15 * 60 * 1_000);
+    const changed = addFollowUpNotificationSyncListener(() => void sync().catch(() => undefined));
     return () => {
       appState.remove();
+      changed.remove();
       clearInterval(interval);
     };
   }, [accessToken]);

@@ -58,6 +58,7 @@ export function RecordingPlayOrb({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={status.playing ? 'Pause recording' : 'Play recording'}
+      accessibilityHint={durationSeconds > 0 ? `Recording length ${formatDuration(durationSeconds)}` : undefined}
       onPress={togglePlayback}
       style={({ pressed }) => [
         styles.playOrb,

@@ -125,6 +125,7 @@ export function BrandedQrCode({
             style={{ width: logoSize, height: logoSize }}
             contentFit="contain"
             accessibilityLabel="AfterMeet"
+            alt="AfterMeet"
           />
         </View>
       ) : null}

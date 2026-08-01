@@ -279,7 +279,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     if (!session) return;
     const task = setTimeout(() => { void sync(); }, 0);
     return () => clearTimeout(task);
-  }, [session?.user?.id, sync]);
+  }, [session, sync]);
 
   useEffect(() => {
     if (!session) return;
@@ -293,7 +293,7 @@ export function CardProvider({ children }: PropsWithChildren) {
       subscription.remove();
       clearInterval(interval);
     };
-  }, [session?.user?.id, sync]);
+  }, [session, sync]);
 
   const setPrimaryCard = useCallback(async (id: string) => {
     const currentCards = cardsRef.current;
@@ -437,7 +437,7 @@ export function CardProvider({ children }: PropsWithChildren) {
     } finally {
       setPublishing(false);
     }
-  }, [activeCard, activeCardId, cardPublicUrl, saveRemoteCard, session, updateCardById]);
+  }, [activeCard, activeCardId, cardPublicUrl, persistCards, saveRemoteCard, session]);
 
   const deleteCard = useCallback(async (id: string) => {
     const currentCards = cardsRef.current;
@@ -468,7 +468,6 @@ export function CardProvider({ children }: PropsWithChildren) {
   );
 
   const value = useMemo<CardValue>(() => {
-    const env = readEnv();
     return {
       cards: visibleCards,
       card: activeCard,

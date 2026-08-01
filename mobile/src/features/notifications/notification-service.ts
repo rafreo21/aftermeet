@@ -7,13 +7,18 @@ import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
 const ENABLED_KEY = 'aftermeet-device-notifications-enabled-v1';
 const SCHEDULE_KEY = 'aftermeet-follow-up-notification-schedule-v1';
 const HISTORY_KEY = 'aftermeet-notification-history-v1';
+const REMINDER_TIME_KEY = 'aftermeet-follow-up-reminder-time-v1';
 const CHANNEL_ID = 'follow-ups';
 const MAX_HISTORY = 40;
 
 type ScheduledReminder = {
   identifier: string;
   dueAt: string;
+  reminderTime: string;
 };
+
+export const REMINDER_TIME_OPTIONS = ['09:00', '12:00', '17:00'] as const;
+export type ReminderTime = typeof REMINDER_TIME_OPTIONS[number];
 
 export type NotificationHistoryItem = {
   id: string;
@@ -37,11 +42,20 @@ function followUpKey(item: FollowUpItem) {
   return `${item.encounterId}:${item.actionId}`;
 }
 
-function reminderDate(dueAt: string) {
-  const due = new Date(`${dueAt.slice(0, 10)}T09:00:00`);
+function reminderDate(dueAt: string, reminderTime: ReminderTime) {
+  const due = new Date(`${dueAt.slice(0, 10)}T${reminderTime}:00`);
   if (Number.isNaN(due.getTime())) return null;
   if (due.getTime() <= Date.now()) return new Date(Date.now() + 5_000);
   return due;
+}
+
+export async function followUpReminderTime(): Promise<ReminderTime> {
+  const stored = await AsyncStorage.getItem(REMINDER_TIME_KEY);
+  return REMINDER_TIME_OPTIONS.includes(stored as ReminderTime) ? stored as ReminderTime : '09:00';
+}
+
+export async function setFollowUpReminderTime(value: ReminderTime) {
+  await AsyncStorage.setItem(REMINDER_TIME_KEY, value);
 }
 
 async function readSchedule(): Promise<Record<string, ScheduledReminder>> {
@@ -109,18 +123,19 @@ export async function syncFollowUpNotifications(items: FollowUpItem[]) {
   const withDueDate = open.filter((item) => item.dueAt.trim());
   const previous = await readSchedule();
   const next: Record<string, ScheduledReminder> = {};
+  const reminderTime = await followUpReminderTime();
 
   for (const item of withDueDate) {
     const key = followUpKey(item);
     const existing = previous[key];
-    if (existing?.dueAt === item.dueAt) {
+    if (existing?.dueAt === item.dueAt && existing.reminderTime === reminderTime) {
       next[key] = existing;
       continue;
     }
     if (existing) {
       await Notifications.cancelScheduledNotificationAsync(existing.identifier).catch(() => undefined);
     }
-    const date = reminderDate(item.dueAt);
+    const date = reminderDate(item.dueAt, reminderTime);
     if (!date) continue;
     const identifier = await Notifications.scheduleNotificationAsync({
       identifier: `aftermeet-followup-${item.encounterId}-${item.actionId}`,
@@ -142,7 +157,7 @@ export async function syncFollowUpNotifications(items: FollowUpItem[]) {
         channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
       },
     });
-    next[key] = { identifier, dueAt: item.dueAt };
+    next[key] = { identifier, dueAt: item.dueAt, reminderTime };
   }
 
   for (const [key, existing] of Object.entries(previous)) {

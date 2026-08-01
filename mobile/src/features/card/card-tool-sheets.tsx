@@ -11,7 +11,7 @@ import {
   Watch,
 } from 'phosphor-react-native';
 import { Platform, Image, StyleSheet, Text, View } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 
 import { BrandedQrPreview } from '@/components/branded-qr-preview';
@@ -250,7 +250,10 @@ export function WidgetToolSheetContent({
 }) {
   const { busy, run } = actions;
   const [snapshot, setSnapshot] = useState<WidgetSnapshot | null>(null);
-  const resolveCardUrl = cardPublicUrl || (() => publicUrl);
+  const resolveCardUrl = useMemo(
+    () => cardPublicUrl || (() => publicUrl),
+    [cardPublicUrl, publicUrl],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -260,7 +263,7 @@ export function WidgetToolSheetContent({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, allCards, card, publicUrl, cardPublicUrl]);
+  }, [accessToken, allCards, card, publicUrl, resolveCardUrl]);
 
   const connections = snapshot?.connections ?? [];
   const firstConnection = connections[0];
@@ -314,7 +317,7 @@ export function WidgetToolSheetContent({
                   </View>
                   <View style={styles.widgetBusinessCopy}>
                     {card.photo?.trim() ? (
-                      <Image source={{ uri: card.photo }} style={styles.widgetPhotoSmall} />
+                      <Image source={{ uri: card.photo }} style={styles.widgetPhotoSmall} alt={`${card.name || 'Your'} profile photo`} />
                     ) : (
                       <View style={styles.widgetAvatarSmall}>
                         <Text style={styles.widgetAvatarText}>{initials}</Text>
@@ -382,7 +385,6 @@ export function WidgetToolSheetContent({
 export function SignatureToolSheetContent({
   card,
   publicUrl,
-  accessToken,
   signatureProfile,
   initials,
   showCompany,
@@ -391,7 +393,6 @@ export function SignatureToolSheetContent({
 }: {
   card: MobileCard;
   publicUrl: string;
-  accessToken?: string;
   signatureProfile: SignatureProfile;
   initials: string;
   showCompany: boolean;
@@ -407,6 +408,7 @@ export function SignatureToolSheetContent({
             source={{ uri: signatureProfile.photoUrl.trim() }}
             style={styles.signaturePhotoImage}
             accessibilityLabel={`${card.name || 'Your'} profile photo`}
+            alt={`${card.name || 'Your'} profile photo`}
           />
         ) : (
           <View style={styles.signaturePhoto}>
@@ -472,11 +474,9 @@ export function WatchToolSheetContent({
 export function BackgroundToolSheetContent({
   card,
   publicUrl,
-  theme,
   actions,
   accessToken,
   published,
-  subtitle,
 }: SharedSheetProps & { published: boolean; subtitle: string }) {
   const { busy, run } = actions;
 

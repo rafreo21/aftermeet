@@ -9,10 +9,14 @@ import { getSupabase } from '@/lib/supabase';
 import { fetchFollowUps } from '@/features/follow-ups/follow-up-api';
 import {
   deviceNotificationsEnabled,
+  followUpReminderTime,
   notificationPermissionGranted,
+  REMINDER_TIME_OPTIONS,
   requestNotificationPermission,
   setDeviceNotificationsEnabled,
+  setFollowUpReminderTime,
   syncFollowUpNotifications,
+  type ReminderTime,
 } from '@/features/notifications/notification-service';
 import { colors, spacing } from '@/theme/tokens';
 
@@ -24,6 +28,7 @@ export default function SettingsScreen() {
   const [deviceSaving, setDeviceSaving] = useState(false);
   const [devicePermission, setDevicePermission] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [reminderTime, setReminderTime] = useState<ReminderTime>('09:00');
 
   useEffect(() => {
     if (!session) return;
@@ -37,11 +42,23 @@ export default function SettingsScreen() {
     void Promise.all([
       deviceNotificationsEnabled(),
       notificationPermissionGranted(),
-    ]).then(([enabled, granted]) => {
+      followUpReminderTime(),
+    ]).then(([enabled, granted, storedReminderTime]) => {
       setDeviceEnabled(enabled && granted);
       setDevicePermission(granted);
+      setReminderTime(storedReminderTime);
     });
   }, []);
+
+  async function chooseReminderTime(value: ReminderTime) {
+    setReminderTime(value);
+    await setFollowUpReminderTime(value);
+    if (deviceEnabled && session?.access_token) {
+      const followUps = await fetchFollowUps(session.access_token);
+      await syncFollowUpNotifications(followUps);
+    }
+    setNotificationMessage(`Device reminders will arrive at ${value} on their due date.`);
+  }
 
   async function toggleReminders(value: boolean) {
     setRemindersEnabled(value);
@@ -171,6 +188,31 @@ export default function SettingsScreen() {
               thumbColor={colors.white}
             />
           </View>
+          {deviceEnabled ? (
+            <View style={styles.reminderTimeBlock}>
+              <Text style={styles.preferenceTitle}>Reminder time</Text>
+              <View style={styles.reminderTimeOptions}>
+                {REMINDER_TIME_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: reminderTime === option }}
+                    onPress={() => void chooseReminderTime(option)}
+                    style={({ pressed }) => [
+                      styles.reminderTimeOption,
+                      reminderTime === option && styles.reminderTimeOptionSelected,
+                      pressed && styles.linkPanelPressed,
+                    ]}>
+                    <Text style={[
+                      styles.reminderTimeText,
+                      reminderTime === option && styles.reminderTimeTextSelected,
+                    ]}>{option}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.linkHint}>Uses this phone’s local time.</Text>
+            </View>
+          ) : null}
           {notificationMessage ? (
             <View style={styles.statusRow}>
               <Text style={[styles.statusMessage, !devicePermission && styles.statusError]}>
@@ -224,6 +266,22 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
   preferenceTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   preferenceDivider: { height: 1, backgroundColor: colors.line },
+  reminderTimeBlock: { gap: spacing.x2 },
+  reminderTimeOptions: { flexDirection: 'row', gap: spacing.x2 },
+  reminderTimeOption: {
+    minWidth: 68,
+    minHeight: 44,
+    paddingHorizontal: spacing.x3,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  reminderTimeOptionSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  reminderTimeText: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  reminderTimeTextSelected: { fontWeight: '900' },
   statusMessage: { color: colors.ink, fontSize: 12, lineHeight: 18 },
   statusError: { color: colors.danger },
   statusRow: { gap: spacing.x2 },

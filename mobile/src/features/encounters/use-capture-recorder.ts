@@ -172,9 +172,10 @@ export function useCaptureRecorder({
 
   useEffect(() => {
     void ensureRecordingsDirectory().catch(() => {});
+    const speechCapture = speechCaptureRef.current;
 
     return () => {
-      speechCaptureRef.current.abort();
+      speechCapture.abort();
       if (speechTimerRef.current) clearInterval(speechTimerRef.current);
     };
   }, []);

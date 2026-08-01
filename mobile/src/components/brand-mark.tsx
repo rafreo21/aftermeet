@@ -9,7 +9,7 @@ type BrandMarkProps = {
 export function BrandMark({ size = 36 }: BrandMarkProps) {
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
-      <Image source={logo} style={{ width: size, height: size }} contentFit="contain" accessibilityLabel="AfterMeet" />
+      <Image source={logo} style={{ width: size, height: size }} contentFit="contain" accessibilityLabel="AfterMeet" alt="AfterMeet" />
     </View>
   );
 }

@@ -50,7 +50,6 @@ export default function CaptureDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
-  const [guestSharingEnabled, setGuestSharingEnabled] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadRetryable, setUploadRetryable] = useState(true);
   const [approveHint, setApproveHint] = useState('');
@@ -138,7 +137,6 @@ export default function CaptureDetailScreen() {
         const nextEncounter = await getEncounter(session.access_token!, id);
         if (cancelled) return;
         setEncounter(nextEncounter);
-        setGuestSharingEnabled(nextEncounter.status === 'shared');
 
         const uri = await resolveEncounterRecordingUri(id, nextEncounter.recording);
         if (cancelled) return;
@@ -194,7 +192,6 @@ export default function CaptureDetailScreen() {
   const canApprove = uploadStatus !== 'uploading';
 
   function toggleGuestSharing(next: boolean) {
-    setGuestSharingEnabled(next);
     setApproveHint('');
 
     if (next) {
@@ -212,7 +209,6 @@ export default function CaptureDetailScreen() {
         .catch((caught) => {
           setErrorMessage(caught instanceof Error ? caught.message : 'Could not turn off guest sharing.');
           setErrorSheetOpen(true);
-          setGuestSharingEnabled(true);
         })
         .finally(() => setApproving(false));
     }
@@ -300,7 +296,6 @@ export default function CaptureDetailScreen() {
       return;
     }
 
-    setGuestSharingEnabled(true);
     if (needsUpload && recordingUri) {
       const uploaded = await syncUpload(
         session.access_token,

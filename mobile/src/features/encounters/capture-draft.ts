@@ -328,7 +328,8 @@ export function captureDraftToRemote(
   draft: CaptureWizardDraft,
   device: { id: string; label: string },
 ): RemoteCaptureSession {
-  const { recordingUri: _recordingUri, ...safeDraft } = draft;
+  const { recordingUri, ...safeDraft } = draft;
+  void recordingUri;
   return {
     ...safeDraft,
     encounterId: draft.encounterId,

@@ -9,8 +9,8 @@ import {
 } from '@/features/encounters/audio-upload';
 import type { LocalRecordingMetadata } from '@/features/encounters/local-recordings';
 import { mobileFetch } from '@/lib/mobile-api';
+import { requestFollowUpNotificationSync } from '@/features/notifications/notification-sync-events';
 import {
-  defaultFollowUpTitle,
   displayFollowUpTitle,
   type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
@@ -672,6 +672,7 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not save this meeting.');
   }
+  requestFollowUpNotificationSync();
 }
 
 export async function getEncounter(accessToken: string, id: string) {

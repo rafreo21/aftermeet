@@ -14,7 +14,7 @@ import { connectionFromScannedSlug } from '@/features/connections/connections-ap
 import { setAuthReturnPath } from '@/features/encounters/capture-draft';
 import { parseAfterMeetCardSlugFromScan } from '@/lib/parse-scanned-qr';
 import { useAppInsets } from '@/lib/safe-area';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 
 function parseCardSlug(url: string) {
   return parseAfterMeetCardSlugFromScan(url);

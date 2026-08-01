@@ -402,7 +402,7 @@ export default function CaptureWizardScreen() {
       status,
       seconds: recorder.seconds,
     });
-  }, [isTranscribing, recorder.pauseOrResume, recorder.recordingState, recorder.stopRecording]);
+  }, [isTranscribing, recorder.pauseOrResume, recorder.recordingState, recorder.seconds, recorder.stopRecording]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -729,7 +729,7 @@ export default function CaptureWizardScreen() {
     if (draft.recordingUri && draft.transcript.trim().length < 20 && session?.access_token) {
       void recorder.transcribeRecordingIfNeeded(draft.recordingUri);
     }
-  }, [draft.durationSeconds, draft.recordingSource, draft.recordingUri, draft.sessionStatus, draft.transcript, draftReady, recorder, session?.access_token, updateDraft]);
+  }, [draft.durationSeconds, draft.failureReason, draft.originDeviceId, draft.originDeviceLabel, draft.recordingSource, draft.recordingUri, draft.sessionStatus, draft.transcript, draftReady, recorder, session?.access_token, showCaptureError, updateDraft]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -823,7 +823,6 @@ export default function CaptureWizardScreen() {
     if (!params.exchange || !exchanges.length) return;
     const match = exchanges.find((item) => item.id === params.exchange);
     if (match) linkExchange(match);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exchanges, params.exchange]);
 
   function linkExchange(exchange: InboundExchange) {

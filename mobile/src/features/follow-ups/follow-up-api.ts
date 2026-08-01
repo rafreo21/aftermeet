@@ -2,6 +2,7 @@ import type { EncounterAction, EncounterParticipant, EncounterPayload } from '@/
 import { mobileFetch } from '@/lib/mobile-api';
 import { sortFollowUps } from '@/lib/due-date';
 import type { ContactMethod } from '@/features/card/types';
+import { requestFollowUpNotificationSync } from '@/features/notifications/notification-sync-events';
 
 export type FollowUpItem = {
   encounterId: string;
@@ -92,6 +93,7 @@ export async function completeFollowUp(accessToken: string, encounterId: string,
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not complete this follow-up.');
   }
+  requestFollowUpNotificationSync();
 }
 
 export async function reopenFollowUp(accessToken: string, encounterId: string, actionId: string) {
@@ -104,6 +106,7 @@ export async function reopenFollowUp(accessToken: string, encounterId: string, a
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not reopen this follow-up.');
   }
+  requestFollowUpNotificationSync();
 }
 
 export async function fetchEncounterRecords(accessToken: string) {

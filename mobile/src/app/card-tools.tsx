@@ -403,7 +403,6 @@ export default function CardToolsScreen() {
         <SignatureToolSheetContent
           card={card}
           publicUrl={publicUrl}
-          accessToken={session?.access_token}
           signatureProfile={signatureProfile}
           initials={initials}
           showCompany={showCompany}
