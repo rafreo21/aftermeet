@@ -16,7 +16,7 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
   useEffect(() => {
-    setCampaigns(readCampaigns());
+    queueMicrotask(() => setCampaigns(readCampaigns()));
   }, []);
 
   const analytics = useMemo(

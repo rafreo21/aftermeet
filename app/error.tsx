@@ -1,13 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  const [offline, setOffline] = useState(false);
+  const [offline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
 
   useEffect(() => {
     console.error(error);
-    setOffline(typeof navigator !== "undefined" && !navigator.onLine);
   }, [error]);
 
   return (
@@ -22,7 +22,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
         </p>
         <div>
           <button type="button" onClick={reset}>Try again</button>
-          <a href="/">Return home</a>
+          <Link href="/">Return home</Link>
         </div>
       </div>
     </main>

@@ -30,8 +30,10 @@ export default function CampaignDetailPage() {
 
   useEffect(() => {
     const id = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
-    setCampaign(findCampaignById(id));
-    setActiveCampaignId(readActiveCampaignId());
+    queueMicrotask(() => {
+      setCampaign(findCampaignById(id));
+      setActiveCampaignId(readActiveCampaignId());
+    });
   }, []);
 
   const contacts = useMemo(() => readContacts(), [campaign]);

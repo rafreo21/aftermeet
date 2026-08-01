@@ -157,8 +157,6 @@ export default function CardsPage() {
 
   useEffect(() => {
     if (!profile.slug) {
-      setQr("");
-      setQrSvg("");
       return;
     }
 
@@ -168,9 +166,6 @@ export default function CardsPage() {
       errorCorrectionLevel: "H",
       color: { dark: "#163300", light: "#ffffff" },
     } as const;
-    setQr("");
-    setQrSvg("");
-    setQrError("");
     Promise.all([
       fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=900`)
         .then(async (response) => {
@@ -182,6 +177,7 @@ export default function CardsPage() {
       QRCode.toString(shareUrl, { ...options, type: "svg" }),
     ]).then(([image, svg]) => {
       const svgDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      setQrError("");
       setQr(image || svgDataUri);
       setQrSvg(svg);
     }).catch(() => setQrError("We couldn’t generate this QR code. Check the card link and try again."));
@@ -218,7 +214,7 @@ export default function CardsPage() {
     });
     upsertLibraryCard(localStorage, card);
     queueCardSync(card);
-    window.location.href = `/business/card/edit?id=${card.id}`;
+    window.location.assign(`/business/card/edit?id=${card.id}`);
   }
 
   function createCardFromTemplate(template: CardTemplate) {
@@ -230,7 +226,7 @@ export default function CardsPage() {
     });
     upsertLibraryCard(localStorage, card);
     queueCardSync(card);
-    window.location.href = `/business/card/edit?id=${card.id}`;
+    window.location.assign(`/business/card/edit?id=${card.id}`);
   }
 
   function deleteActiveCard() {

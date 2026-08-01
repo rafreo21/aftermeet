@@ -39,32 +39,34 @@ export default function NewContactPage() {
     const params = new URLSearchParams(window.location.search);
     const linkedin = params.get("linkedin") ?? params.get("url") ?? "";
     const contactId = params.get("contact") ?? "";
-    if (linkedin) {
-      const profile = parseLinkedInProfileInput(linkedin);
-      if (profile) {
-        setForm((current) => ({
-          ...current,
-          fullName: current.fullName || capturedProfileFullName(profile),
-          linkedinUrl: normalizeLinkedInUrl(profile.url),
-        }));
+    queueMicrotask(() => {
+      if (linkedin) {
+        const profile = parseLinkedInProfileInput(linkedin);
+        if (profile) {
+          setForm((current) => ({
+            ...current,
+            fullName: current.fullName || capturedProfileFullName(profile),
+            linkedinUrl: normalizeLinkedInUrl(profile.url),
+          }));
+        }
       }
-    }
-    if (contactId) {
-      const contact = findContactById(contactId);
-      if (contact) {
-        setForm({
-          fullName: contactDisplayName(contact),
-          email: contact.email,
-          phone: contact.phone ?? "",
-          linkedinUrl: contact.linkedinUrl ?? "",
-          company: contact.company,
-          role: contact.role,
-          context: contact.context,
-          nextAction: "",
-        });
+      if (contactId) {
+        const contact = findContactById(contactId);
+        if (contact) {
+          setForm({
+            fullName: contactDisplayName(contact),
+            email: contact.email,
+            phone: contact.phone ?? "",
+            linkedinUrl: contact.linkedinUrl ?? "",
+            company: contact.company,
+            role: contact.role,
+            context: contact.context,
+            nextAction: "",
+          });
+        }
       }
-    }
-    setCampaignId(defaultCampaignId());
+      setCampaignId(defaultCampaignId());
+    });
   }, []);
 
   function save(event: React.FormEvent) {

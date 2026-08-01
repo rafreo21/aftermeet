@@ -31,10 +31,12 @@ export default function ContactDetailPage() {
 
   useEffect(() => {
     const id = window.location.pathname.split("/").filter(Boolean).at(-1) || "";
-    setContactId(id);
-    const loaded = findContactById(id);
-    setContact(loaded);
-    if (loaded) setEncounters(encountersForContact(loaded));
+    queueMicrotask(() => {
+      setContactId(id);
+      const loaded = findContactById(id);
+      setContact(loaded);
+      if (loaded) setEncounters(encountersForContact(loaded));
+    });
   }, []);
 
   const methods = useMemo(() => {

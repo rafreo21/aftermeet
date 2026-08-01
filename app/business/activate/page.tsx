@@ -27,8 +27,10 @@ export default function ActivatePage() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setContacts(readContacts());
-    setHydrated(true);
+    queueMicrotask(() => {
+      setContacts(readContacts());
+      setHydrated(true);
+    });
     void fetch("/api/crm/hubspot/status")
       .then(async (response) => {
         if (!response.ok) return;

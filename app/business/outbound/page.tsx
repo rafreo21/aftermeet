@@ -34,9 +34,11 @@ export default function OutboundPage() {
   const [habit, setHabit] = useState(readOutboundHabit());
 
   useEffect(() => {
-    setEncounters(readEncounters());
-    setHabit(readOutboundHabit());
-    setHydrated(true);
+    queueMicrotask(() => {
+      setEncounters(readEncounters());
+      setHabit(readOutboundHabit());
+      setHydrated(true);
+    });
   }, []);
 
   const queue = useMemo<QueueItem[]>(() => encounters.flatMap((encounter) => encounter.actions
