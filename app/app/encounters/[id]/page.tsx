@@ -44,6 +44,7 @@ export default function EncounterReviewPage() {
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
   const [uploadError, setUploadError] = useState("");
+  const [uploadRetryable, setUploadRetryable] = useState(true);
   const [localAudioUrl, setLocalAudioUrl] = useState<string | null>(null);
   const [localRecordingMimeType, setLocalRecordingMimeType] = useState("audio/mp4");
   const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({});
@@ -127,6 +128,7 @@ export default function EncounterReviewPage() {
       } catch (caught) {
         if (cancelled) return;
         setUploadStatus("failed");
+        setUploadRetryable((caught as Error & { retryable?: boolean })?.retryable !== false);
         setUploadError(caught instanceof Error ? caught.message : "Could not upload recording for guests.");
       }
     })();
@@ -155,6 +157,7 @@ export default function EncounterReviewPage() {
       setMessage("Recording uploaded for guest sharing.");
     } catch (caught) {
       setUploadStatus("failed");
+      setUploadRetryable((caught as Error & { retryable?: boolean })?.retryable !== false);
       setUploadError(caught instanceof Error ? caught.message : "Could not upload recording for guests.");
     }
   }
@@ -581,7 +584,7 @@ export default function EncounterReviewPage() {
           {uploadStatus === "failed" ? (
             <>
               <p className="share-message" role="status">{uploadError || "Upload failed."}</p>
-              <Button fullWidth variant="secondary" onClick={() => void retryUpload()}>Retry upload</Button>
+              {uploadRetryable ? <Button fullWidth variant="secondary" onClick={() => void retryUpload()}>Retry upload</Button> : null}
             </>
           ) : null}
           {encounter.status !== "shared" ? (

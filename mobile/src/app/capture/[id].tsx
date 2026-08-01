@@ -52,6 +52,7 @@ export default function CaptureDetailScreen() {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [guestSharingEnabled, setGuestSharingEnabled] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadRetryable, setUploadRetryable] = useState(true);
   const [approveHint, setApproveHint] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -115,6 +116,7 @@ export default function CaptureDetailScreen() {
       return uploaded;
     } catch (caught) {
       setUploadStatus('failed');
+      setUploadRetryable((caught as Error & { retryable?: boolean })?.retryable !== false);
       setUploadError(caught instanceof Error ? caught.message : 'Could not upload recording for guests.');
       return null;
     }
@@ -736,7 +738,7 @@ export default function CaptureDetailScreen() {
         {uploadStatus === 'failed' ? (
           <View style={styles.uploadFailed}>
             <Text style={styles.uploadFailedText}>{uploadError || 'Upload failed.'}</Text>
-            {recordingUri ? (
+            {recordingUri && uploadRetryable ? (
               <Button
                 variant="secondary"
                 onPress={() => void syncUpload(

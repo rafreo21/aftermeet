@@ -2,7 +2,8 @@ import { Component, type ErrorInfo, type PropsWithChildren } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { reportClientError } from '@/lib/client-error-reporting';
+import { colors, spacing } from '@/theme/tokens';
 
 type Props = PropsWithChildren<{
   onReset?: () => void;
@@ -21,6 +22,12 @@ export class CaptureErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Capture screen crashed:', error, info.componentStack);
+    void reportClientError({
+      route: '/capture',
+      message: error.message || 'Capture screen crashed',
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
   }
 
   private reset = () => {

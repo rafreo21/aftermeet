@@ -21,11 +21,19 @@ export async function uploadEncounterRecording(
   const payload = await response.json().catch(() => ({})) as {
     ok?: boolean;
     error?: string;
+    code?: string;
+    retryable?: boolean;
     recording?: LocalRecordingMetadata;
   };
 
   if (!response.ok || !payload.ok || !payload.recording) {
-    throw new Error(payload.error || "Could not upload this recording for sharing.");
+    const error = new Error(payload.error || (response.status === 401
+      ? "Your session has expired. Sign in again; your local recording is safe."
+      : response.status === 413
+        ? "This recording is too large to upload for sharing. Your local copy is safe."
+        : "The recording could not be uploaded for sharing. Your local copy is safe—check your connection and retry."));
+    Object.assign(error, { code: payload.code, retryable: payload.retryable ?? response.status >= 500 });
+    throw error;
   }
 
   return {

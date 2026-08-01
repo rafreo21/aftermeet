@@ -209,6 +209,7 @@ export default function NewEncounterPage() {
   const [interimTranscript, setInterimTranscript] = useState("");
   const [transcriptSupported, setTranscriptSupported] = useState(true);
   const [transcriptStatus, setTranscriptStatus] = useState<"idle" | "listening" | "receiving" | "unavailable" | "transcribing">("idle");
+  const [transcriptionRetryable, setTranscriptionRetryable] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [draftMessage, setDraftMessage] = useState("");
   const [recoveryReason, setRecoveryReason] = useState("");
@@ -532,11 +533,13 @@ export default function NewEncounterPage() {
     if (!needsServer) return cleanedTranscript;
 
     setTranscriptStatus("transcribing");
+    setTranscriptionRetryable(false);
     const result = await transcribeEncounterAudioBlob(blob, { language: "en" });
     if (result.transcript && (!options?.preferSpeakerLabels || result.diarized || cleanedTranscript.trim().length < 20)) {
       finalTranscriptRef.current = result.transcript;
       setForm((current) => ({ ...current, transcript: result.transcript }));
       setTranscriptStatus("idle");
+      setTranscriptionRetryable(false);
       if (result.diarized && result.speakers?.length) {
         setDraftMessage(`${result.speakers.length} voices detected. Confirm their names on the review screen.`);
       }
@@ -550,11 +553,10 @@ export default function NewEncounterPage() {
     }
 
     setTranscriptStatus("unavailable");
-    if (result.unavailable === "ai_not_configured") {
-      setDraftMessage("Live speech-to-text is unavailable here. Paste or type a transcript, or configure AI Gateway for server transcription.");
-    } else {
-      setDraftMessage("Could not transcribe this recording automatically. Paste or type what was said.");
-    }
+    setTranscriptionRetryable(result.retryable === true);
+    setDraftMessage(result.error || (result.unavailable === "ai_not_configured"
+      ? "Automatic transcription is not configured. Your recording is safe; paste or type a transcript to continue."
+      : "Transcription is temporarily unavailable. Your recording is safe—retry later or continue with manual notes."));
     setDraftSource("");
     return cleanedTranscript;
   }
@@ -1297,6 +1299,11 @@ export default function NewEncounterPage() {
                 placeholder={transcriptSupported ? "Your transcript will appear here while you record…" : "Live transcription is unavailable in this browser. Paste or type the transcript here."}
               />
               {!transcriptSupported && <small>Audio recording is working, but this browser could not provide live speech-to-text. AfterMeet will transcribe the recording when you stop, or you can type or paste a transcript here.</small>}
+              {transcriptionRetryable && audioUrl ? (
+                <Button variant="secondary" onClick={() => void maybeTranscribeFromServer(audioBlobRef.current!, finalTranscriptRef.current)}>
+                  Retry transcription
+                </Button>
+              ) : null}
               {draftMessage && <p className="encounter-draft-note"><span className="encounter-draft-label">{draftSource === "ai" ? "AI draft" : "Suggested draft"}</span>{draftMessage.replace(/^(AI draft|Suggested draft)[^—]*—\s*/, "")}{draftLoading ? " Generating…" : ""}</p>}
               {uncertainFields.length > 0 && <p className="encounter-draft-uncertain">Double-check: {uncertainFields.join(", ")}</p>}
             </div>}

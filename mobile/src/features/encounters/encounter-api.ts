@@ -407,6 +407,8 @@ type TranscribePayload = {
   source?: 'ai' | 'unavailable';
   unavailable?: string;
   error?: string;
+  code?: string;
+  retryable?: boolean;
   diarized?: boolean;
   speakers?: string[];
   segments?: Array<{
@@ -536,13 +538,31 @@ export async function uploadEncounterRecording(
     method: 'POST',
     body: formData,
   });
-  const payload = await response.json() as {
-    ok?: boolean;
-    error?: string;
-    recording?: LocalRecordingMetadata;
-  };
+  const raw = await response.text();
+  const payload = (() => {
+    try {
+      return raw ? JSON.parse(raw) as {
+        ok?: boolean;
+        error?: string;
+        code?: string;
+        retryable?: boolean;
+        recording?: LocalRecordingMetadata;
+      } : {};
+    } catch {
+      return {};
+    }
+  })();
   if (!response.ok || !payload.ok || !payload.recording) {
-    throw new Error(payload.error || 'Could not upload this recording for sharing.');
+    const fallback = response.status === 401
+      ? 'Your session has expired. Sign in again; your local recording is safe.'
+      : response.status === 413
+        ? 'This recording is too large to upload for sharing. Your local copy is safe.'
+        : raw.trim().startsWith('<')
+          ? 'The upload service returned an invalid response. Your local recording is safe—retry later.'
+          : 'The recording could not be uploaded for sharing. Your local copy is safe—check your connection and retry.';
+    const error = new Error(payload.error || fallback);
+    Object.assign(error, { code: payload.code, retryable: payload.retryable ?? response.status >= 500 });
+    throw error;
   }
   return payload.recording;
 }

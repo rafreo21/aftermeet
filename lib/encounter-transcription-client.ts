@@ -3,6 +3,8 @@ export type EncounterTranscriptionResult = {
   source: "ai" | "unavailable";
   unavailable?: string;
   error?: string;
+  code?: string;
+  retryable?: boolean;
   diarized?: boolean;
   speakers?: string[];
   segments?: Array<{
@@ -28,12 +30,14 @@ export async function transcribeEncounterAudioBlob(
     body: formData,
   });
 
-  const payload = await response.json().catch(() => null) as EncounterTranscriptionResult | { error?: string } | null;
+  const payload = await response.json().catch(() => null) as EncounterTranscriptionResult | { error?: string; code?: string; retryable?: boolean } | null;
   if (!response.ok || !payload || !("source" in payload)) {
     return {
       transcript: "",
       source: "unavailable",
       error: payload && "error" in payload && payload.error ? payload.error : "Could not transcribe this recording.",
+      code: payload && "code" in payload ? payload.code : undefined,
+      retryable: payload && "retryable" in payload ? payload.retryable : response.status >= 500,
     };
   }
 

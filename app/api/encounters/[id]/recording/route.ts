@@ -4,16 +4,20 @@ import { createApiSupabaseClient, resolveApiUser } from "../../../../../lib/auth
 import { cloudExpiresAt } from "../../../../../lib/recording-metadata";
 import { ENCOUNTER_RECORDINGS_BUCKET, createServiceSupabaseClient } from "../../../../../lib/supabase/service";
 import { audioFileExtension, detectAudioMimeType } from "../../../../../lib/audio-format";
+import { classifyRecordingUploadError } from "../../../../../lib/capture-errors";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
 
-  const formData = await request.formData();
+  const formData = await request.formData().catch(() => null);
+  if (!formData) {
+    return NextResponse.json({ error: "The recording upload could not be read. Your local copy is safe—retry from the meeting.", code: "recording_upload_failed", retryable: true }, { status: 400 });
+  }
   const audio = formData.get("audio");
   if (!(audio instanceof File) || audio.size <= 0) {
-    return NextResponse.json({ error: "An audio recording is required." }, { status: 400 });
+    return NextResponse.json({ error: "No recording was received. Your local copy is safe—choose it again and retry.", code: "audio_missing", retryable: false }, { status: 400 });
   }
 
   const supabase = await createApiSupabaseClient(request);
@@ -30,7 +34,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const service = createServiceSupabaseClient();
   if (!service) {
-    return NextResponse.json({ error: "Shared recording storage is not configured yet." }, { status: 503 });
+    return NextResponse.json({ error: "Shared recording storage is not configured yet. Your local recording is safe.", code: "recording_storage_not_configured", retryable: false }, { status: 503 });
   }
 
   const buffer = Buffer.from(await audio.arrayBuffer());
@@ -41,7 +45,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
 
   if (upload.error) {
-    return NextResponse.json({ error: upload.error.message || "Could not upload this recording." }, { status: 500 });
+    const failure = classifyRecordingUploadError(upload.error);
+    return NextResponse.json({ error: failure.error, code: failure.code, retryable: failure.retryable }, { status: failure.status });
   }
 
   const previous = encounter.recording_metadata && typeof encounter.recording_metadata === "object"
@@ -70,7 +75,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .eq("workspace_id", user.workspaceId);
 
   if (updateError) {
-    return NextResponse.json({ error: "Recording uploaded but could not save metadata." }, { status: 500 });
+    return NextResponse.json({ error: "The recording uploaded, but sharing could not be finalized. Your local copy is safe—retry from the meeting.", code: "recording_metadata_failed", retryable: true }, { status: 500 });
   }
 
   return NextResponse.json({

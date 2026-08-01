@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveApiUser } from "../../../../lib/auth/api-request";
+import { classifyTranscriptionError } from "../../../../lib/capture-errors";
 import { transcribeEncounterAudio } from "../../../../lib/encounter-transcription-server";
 
 export const maxDuration = 60;
@@ -74,8 +75,8 @@ export async function POST(request: Request) {
         fileName: typeof body?.fileName === "string" ? body.fileName : undefined,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not transcribe this recording.";
-      return NextResponse.json({ error: message }, { status: 400 });
+      const failure = classifyTranscriptionError(error);
+      return NextResponse.json({ error: failure.error, code: failure.code, retryable: failure.retryable }, { status: failure.status });
     }
   }
 
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
     const buffer = new Uint8Array(await audio.arrayBuffer());
     return await runTranscription(buffer, { language, mimeType, fileName });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not transcribe this recording.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const failure = classifyTranscriptionError(error);
+    return NextResponse.json({ error: failure.error, code: failure.code, retryable: failure.retryable }, { status: failure.status });
   }
 }
