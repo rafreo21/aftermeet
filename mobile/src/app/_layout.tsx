@@ -51,7 +51,6 @@ function RootNavigator() {
       <Stack.Screen name="settings/connected-accounts" />
       <Stack.Screen name="settings/follow-ups" />
       <Stack.Screen name="settings/follow-ups-history" />
-      <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="integrations/callback" options={{ presentation: 'modal', headerShown: false }} />
     </Stack>

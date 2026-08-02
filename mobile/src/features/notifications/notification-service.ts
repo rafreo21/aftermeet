@@ -183,6 +183,14 @@ export async function recordNotification(notification: Notifications.Notificatio
   await storeNotificationHistoryItem(item);
 }
 
+async function readNotificationHistory(): Promise<NotificationHistoryItem[]> {
+  try {
+    return JSON.parse(await AsyncStorage.getItem(HISTORY_KEY) || '[]') as NotificationHistoryItem[];
+  } catch {
+    return [];
+  }
+}
+
 async function storeNotificationHistoryItem(item: NotificationHistoryItem) {
   const current = await readNotificationHistory();
   const isNew = !current.some((entry) => entry.id === item.id);
@@ -227,33 +235,6 @@ export async function notifyMeetingReviewReady(input: { encounterId: string; tit
   }
 
   return true;
-}
-
-export async function readNotificationHistory(): Promise<NotificationHistoryItem[]> {
-  try {
-    return JSON.parse(await AsyncStorage.getItem(HISTORY_KEY) || '[]') as NotificationHistoryItem[];
-  } catch {
-    return [];
-  }
-}
-
-export async function clearNotificationHistory() {
-  await AsyncStorage.removeItem(HISTORY_KEY);
-  await Notifications.dismissAllNotificationsAsync();
-}
-
-export async function unreadNotificationCount() {
-  const history = await readNotificationHistory();
-  return history.filter((item) => !item.readAt).length;
-}
-
-export async function markAllNotificationsRead() {
-  const history = await readNotificationHistory();
-  const readAt = new Date().toISOString();
-  await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(
-    history.map((item) => item.readAt ? item : { ...item, readAt }),
-  ));
-  await Notifications.setBadgeCountAsync(0).catch(() => false);
 }
 
 export async function scheduledFollowUpCount() {

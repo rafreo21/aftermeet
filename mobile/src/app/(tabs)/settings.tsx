@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Bell, CaretRight, EnvelopeSimple, ListChecks } from 'phosphor-react-native';
+import { Bell, CalendarCheck, CaretRight, CheckCircle, ClockCounterClockwise, EnvelopeSimple, ListChecks, ShareNetwork } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
@@ -18,7 +18,24 @@ import {
   syncFollowUpNotifications,
   type ReminderTime,
 } from '@/features/notifications/notification-service';
+import {
+  deactivatePushToken,
+  registerPushToken,
+} from '@/features/notifications/push-token-service';
+import {
+  fetchNotificationPreferences,
+  updateNotificationPreferences,
+  type NotificationPreferences,
+  type NotificationType,
+} from '@/features/notifications/notification-center-api';
 import { colors, spacing } from '@/theme/tokens';
+
+const NOTIFICATION_TYPE_ROWS: Array<{ type: NotificationType; icon: typeof Bell; label: string; hint: string }> = [
+  { type: 'review_ready', icon: CheckCircle, label: 'Transcript ready', hint: 'A capture is ready for your review' },
+  { type: 'follow_up_due', icon: CalendarCheck, label: 'Follow-up due', hint: 'A reviewed follow-up is due today' },
+  { type: 'follow_up_overdue', icon: ClockCounterClockwise, label: 'Follow-up overdue', hint: 'A reviewed follow-up is overdue' },
+  { type: 'shared_meeting_update', icon: ShareNetwork, label: 'Shared meeting updates', hint: 'A guest commits to their own follow-up' },
+];
 
 export default function SettingsScreen() {
   const { session, configured, signOut, loading } = useAuth();
@@ -29,6 +46,8 @@ export default function SettingsScreen() {
   const [devicePermission, setDevicePermission] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [reminderTime, setReminderTime] = useState<ReminderTime>('09:00');
+  const [typePreferences, setTypePreferences] = useState<NotificationPreferences | null>(null);
+  const [typePreferencesSaving, setTypePreferencesSaving] = useState<NotificationType | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -37,6 +56,28 @@ export default function SettingsScreen() {
       if (typeof data === 'boolean') setRemindersEnabled(data);
     });
   }, [session]);
+
+  useEffect(() => {
+    if (!session?.access_token) {
+      void Promise.resolve().then(() => setTypePreferences(null));
+      return;
+    }
+    void fetchNotificationPreferences(session.access_token).then(setTypePreferences).catch(() => undefined);
+  }, [session]);
+
+  async function toggleNotificationType(type: NotificationType, value: boolean) {
+    if (!session?.access_token || !typePreferences) return;
+    const next = { ...typePreferences, [type]: value };
+    setTypePreferences(next);
+    setTypePreferencesSaving(type);
+    try {
+      await updateNotificationPreferences(session.access_token, next);
+    } catch {
+      setTypePreferences(typePreferences);
+    } finally {
+      setTypePreferencesSaving(null);
+    }
+  }
 
   useEffect(() => {
     void Promise.all([
@@ -80,6 +121,7 @@ export default function SettingsScreen() {
       if (!value) {
         await setDeviceNotificationsEnabled(false);
         setDeviceEnabled(false);
+        if (session?.access_token) void deactivatePushToken(session.access_token);
         return;
       }
 
@@ -96,6 +138,7 @@ export default function SettingsScreen() {
       if (session?.access_token) {
         const followUps = await fetchFollowUps(session.access_token);
         await syncFollowUpNotifications(followUps);
+        void registerPushToken(session.access_token);
       }
       setNotificationMessage('Device reminders are on. AfterMeet will remind you when a follow-up is due.');
     } catch {
@@ -213,6 +256,33 @@ export default function SettingsScreen() {
               <Text style={styles.linkHint}>Uses this phone’s local time.</Text>
             </View>
           ) : null}
+          {typePreferences ? (
+            <>
+              <View style={styles.preferenceDivider} />
+              <View style={styles.notificationHeading}>
+                <Text style={styles.preferenceTitle}>Notify me about</Text>
+              </View>
+              {NOTIFICATION_TYPE_ROWS.map((row) => (
+                <View key={row.type} style={styles.reminderRow}>
+                  <View style={styles.linkCopy}>
+                    <View style={styles.linkTitleRow}>
+                      <row.icon size={18} color={colors.ink} weight="bold" />
+                      <Text style={styles.preferenceTitle}>{row.label}</Text>
+                    </View>
+                    <Text style={styles.linkHint}>{row.hint}</Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel={row.label}
+                    value={typePreferences[row.type]}
+                    disabled={typePreferencesSaving === row.type}
+                    onValueChange={(value) => void toggleNotificationType(row.type, value)}
+                    trackColor={{ false: colors.line, true: colors.accent }}
+                    thumbColor={colors.white}
+                  />
+                </View>
+              ))}
+            </>
+          ) : null}
           {notificationMessage ? (
             <View style={styles.statusRow}>
               <Text style={[styles.statusMessage, !devicePermission && styles.statusError]}>
@@ -238,7 +308,14 @@ export default function SettingsScreen() {
       {!session ? (
         <Button onPress={() => router.push('/auth')}>Sign in or sign up</Button>
       ) : (
-        <Button variant="secondary" onPress={signOut}>Sign out</Button>
+        <Button
+          variant="secondary"
+          onPress={() => {
+            if (session.access_token) void deactivatePushToken(session.access_token);
+            signOut();
+          }}>
+          Sign out
+        </Button>
       )}
     </Screen>
   );

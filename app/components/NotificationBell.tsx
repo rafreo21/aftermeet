@@ -1,25 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BellIcon } from "@phosphor-icons/react/dist/csr/Bell";
+import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
+import { ShareNetworkIcon } from "@phosphor-icons/react/dist/csr/ShareNetwork";
 import { LinkButton } from "./Button";
 import { BROWSER_NOTIFICATION_CHANGE_EVENT, BROWSER_NOTIFICATION_KEY } from "./NotificationPreferences";
 
-type FollowUpAlert = {
-  encounterId: string;
-  actionId: string;
+type NotificationType = "review_ready" | "follow_up_due" | "follow_up_overdue" | "shared_meeting_update";
+
+type NotificationAlert = {
+  id: string;
+  type: NotificationType;
   title: string;
-  dueAt: string;
-  status: string;
-  owner: "me" | "guest";
-  personName: string;
-  encounterTitle: string;
+  body: string;
+  encounterId: string | null;
+  actionId: string;
+  readAt: string | null;
+  createdAt: string;
 };
 
-const READ_KEY = "aftermeet-read-notifications-v1";
+type FollowUpDueCount = { encounterId: string; actionId: string; owner: "me" | "guest"; status: string; dueAt: string };
+
 const SHOWN_KEY = "aftermeet-shown-browser-notifications-v1";
 
 function startOfToday() {
@@ -28,33 +34,43 @@ function startOfToday() {
   return today;
 }
 
-function alertUrgency(dueAt: string): "overdue" | "today" | null {
-  if (!dueAt) return null;
+function isUrgent(dueAt: string): boolean {
+  if (!dueAt) return false;
   const due = new Date(`${dueAt.slice(0, 10)}T12:00:00`);
-  if (Number.isNaN(due.getTime())) return null;
+  if (Number.isNaN(due.getTime())) return false;
   due.setHours(0, 0, 0, 0);
-  const today = startOfToday();
-  if (due < today) return "overdue";
-  if (due.getTime() === today.getTime()) return "today";
-  return null;
+  return due <= startOfToday();
 }
 
-function alertId(alert: FollowUpAlert) {
-  return `${alert.encounterId}:${alert.actionId}:${alert.dueAt}`;
-}
-
-function readStoredIds() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(READ_KEY) || "[]");
-    return new Set(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : []);
-  } catch {
-    return new Set<string>();
+function iconForType(type: NotificationType) {
+  switch (type) {
+    case "review_ready": return CheckCircleIcon;
+    case "follow_up_due": return CalendarCheckIcon;
+    case "follow_up_overdue": return ClockCounterClockwiseIcon;
+    case "shared_meeting_update": return ShareNetworkIcon;
+    default: return BellIcon;
   }
 }
 
+function notificationHref(alert: NotificationAlert) {
+  if (!alert.encounterId) return "/app/followups";
+  return `/app/encounters/${alert.encounterId}`;
+}
+
+function relativeTime(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function NotificationBell({ onActionableCountChange }: { onActionableCountChange?: (count: number) => void }) {
-  const [alerts, setAlerts] = useState<FollowUpAlert[]>([]);
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [alerts, setAlerts] = useState<NotificationAlert[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -63,10 +79,11 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/follow-ups", { cache: "no-store" });
-      if (!response.ok) throw new Error("Could not load alerts");
-      const payload = await response.json() as { followUps?: FollowUpAlert[] };
-      setAlerts((payload.followUps ?? []).filter((item) => item.owner === "me" && item.status !== "completed" && Boolean(alertUrgency(item.dueAt))));
+      const response = await fetch("/api/notifications", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load notifications");
+      const payload = await response.json() as { notifications?: NotificationAlert[]; unreadCount?: number };
+      setAlerts(payload.notifications ?? []);
+      setUnreadCount(payload.unreadCount ?? 0);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -75,8 +92,24 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
     }
   }, []);
 
+  // The "Follow-ups" nav badge counts due/overdue work items, which is a
+  // distinct concept from unread notifications — notifications are alerts
+  // that point at work, not the work queue itself.
+  const loadActionableFollowUpCount = useCallback(async () => {
+    try {
+      const response = await fetch("/api/follow-ups", { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json() as { followUps?: FollowUpDueCount[] };
+      const count = (payload.followUps ?? []).filter((item) => (
+        item.owner === "me" && item.status !== "completed" && isUrgent(item.dueAt)
+      )).length;
+      onActionableCountChange?.(count);
+    } catch {
+      // Leave the last known nav badge rather than flash it away on a transient failure.
+    }
+  }, [onActionableCountChange]);
+
   useEffect(() => {
-    void Promise.resolve().then(() => setReadIds(readStoredIds()));
     const syncBrowserPreference = () => setBrowserNotificationsEnabled(
       "Notification" in window
       && Notification.permission === "granted"
@@ -85,12 +118,16 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
     void Promise.resolve().then(syncBrowserPreference);
     window.addEventListener(BROWSER_NOTIFICATION_CHANGE_EVENT, syncBrowserPreference);
     void Promise.resolve().then(load);
-    const interval = window.setInterval(() => void load(), 60_000);
+    void Promise.resolve().then(loadActionableFollowUpCount);
+    const interval = window.setInterval(() => {
+      void load();
+      void loadActionableFollowUpCount();
+    }, 60_000);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener(BROWSER_NOTIFICATION_CHANGE_EVENT, syncBrowserPreference);
     };
-  }, [load]);
+  }, [load, loadActionableFollowUpCount]);
 
   useEffect(() => {
     if (!browserNotificationsEnabled || !("Notification" in window)) return;
@@ -99,25 +136,18 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
       const stored = JSON.parse(localStorage.getItem(SHOWN_KEY) || "[]");
       if (Array.isArray(stored)) shown = new Set(stored.filter((value): value is string => typeof value === "string"));
     } catch {}
-    const nextAlerts = alerts.filter((alert) => !shown.has(alertId(alert)));
+    const nextAlerts = alerts.filter((alert) => !alert.readAt && !shown.has(alert.id));
     for (const alert of nextAlerts) {
-      const notification = new Notification(alert.title, {
-        body: `${alert.personName || alert.encounterTitle} · ${alertUrgency(alert.dueAt) === "overdue" ? "Overdue" : "Due today"}`,
-        tag: alertId(alert),
-      });
+      const notification = new Notification(alert.title, { body: alert.body, tag: alert.id });
       notification.onclick = () => {
         window.focus();
-        window.location.assign(`/app/encounters/${alert.encounterId}`);
+        window.location.assign(notificationHref(alert));
         notification.close();
       };
-      shown.add(alertId(alert));
+      shown.add(alert.id);
     }
     localStorage.setItem(SHOWN_KEY, JSON.stringify(Array.from(shown).slice(-200)));
   }, [alerts, browserNotificationsEnabled]);
-
-  useEffect(() => {
-    onActionableCountChange?.(alerts.length);
-  }, [alerts.length, onActionableCountChange]);
 
   useEffect(() => {
     function closeWhenOutside(event: MouseEvent) {
@@ -134,20 +164,38 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
     };
   }, []);
 
-  const unreadCount = useMemo(() => alerts.filter((alert) => !readIds.has(alertId(alert))).length, [alerts, readIds]);
-
-  function persistRead(next: Set<string>) {
-    setReadIds(next);
-    localStorage.setItem(READ_KEY, JSON.stringify(Array.from(next)));
-  }
-
-  function markRead(alert: FollowUpAlert) {
-    persistRead(new Set([...readIds, alertId(alert)]));
+  async function markRead(alert: NotificationAlert) {
+    if (alert.readAt) {
+      setOpen(false);
+      return;
+    }
+    setAlerts((current) => current.map((item) => (item.id === alert.id ? { ...item, readAt: new Date().toISOString() } : item)));
+    setUnreadCount((current) => Math.max(0, current - 1));
     setOpen(false);
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: alert.id }),
+      });
+    } catch {
+      // Best-effort — the next load() reconciles state if this failed.
+    }
   }
 
-  function markAllRead() {
-    persistRead(new Set([...readIds, ...alerts.map(alertId)]));
+  async function markAllRead() {
+    const now = new Date().toISOString();
+    setAlerts((current) => current.map((item) => (item.readAt ? item : { ...item, readAt: now })));
+    setUnreadCount(0);
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+    } catch {
+      // Best-effort — the next load() reconciles state if this failed.
+    }
   }
 
   return (
@@ -161,23 +209,23 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
         <section className="notification-popover" role="dialog" aria-label="Notifications">
           <header>
             <div><span>Attention centre</span><h2>Notifications</h2></div>
-            {unreadCount ? <button type="button" onClick={markAllRead}><CheckIcon size={14} weight="bold" />Mark all read</button> : null}
+            {unreadCount ? <button type="button" onClick={() => void markAllRead()}><CheckIcon size={14} weight="bold" />Mark all read</button> : null}
           </header>
           <div className="notification-popover-body">
             {loading ? <div className="notification-loading"><i /><i /><i /></div> : failed ? (
               <div className="notification-empty"><strong>Couldn&apos;t load notifications</strong><p>Check your connection and try again.</p><button type="button" onClick={() => void load()}>Try again</button></div>
             ) : alerts.length ? alerts.slice(0, 8).map((alert) => {
-              const urgency = alertUrgency(alert.dueAt);
-              const isUnread = !readIds.has(alertId(alert));
+              const Icon = iconForType(alert.type);
+              const isUnread = !alert.readAt;
               return (
-                <Link className={`notification-item ${isUnread ? "is-unread" : ""}`} href={`/app/encounters/${alert.encounterId}`} key={alertId(alert)} prefetch={false} onClick={() => markRead(alert)}>
-                  <span className={`notification-status ${urgency}`}><ClockIcon size={17} weight="bold" /></span>
-                  <span><strong>{alert.title}</strong><small>{alert.personName || alert.encounterTitle}</small><em>{urgency === "overdue" ? "Overdue" : "Due today"}</em></span>
+                <Link className={`notification-item ${isUnread ? "is-unread" : ""}`} href={notificationHref(alert)} key={alert.id} prefetch={false} onClick={() => void markRead(alert)}>
+                  <span className={`notification-status notification-status-${alert.type}`}><Icon size={17} weight="bold" /></span>
+                  <span><strong>{alert.title}</strong>{alert.body ? <small>{alert.body}</small> : null}<em>{relativeTime(alert.createdAt)}</em></span>
                   {isUnread ? <i aria-label="Unread" /> : null}
                 </Link>
               );
             }) : (
-              <div className="notification-empty"><span><CheckIcon size={22} weight="bold" /></span><strong>You&apos;re all caught up</strong><p>New due-date alerts and meeting activity will appear here.</p></div>
+              <div className="notification-empty"><span><CheckIcon size={22} weight="bold" /></span><strong>You&apos;re all caught up</strong><p>Review-ready captures, due follow-ups, and shared-meeting updates will appear here.</p></div>
             )}
           </div>
           <footer><LinkButton fullWidth variant="secondary" href="/app/followups" onClick={() => setOpen(false)}>Open follow-ups</LinkButton></footer>

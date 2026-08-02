@@ -865,6 +865,7 @@
 .preference-switch.is-on > span { transform: translateX(18px); }
 .preference-switch:focus-visible { outline: 3px solid rgba(159,232,112,.65); outline-offset: 2px; }
 .preference-switch:disabled { cursor: not-allowed; opacity: .55; }
+.preference-group-label { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--p-line); font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--p-muted); }
 .preference-footnote { padding-top: 16px; border-top: 1px solid var(--p-line); }
 .preference-footnote strong { color: var(--p-ink); }
 @media (max-width: 620px) {

@@ -59,8 +59,10 @@
 .notification-item:hover { background: var(--p-sky); }
 .notification-item.is-unread { background: rgba(159,232,112,.12); }
 .notification-status { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px; background: var(--p-sky); }
-.notification-status.overdue { background: #fff0e8; color: #a33a20; }
-.notification-status.today { background: var(--p-blue); }
+.notification-status.overdue, .notification-status-follow_up_overdue { background: #fff0e8; color: #a33a20; }
+.notification-status.today, .notification-status-follow_up_due { background: var(--p-blue); }
+.notification-status-review_ready { background: #eafbe2; color: #1f7a2e; }
+.notification-status-shared_meeting_update { background: var(--p-sky); }
 .notification-item > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
 .notification-item strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .notification-item small { overflow: hidden; color: var(--p-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }

@@ -2,6 +2,43 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "../../../../../../lib/supabase/server";
 import { createServiceSupabaseClient } from "../../../../../../lib/supabase/service";
+import { createNotification, notificationTypeEnabled } from "../../../../../../lib/notifications-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function notifyHostOfGuestFollowUp(
+  service: SupabaseClient,
+  encounter: { id: string; workspace_id: string },
+  committedAt: string,
+) {
+  try {
+    const { data: workspace } = await service
+      .from("workspaces")
+      .select("owner_user_id")
+      .eq("id", encounter.workspace_id)
+      .maybeSingle();
+    const ownerId = workspace?.owner_user_id;
+    if (!ownerId) return;
+
+    const { data: owner } = await service
+      .from("users")
+      .select("notification_preferences")
+      .eq("id", ownerId)
+      .maybeSingle();
+    if (!notificationTypeEnabled(owner?.notification_preferences, "shared_meeting_update")) return;
+
+    await createNotification(service, {
+      userId: ownerId,
+      workspaceId: encounter.workspace_id,
+      type: "shared_meeting_update",
+      title: "A guest committed to a follow-up",
+      body: "They said they'll follow up too — see the details on the meeting.",
+      encounterId: encounter.id,
+      dedupeKey: `shared_meeting_update:${encounter.id}:${committedAt}`,
+    });
+  } catch {
+    // Best-effort: never let a missed notification block the guest's commitment.
+  }
+}
 
 function success(guestFollowUp: { committedAt: string; note: string }) {
   return NextResponse.json({ guestFollowUp }, { headers: { "Cache-Control": "private, no-store" } });
@@ -30,7 +67,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
   if (service) {
     const { data: encounter } = await service
       .from("encounters")
-      .select("id")
+      .select("id, workspace_id")
       .eq("share_token", shareToken)
       .eq("status", "shared")
       .maybeSingle();
@@ -49,6 +86,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     }).select("committed_at, note, channel, due_at").single();
 
     if (!insertError && inserted) {
+      await notifyHostOfGuestFollowUp(service, encounter, committedAt);
       return NextResponse.json({ guestFollowUp: { committedAt: inserted.committed_at, note: inserted.note, channel: inserted.channel, dueAt: inserted.due_at || undefined } });
     }
 

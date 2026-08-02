@@ -7,6 +7,7 @@ import { fetchParticipantsByEncounter } from "../../../lib/encounter-participant
 import { fetchGuestFollowUpsByEncounter } from "../../../lib/encounter-guest-follow-ups-server";
 import { encounterMatchesConnection } from "../../../lib/follow-ups-server";
 import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
+import { createNotification, notificationTypeEnabled } from "../../../lib/notifications-server";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
 
@@ -180,6 +181,39 @@ export async function POST(request: Request) {
   }
 
   await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
+
+  // The encounter is reviewable — and its transcript actually has content —
+  // the first time it is saved. This is the single place both mobile and
+  // consumer web funnel through, so it is the one spot to raise
+  // "review ready": one row per encounter, regardless of which client saved
+  // it or how many times the save is retried (dedupe_key + unique index).
+  const isNewEncounter = !existingRow;
+  const transcript = typeof body.transcript === "string" ? body.transcript.trim() : "";
+  if (isNewEncounter && (body.status ?? "draft") === "draft" && transcript.length >= 20) {
+    try {
+      const { data: preferenceRow } = await supabase
+        .from("users")
+        .select("notification_preferences")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (notificationTypeEnabled(preferenceRow?.notification_preferences, "review_ready")) {
+        const title = projection.personName.trim()
+          ? `Ready to review: ${projection.personName.trim()}`
+          : "A capture is ready to review";
+        await createNotification(supabase, {
+          userId: user.id,
+          workspaceId: user.workspaceId,
+          type: "review_ready",
+          title,
+          body: "Your follow-up choices are saved. Confirm the review to activate them.",
+          encounterId: body.id,
+          dedupeKey: `review_ready:${body.id}`,
+        });
+      }
+    } catch {
+      // Best-effort: a missed notification must never fail the save itself.
+    }
+  }
 
   return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -12,6 +12,7 @@ import {
   syncFollowUpNotifications,
 } from '@/features/notifications/notification-service';
 import { addFollowUpNotificationSyncListener } from '@/features/notifications/notification-sync-events';
+import { registerPushToken } from '@/features/notifications/push-token-service';
 
 function openNotificationRoute(notification: Notifications.Notification) {
   const data = notification.request.content.data as { route?: unknown } | undefined;
@@ -56,6 +57,7 @@ export function NotificationManager() {
     }
 
     void sync().catch(() => undefined);
+    void registerPushToken(accessToken).catch(() => undefined);
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') void sync().catch(() => undefined);
     });

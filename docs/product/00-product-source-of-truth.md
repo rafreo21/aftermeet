@@ -237,11 +237,15 @@ Scan is launched contextually. A successful scan opens the public card, allows s
 
 Notifications are alerts about work, not a second follow-up system.
 
-- A bell in Home opens the notification centre.
-- Follow-up due dates schedule device reminders when permitted.
-- Badges count unresolved attention, not every historical event.
-- Settings contain one coherent Device Notifications area for permission, timing, channels, and reminder preferences.
+- A bell in Home (mobile) or the app header (consumer web) opens the notification centre — a chronological list of alerts, distinct from the Follow-ups queue of work to perform.
+- Notification records are Supabase-backed (`public.notifications`), shared by iOS, Android, and consumer web, not device-local history.
+- Four notification types: transcript/review ready, follow-up due, follow-up overdue, shared meeting update (a guest committing to their own follow-up). Each is an independent, user-configurable preference.
+- Follow-up notifications only ever reference a *reviewed* encounter — an unreviewed (draft) encounter never produces a due/overdue/shared-update notification on any channel. See the follow-up gating note under Review.
+- Follow-up due dates schedule device reminders when permitted; mobile also keeps a lightweight local echo (AsyncStorage) purely to fire the OS-level banner, but the notification centre itself always reads the shared Supabase records.
+- Badges count unresolved (unread) notifications, not every historical event.
+- Settings contain one coherent Device Notifications area for permission, timing, per-type toggles, and reminder preferences, shared in shape (not in per-device state) between mobile and web.
 - Email reminders remain a separate delivery-channel preference, not a duplicate settings section.
+- Remote push delivery (a server-sent push landing on a locked/backgrounded device) requires an EAS project id, which this app does not yet have configured. Push-token storage (`public.push_tokens`, multi-device, deactivatable) is fully built and ready to receive tokens the moment that one-time setup happens; until then, mobile relies on local scheduling and the in-app centre.
 
 ### 19. Settings and Connected Accounts
 
@@ -293,7 +297,7 @@ Every flow must include:
 - Native background recording and interruption recovery
 - Reliable transcription and speaker assignment
 - Capture draft/review lifecycle shared across clients
-- Device push permissions, scheduled reminders, badges, and notification centre
+- Remote push delivery to a backgrounded/locked device (requires an EAS project id — see Notifications)
 - Three-day recording-sharing lifecycle and expiry jobs
 - Shared component and copy contracts across mobile and consumer web
 - Connected storage/provider health and recovery

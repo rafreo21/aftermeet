@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { encounterFromApi } from "../../../../lib/encounters";
 import { fetchParticipantsByEncounter } from "../../../../lib/encounter-participants-server";
-import { flattenOpenFollowUps, type FollowUpItem } from "../../../../lib/follow-ups-server";
+import { dueDateBucket, flattenOpenFollowUps, type FollowUpItem } from "../../../../lib/follow-ups-server";
+import { createNotification, notificationTypeEnabled } from "../../../../lib/notifications-server";
 import { buildReminderDigestEmail, reminderQualifies } from "../../../../lib/reminder-email";
 import { sendEmail } from "../../../../lib/send-email";
 import { createServiceSupabaseClient } from "../../../../lib/supabase/service";
@@ -12,6 +13,9 @@ type ReminderUser = {
   auth_user_id: string;
   primary_email: string;
   status: string;
+  reminder_emails_enabled: boolean;
+  reminder_last_sent_at: string | null;
+  notification_preferences: unknown;
 };
 
 function startOfTodayIso() {
@@ -34,12 +38,13 @@ export async function GET(request: Request) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://aftermeet.app";
   const todayStart = startOfTodayIso();
 
+  // Email and in-app/push notifications are independent preferences, so this
+  // scans every active user rather than only those with email reminders on —
+  // the per-user branches below decide each channel separately.
   const { data: users, error: usersError } = await service
     .from("users")
-    .select("id, auth_user_id, primary_email, status")
+    .select("id, auth_user_id, primary_email, status, reminder_emails_enabled, reminder_last_sent_at, notification_preferences")
     .eq("status", "active")
-    .eq("reminder_emails_enabled", true)
-    .or(`reminder_last_sent_at.is.null,reminder_last_sent_at.lt.${todayStart}`)
     .limit(500);
 
   if (usersError) {
@@ -47,12 +52,12 @@ export async function GET(request: Request) {
   }
 
   let scanned = 0;
-  let sent = 0;
-  let failed = 0;
+  let emailsSent = 0;
+  let emailsFailed = 0;
+  let notificationsCreated = 0;
 
   for (const user of (users ?? []) as ReminderUser[]) {
     scanned += 1;
-    if (!user.primary_email?.trim()) continue;
 
     const qualifying: FollowUpItem[] = [];
 
@@ -113,19 +118,54 @@ export async function GET(request: Request) {
 
     if (!qualifying.length) continue;
 
+    // In-app/push: one row per (user, type, encounter, action) ever — the
+    // dedupe_key unique index makes this safe to run daily without spamming
+    // the notification centre as an item stays due or overdue.
+    if (membership?.workspace_id) {
+      for (const item of qualifying) {
+        const bucket = dueDateBucket(item.dueAt);
+        const type = bucket === "overdue" ? "follow_up_overdue" : "follow_up_due";
+        if (!notificationTypeEnabled(user.notification_preferences, type)) continue;
+        try {
+          const created = await createNotification(service, {
+            userId: user.id,
+            workspaceId: membership.workspace_id,
+            type,
+            title: bucket === "overdue"
+              ? `Overdue: ${item.title}`
+              : `Due today: ${item.title}`,
+            body: item.personName.trim() ? `With ${item.personName.trim()}` : "",
+            encounterId: item.encounterId,
+            actionId: item.actionId,
+            dedupeKey: `${type}:${item.encounterId}:${item.actionId}`,
+          });
+          if (created) notificationsCreated += 1;
+        } catch {
+          // A missed in-app notification must not block the email digest below.
+        }
+      }
+    }
+
+    // Email digest respects its own daily-once cadence, independent of
+    // whether in-app notifications were created above.
+    const emailEligible = user.reminder_emails_enabled
+      && user.primary_email?.trim()
+      && (!user.reminder_last_sent_at || user.reminder_last_sent_at < todayStart);
+    if (!emailEligible) continue;
+
     const { subject, html } = buildReminderDigestEmail(qualifying, appUrl);
     const result = await sendEmail({ to: user.primary_email.trim(), subject, html });
 
     if (result.ok) {
-      sent += 1;
+      emailsSent += 1;
       await service
         .from("users")
         .update({ reminder_last_sent_at: new Date().toISOString() })
         .eq("id", user.id);
     } else {
-      failed += 1;
+      emailsFailed += 1;
     }
   }
 
-  return NextResponse.json({ ok: true, scanned, sent, failed });
+  return NextResponse.json({ ok: true, scanned, emailsSent, emailsFailed, notificationsCreated });
 }

@@ -9,7 +9,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { summarizeFollowUpNudges } from '@/features/follow-ups/follow-up-nudges';
-import { unreadNotificationCount } from '@/features/notifications/notification-service';
+import { fetchNotifications } from '@/features/notifications/notification-center-api';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -47,16 +47,29 @@ export default function HomeScreen() {
     }
   }, [session]);
 
+  const loadUnreadNotifications = useCallback(async () => {
+    if (!session?.access_token) {
+      setUnreadNotifications(0);
+      return;
+    }
+    try {
+      const { unreadCount } = await fetchNotifications(session.access_token);
+      setUnreadNotifications(unreadCount);
+    } catch {
+      // Leave the last known count rather than flash it to zero on a transient failure.
+    }
+  }, [session]);
+
   useFocusEffect(
     useCallback(() => {
       void loadFollowUps();
-      void unreadNotificationCount().then(setUnreadNotifications);
+      void loadUnreadNotifications();
       const interval = setInterval(() => {
         void loadFollowUps();
-        void unreadNotificationCount().then(setUnreadNotifications);
+        void loadUnreadNotifications();
       }, 30_000);
       return () => clearInterval(interval);
-    }, [loadFollowUps]),
+    }, [loadFollowUps, loadUnreadNotifications]),
   );
 
   const nudge = useMemo(() => summarizeFollowUpNudges(followUps), [followUps]);
