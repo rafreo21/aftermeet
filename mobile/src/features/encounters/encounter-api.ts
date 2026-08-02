@@ -8,7 +8,7 @@ import {
   type PreparedAudioUpload,
 } from '@/features/encounters/audio-upload';
 import type { LocalRecordingMetadata } from '@/features/encounters/local-recordings';
-import { mobileFetch } from '@/lib/mobile-api';
+import { mobileFetch, readMobileApiJson } from '@/lib/mobile-api';
 import { requestFollowUpNotificationSync } from '@/features/notifications/notification-sync-events';
 import {
   displayFollowUpTitle,
@@ -47,10 +47,24 @@ export type EncounterAction = {
   assigneeEmail?: string;
   participantId?: string;
   groupId?: string;
+  outboundDraft?: OutboundDraft;
+};
+
+export type OutboundDraft = {
+  subject: string;
+  body: string;
+  status: 'proposed' | 'approved' | 'sent' | 'dismissed';
+  source: 'ai' | 'heuristic' | 'manual';
+  generatedAt: string;
+  approvedAt?: string;
+  sentAt?: string;
 };
 
 export type GuestFollowUp = {
   id?: string;
+  participantId?: string;
+  guestName?: string;
+  guestEmail?: string;
   committedAt: string;
   note?: string;
   channel?: FollowUpChannelId;
@@ -73,6 +87,7 @@ export type EncounterPayload = {
   personEmail: string;
   contactId?: string;
   exchangeId?: string;
+  campaignId?: string;
   startedAt: string;
   endedAt: string;
   durationSeconds: number;
@@ -146,7 +161,10 @@ function mapEncounterSummary(row: Record<string, unknown>): EncounterSummary {
 
 export async function fetchEncounters(accessToken: string) {
   const response = await mobileFetch('/api/encounters', accessToken);
-  const payload = await response.json() as { encounters?: Array<Record<string, unknown>>; error?: string; preview?: boolean };
+  const payload = await readMobileApiJson<{ encounters?: Array<Record<string, unknown>>; error?: string; preview?: boolean }>(
+    response,
+    'Could not read your captures from AfterMeet.',
+  );
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load your captures.');
   }
@@ -177,7 +195,10 @@ export class CaptureSessionConflictError extends Error {
 
 export async function fetchCaptureSessions(accessToken: string) {
   const response = await mobileFetch('/api/capture-sessions', accessToken);
-  const payload = await response.json() as { sessions?: RemoteCaptureSession[]; error?: string };
+  const payload = await readMobileApiJson<{ sessions?: RemoteCaptureSession[]; error?: string }>(
+    response,
+    'Could not read active captures from AfterMeet.',
+  );
   if (!response.ok) throw new Error(payload.error || 'Could not load active captures.');
   return payload.sessions ?? [];
 }
@@ -188,7 +209,10 @@ export async function syncCaptureSession(accessToken: string, snapshot: RemoteCa
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(snapshot),
   });
-  const payload = await response.json() as { ok?: boolean; error?: string; currentStatus?: string };
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string; currentStatus?: string }>(
+    response,
+    'Could not sync this capture with AfterMeet.',
+  );
   if (response.status === 409) {
     throw new CaptureSessionConflictError(
       payload.error || 'This capture changed on another device.',
@@ -219,12 +243,12 @@ export async function extractEncounterDraft(
       people: hints?.people ?? [],
     }),
   });
-  const payload = await response.json() as {
+  const payload = await readMobileApiJson<{
     draft?: EncounterDraft;
     source?: 'ai' | 'heuristic';
     uncertainFields?: string[];
     error?: string;
-  };
+  }>(response, 'Could not read the suggested meeting context.');
   if (!response.ok || !payload.draft) {
     throw new Error(payload.error || 'Could not suggest meeting context.');
   }
@@ -233,7 +257,10 @@ export async function extractEncounterDraft(
 
 export async function fetchInboundExchanges(accessToken: string) {
   const response = await mobileFetch('/api/cards/exchanges', accessToken);
-  const payload = await response.json() as { exchanges?: InboundExchange[]; error?: string };
+  const payload = await readMobileApiJson<{ exchanges?: InboundExchange[]; error?: string }>(
+    response,
+    'Could not read inbound captures from AfterMeet.',
+  );
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load inbound captures.');
   }
@@ -249,6 +276,7 @@ export function buildEncounterPayload(input: {
   people?: Array<{ id?: string; name: string; email?: string; phone?: string; linkedIn?: string; exchangeId?: string }>;
   contactId?: string;
   exchangeId?: string;
+  campaignId?: string;
   sharedSummary: string;
   privateNotes: string;
   followUp?: string;
@@ -351,6 +379,7 @@ export function buildEncounterPayload(input: {
     personEmail: input.personEmail?.trim() || '',
     contactId: input.contactId || undefined,
     exchangeId: input.exchangeId || undefined,
+    campaignId: input.campaignId || undefined,
     startedAt,
     endedAt: now,
     durationSeconds,
@@ -386,6 +415,9 @@ export function applyEncounterFollowUpSettings(
     personName: encounter.personName,
     personEmail: encounter.personEmail,
     people: encounter.participants,
+    contactId: encounter.contactId,
+    exchangeId: encounter.exchangeId,
+    campaignId: encounter.campaignId,
     sharedSummary: encounter.sharedSummary,
     privateNotes: input.privateNotes,
     followUpChannels: input.followUpChannels,
@@ -584,12 +616,12 @@ export async function uploadEncounterRecordingToDrive(
     method: 'POST',
     body: formData,
   });
-  const payload = await response.json() as {
+  const payload = await readMobileApiJson<{
     ok?: boolean;
     error?: string;
     code?: string;
     recording?: LocalRecordingMetadata;
-  };
+  }>(response, 'Could not read the Google Drive upload response.');
   if (!response.ok || !payload.ok || !payload.recording) {
     const error = new Error(payload.error || 'Could not save this recording to Google Drive.');
     (error as Error & { code?: string }).code = payload.code;
@@ -611,12 +643,12 @@ export async function uploadEncounterRecordingToOneDrive(
     method: 'POST',
     body: formData,
   });
-  const payload = await response.json() as {
+  const payload = await readMobileApiJson<{
     ok?: boolean;
     error?: string;
     code?: string;
     recording?: LocalRecordingMetadata;
-  };
+  }>(response, 'Could not read the OneDrive upload response.');
   if (!response.ok || !payload.ok || !payload.recording) {
     const error = new Error(payload.error || 'Could not save this recording to OneDrive.');
     (error as Error & { code?: string }).code = payload.code;
@@ -636,6 +668,7 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
       personEmail: encounter.personEmail,
       contactId: encounter.contactId ?? null,
       exchangeId: encounter.exchangeId ?? null,
+      campaignId: encounter.campaignId ?? null,
       startedAt: encounter.startedAt,
       endedAt: encounter.endedAt,
       durationSeconds: encounter.durationSeconds,
@@ -668,7 +701,10 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
         : null,
     }),
   });
-  const payload = await response.json() as { ok?: boolean; error?: string };
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string }>(
+    response,
+    'Could not read the meeting save response.',
+  );
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not save this meeting.');
   }
@@ -677,7 +713,10 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
 
 export async function getEncounter(accessToken: string, id: string) {
   const response = await mobileFetch(`/api/encounters/${id}`, accessToken);
-  const payload = await response.json() as { encounter?: EncounterPayload; error?: string };
+  const payload = await readMobileApiJson<{ encounter?: EncounterPayload; error?: string }>(
+    response,
+    'Could not read this meeting from AfterMeet.',
+  );
   if (!response.ok || !payload.encounter) {
     throw new Error(payload.error || 'Encounter not found.');
   }
@@ -686,7 +725,10 @@ export async function getEncounter(accessToken: string, id: string) {
 
 export async function deleteEncounter(accessToken: string, id: string) {
   const response = await mobileFetch(`/api/encounters/${id}`, accessToken, { method: 'DELETE' });
-  const payload = await response.json() as { ok?: boolean; error?: string };
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string }>(
+    response,
+    'Could not read the meeting deletion response.',
+  );
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not delete this capture.');
   }
@@ -705,7 +747,10 @@ export async function generateOutboundDraft(
       action: encounter.actions[0],
     }),
   });
-  const payload = await response.json() as { draft?: { body?: string; subject?: string }; error?: string };
+  const payload = await readMobileApiJson<{ draft?: { body?: string; subject?: string }; error?: string }>(
+    response,
+    'Could not read the follow-up draft response.',
+  );
   if (!response.ok || !payload.draft?.body) {
     throw new Error(payload.error || 'Could not draft a follow-up message.');
   }
@@ -715,6 +760,9 @@ export async function generateOutboundDraft(
 export async function fetchPublicCardName(baseUrl: string, slug: string) {
   const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/cards/public/${encodeURIComponent(slug)}`);
   if (!response.ok) return null;
-  const payload = await response.json() as { card?: { full_name?: string } };
+  const payload = await readMobileApiJson<{ card?: { full_name?: string } }>(
+    response,
+    'Could not read this public card.',
+  );
   return payload.card?.full_name?.trim() || null;
 }

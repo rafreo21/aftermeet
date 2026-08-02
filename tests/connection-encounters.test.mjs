@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   encounterMatchesConnection,
   encountersForConnection,
+  flattenOpenFollowUps,
   followUpsForConnection,
 } from "../lib/follow-ups-server.ts";
 
@@ -64,4 +65,22 @@ test("targeted follow-ups do not leak between people from the same encounter", (
     followUpsForConnection(items, { email: "james@example.com", exchangeId: "exchange-james" }).map((item) => item.actionId),
     ["james-action"],
   );
+});
+
+test("follow-ups stay pending until the encounter has been reviewed", () => {
+  const action = {
+    id: "action-1",
+    title: "Send the proposal",
+    channel: "email",
+    owner: "me",
+    dueAt: "2026-08-04",
+    status: "open",
+  };
+  const draftEncounter = { ...encounter, status: "draft", actions: [action] };
+  const reviewedEncounter = { ...encounter, status: "reviewed", actions: [action] };
+  const sharedEncounter = { ...encounter, status: "shared", actions: [action] };
+
+  assert.deepEqual(flattenOpenFollowUps([draftEncounter]), []);
+  assert.deepEqual(flattenOpenFollowUps([reviewedEncounter]).map((item) => item.actionId), ["action-1"]);
+  assert.deepEqual(flattenOpenFollowUps([sharedEncounter]).map((item) => item.actionId), ["action-1"]);
 });

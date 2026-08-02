@@ -38,3 +38,12 @@ export function transitionCaptureSession(
 export function isActiveCaptureSession(status: CaptureSessionStatus) {
   return status === 'recording' || status === 'paused' || status === 'processing';
 }
+
+/**
+ * A live recording owns the microphone and is the only capture state that
+ * should prevent another recording from starting. Persisted drafts and
+ * background review preparation are resumable work, not live sessions.
+ */
+export function isLiveRecordingSession(status: CaptureSessionStatus) {
+  return status === 'recording' || status === 'paused';
+}

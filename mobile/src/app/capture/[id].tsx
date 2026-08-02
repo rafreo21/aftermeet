@@ -49,6 +49,7 @@ export default function CaptureDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [confirmingReview, setConfirmingReview] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadError, setUploadError] = useState('');
   const [uploadRetryable, setUploadRetryable] = useState(true);
@@ -73,6 +74,7 @@ export default function CaptureDetailScreen() {
     : '';
 
   const isShared = encounter?.status === 'shared';
+  const isReviewed = encounter?.status === 'reviewed' || isShared;
   const cloudReady = Boolean(
     uploadStatus === 'uploaded'
     || encounter?.recording?.sharedAudioUrl
@@ -282,6 +284,24 @@ export default function CaptureDetailScreen() {
     });
   }
 
+  async function confirmReview() {
+    if (!encounter || !session?.access_token || isReviewed) return;
+    setApproveHint('');
+    const next = { ...encounter, status: 'reviewed' as const };
+    setConfirmingReview(true);
+    try {
+      await saveEncounter(session.access_token, next);
+      setEncounter(next);
+      setSuccessMessage('Review confirmed. Your follow-ups are now active.');
+      setSuccessSheetOpen(true);
+    } catch (caught) {
+      setErrorMessage(caught instanceof Error ? caught.message : 'Could not confirm this review.');
+      setErrorSheetOpen(true);
+    } finally {
+      setConfirmingReview(false);
+    }
+  }
+
   async function approveAndShare() {
     if (!encounter || !session?.access_token) return;
     setApproveHint('');
@@ -409,13 +429,27 @@ export default function CaptureDetailScreen() {
       />
       <Body>Confirm the recap and follow-ups, then choose whether to share.</Body>
 
-      <View style={styles.reviewStatusLine} accessibilityLabel={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}, ${openActions.length} open follow-ups, ${isShared ? 'guest view shared' : 'private draft'}`}>
+      <View style={styles.reviewStatusLine} accessibilityLabel={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}, ${openActions.length} follow-ups, ${isShared ? 'guest view shared' : isReviewed ? 'reviewed' : 'pending review'}`}>
         <Text style={styles.reviewStatusText}>{peopleCount} {peopleCount === 1 ? 'person' : 'people'}</Text>
         <View style={styles.reviewStatusDot} />
-        <Text style={styles.reviewStatusText}>{openActions.length} open follow-up{openActions.length === 1 ? '' : 's'}</Text>
+        <Text style={styles.reviewStatusText}>
+          {openActions.length} follow-up{openActions.length === 1 ? '' : 's'}{isReviewed ? '' : ' (pending)'}
+        </Text>
         <View style={styles.reviewStatusDot} />
-        <Text style={styles.reviewStatusText}>{isShared ? 'Guest view shared' : 'Private draft'}</Text>
+        <Text style={styles.reviewStatusText}>{isShared ? 'Guest view shared' : isReviewed ? 'Reviewed · private' : 'Pending review'}</Text>
       </View>
+
+      {!isReviewed ? (
+        <View style={styles.pendingReviewBanner}>
+          <Text style={styles.pendingReviewTitle}>Follow-ups are pending</Text>
+          <Text style={styles.helperCopy}>
+            Nothing above is active yet. Confirm your review to turn these follow-ups on — sharing a guest link is separate and optional.
+          </Text>
+          <Button loading={confirmingReview} onPress={() => void confirmReview()}>
+            Confirm review
+          </Button>
+        </View>
+      ) : null}
 
       <Panel style={styles.section}>
         <Text style={styles.sectionTitle}>Meeting recap</Text>
@@ -699,19 +733,19 @@ export default function CaptureDetailScreen() {
       </View>
 
       <Panel style={styles.section}>
-        <Text style={styles.label}>{isShared ? 'Ready to share' : 'Private by default'}</Text>
+        <Text style={styles.label}>{isShared ? 'Ready to share' : 'Optional'}</Text>
         <Text style={styles.sectionTitle}>{isShared ? 'The guest view is ready' : 'Share with participants'}</Text>
         <Text style={styles.summaryCopy}>
           {isShared
             ? 'Send the secure link yourself. Nothing is sent automatically.'
-            : 'Approve the recap to create a secure guest view. Leave it as a draft to keep everything private.'}
+            : 'Creating a guest link also confirms your review, if you haven’t already. Leave this section alone to keep everything private.'}
         </Text>
         <View style={styles.statusRow}>
           {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
           <Text style={styles.summaryCopy}>
             {isShared
               ? 'Approved. Guests can open the shared summary and recording.'
-              : 'Still a draft. Approve when the summary looks right.'}
+              : 'Nothing shared yet. Create a link when you want participants to see the recap.'}
           </Text>
         </View>
         {cloudReady && cloudAvailableUntil && !cloudExpired ? (
@@ -788,7 +822,7 @@ export default function CaptureDetailScreen() {
 
       <View style={styles.actions}>
         <Button loading={saving} onPress={() => void persist(encounter)}>Save changes</Button>
-        <Button variant="ghost" onPress={() => router.replace('/capture')}>Done</Button>
+        <Button variant="ghost" onPress={() => router.replace('/(tabs)')}>Done</Button>
       </View>
 
       <OutcomeErrorSheet
@@ -817,6 +851,15 @@ const styles = StyleSheet.create({
   reviewStatusLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.x2 },
   reviewStatusText: { color: colors.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' },
   reviewStatusDot: { width: 3, height: 3, borderRadius: radius.round, backgroundColor: colors.muted },
+  pendingReviewBanner: {
+    gap: spacing.x2,
+    padding: spacing.x4,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surfaceMuted,
+  },
+  pendingReviewTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   recorderCard: {
     gap: spacing.x5,
     padding: spacing.x6,

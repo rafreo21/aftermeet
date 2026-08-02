@@ -12,6 +12,7 @@ import { AuthProvider } from '@/features/auth/auth-context';
 import { CardProvider } from '@/features/card/card-context';
 import { NotificationManager } from '@/features/notifications/notification-manager';
 import { ActiveCaptureBanner } from '@/components/active-capture-banner';
+import { CaptureRecorderProvider } from '@/features/encounters/capture-recorder-context';
 import { colors } from '@/theme/tokens';
 
 function applyAndroidNavigationBar() {
@@ -82,12 +83,14 @@ export default function RootLayout() {
         <AuthProvider>
           <NotificationManager />
           <CardProvider>
-            <StatusBar style="dark" />
-            {Platform.OS === 'android' ? <NavigationBar style="dark" /> : null}
-            <View style={{ flex: 1 }}>
-              <RootNavigator />
-              <ActiveCaptureBanner />
-            </View>
+            <CaptureRecorderProvider>
+              <StatusBar style="dark" />
+              {Platform.OS === 'android' ? <NavigationBar style="dark" /> : null}
+              <View style={{ flex: 1 }}>
+                <RootNavigator />
+                <ActiveCaptureBanner />
+              </View>
+            </CaptureRecorderProvider>
           </CardProvider>
         </AuthProvider>
       </SafeAreaProvider>

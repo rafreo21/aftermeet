@@ -180,11 +180,53 @@ export async function recordNotification(notification: Notifications.Notificatio
     receivedAt: new Date().toISOString(),
     route: typeof data?.route === 'string' ? data.route : '/settings/follow-ups',
   };
+  await storeNotificationHistoryItem(item);
+}
+
+async function storeNotificationHistoryItem(item: NotificationHistoryItem) {
   const current = await readNotificationHistory();
+  const isNew = !current.some((entry) => entry.id === item.id);
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify([
     item,
     ...current.filter((entry) => entry.id !== item.id),
   ].slice(0, MAX_HISTORY)));
+  return isNew;
+}
+
+export async function notifyMeetingReviewReady(input: { encounterId: string; title?: string }) {
+  const identifier = `aftermeet-review-ready-${input.encounterId}`;
+  const route = `/capture/new?draftId=${encodeURIComponent(input.encounterId)}`;
+  const meetingTitle = input.title?.trim() || 'Your meeting';
+  const item: NotificationHistoryItem = {
+    id: identifier,
+    title: 'Transcript ready',
+    body: `${meetingTitle} is ready to review. Your follow-up choices are saved.`,
+    receivedAt: new Date().toISOString(),
+    route,
+  };
+
+  const isNew = await storeNotificationHistoryItem(item);
+  if (!isNew) return false;
+
+  if (await deviceNotificationsEnabled() && await notificationPermissionGranted()) {
+    await configureNotificationChannel();
+    await Notifications.scheduleNotificationAsync({
+      identifier,
+      content: {
+        title: item.title,
+        body: item.body,
+        sound: 'default',
+        data: {
+          type: 'meeting-review-ready',
+          route,
+          encounterId: input.encounterId,
+        },
+      },
+      trigger: null,
+    }).catch(() => undefined);
+  }
+
+  return true;
 }
 
 export async function readNotificationHistory(): Promise<NotificationHistoryItem[]> {

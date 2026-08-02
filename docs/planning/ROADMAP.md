@@ -1,9 +1,9 @@
 # AfterMeet product roadmap
 
-Status: Living backlog  
-Last updated: 2026-07-29
+Status: Living delivery backlog
+Last updated: 2026-08-02
 
-Single source of truth for **what we’re building**, **why**, and **in what order**. Complements [MVP vertical slice plan](../product/11-mvp-vertical-slice-plan.md) (delivery slices) and [MVP.md](./MVP.md) (scope).
+Delivery source of truth for **implementation order and status**. The canonical product definition—user jobs, information architecture, navigation, screen ownership, and cross-device behaviour—is the [Product Source of Truth](../product/00-product-source-of-truth.md). This roadmap complements the [MVP vertical slice plan](../product/11-mvp-vertical-slice-plan.md) and [MVP.md](./MVP.md).
 
 ---
 

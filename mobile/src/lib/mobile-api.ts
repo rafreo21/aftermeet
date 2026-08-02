@@ -28,3 +28,21 @@ export async function mobileFetch(path: string, accessToken: string, init?: Requ
 
   return response;
 }
+
+export async function readMobileApiJson<T>(
+  response: Response,
+  fallbackMessage: string,
+): Promise<T> {
+  const raw = await response.text();
+  if (!raw.trim()) return {} as T;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const contentType = response.headers.get('content-type') ?? '';
+    const receivedHtml = contentType.includes('text/html') || raw.trimStart().startsWith('<');
+    throw new Error(receivedHtml
+      ? 'AfterMeet could not reach its API. The server may be temporarily unavailable or protected. Your work on this device is still safe.'
+      : fallbackMessage);
+  }
+}

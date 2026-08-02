@@ -35,10 +35,18 @@ export type FollowUpContactMethod = {
  * Includes completed actions too (bounded by the 250-encounter query limit
  * upstream) — the client buckets open vs. completed into the Current/Past
  * tabs via filterFollowUpsByScope, so this must return both.
+ *
+ * Excludes actions belonging to an unreviewed ("draft") encounter. A user can
+ * choose follow-ups while transcription is still running, but nothing may
+ * become actionable — visible in the queue, reminder-eligible, or sendable —
+ * until the encounter has been reviewed and approved. This is the single
+ * choke point both the follow-ups API and the reminder cron read through, so
+ * gating here is sufficient to keep pending follow-ups pending everywhere.
  */
 export function flattenOpenFollowUps(encounters: Encounter[]): FollowUpItem[] {
   const items: FollowUpItem[] = [];
   for (const encounter of encounters) {
+    if (encounter.status === "draft") continue;
     for (const action of encounter.actions) {
       if (!action.title.trim()) continue;
       items.push({

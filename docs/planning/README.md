@@ -25,10 +25,11 @@ The best starting segment is probably **independent consultants and small agenci
 
 ## Project files
 
+- [Product Source of Truth](../product/00-product-source-of-truth.md) — canonical product jobs, IA, navigation, flows, and cross-device behaviour
 - [PRODUCT-STUDY.md](./PRODUCT-STUDY.md) — Blinq teardown and market observations
 - [BUILD-OPTIONS.md](./BUILD-OPTIONS.md) — three viable product directions
 - [MVP.md](./MVP.md) — recommended scope and user journey
-- [ROADMAP.md](./ROADMAP.md) — four loops, what’s next, and current backlog
+- [ROADMAP.md](./ROADMAP.md) — delivery sequencing, what’s next, and current implementation backlog
 - [TECHNICAL-PLAN.md](./TECHNICAL-PLAN.md) — suggested architecture and delivery phases
 
 ## Working product concept

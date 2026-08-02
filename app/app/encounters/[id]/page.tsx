@@ -227,6 +227,12 @@ export default function EncounterReviewPage() {
     setMessage("Guest link copied.");
   }
 
+  function confirmReview() {
+    if (!encounter || encounter.status !== "draft") return;
+    patch((current) => ({ ...current, status: "reviewed" }));
+    setMessage("Review confirmed. Your follow-ups are now active.");
+  }
+
   function approveAndShare() {
     if (!encounter) return;
     if (!encounter.sharedSummary.trim()) {
@@ -276,6 +282,8 @@ export default function EncounterReviewPage() {
   const showEmailRecording = Boolean(localAudioUrl && (cloudExpired || uploadStatus === "failed" || !hasActiveCloudRecording(encounter.recording)));
   const openActions = actions.filter((action) => action.status !== "completed");
   const peopleCount = participants.length || (encounter.personName ? 1 : 0);
+  const isShared = encounter.status === "shared";
+  const isReviewed = encounter.status === "reviewed" || isShared;
 
   return (
     <AppShell
@@ -293,9 +301,16 @@ export default function EncounterReviewPage() {
 
           <p className="review-status-line" aria-label="Meeting review summary">
             <span>{peopleCount} {peopleCount === 1 ? "person" : "people"}</span>
-            <span>{openActions.length} open follow-up{openActions.length === 1 ? "" : "s"}</span>
-            <span>{encounter.status === "shared" ? "Guest view shared" : "Private draft"}</span>
+            <span>{openActions.length} follow-up{openActions.length === 1 ? "" : "s"}{isReviewed ? "" : " (pending)"}</span>
+            <span>{isShared ? "Guest view shared" : isReviewed ? "Reviewed · private" : "Pending review"}</span>
           </p>
+
+          {!isReviewed ? (
+            <section className="review-section review-primary-section">
+              <header><div><h2>Follow-ups are pending</h2><p>Nothing above is active yet. Confirm your review to turn these follow-ups on — sharing a guest link is separate and optional.</p></div></header>
+              <Button fullWidth onClick={confirmReview}>Confirm review</Button>
+            </section>
+          ) : null}
 
           <section className="review-section shared-section review-primary-section">
             <header><span><ShareNetworkIcon size={20} weight="bold" /></span><div><h2>Meeting recap</h2><p>This is what participants will see after you approve the guest view.</p></div></header>
@@ -567,9 +582,9 @@ export default function EncounterReviewPage() {
         </main>
 
         <aside className="share-rail">
-          <span>{encounter.status === "shared" ? "Ready to share" : "Private by default"}</span>
+          <span>{encounter.status === "shared" ? "Ready to share" : "Optional"}</span>
           <h2>{encounter.status === "shared" ? "The guest view is ready." : "Share when you’re ready."}</h2>
-          <p>{encounter.status === "shared" ? "Send the secure link yourself. Nothing is sent automatically." : `Approve the recap to create a secure guest view. Shared recordings remain online for ${CLOUD_RECORDING_RETENTION_DAYS} days.`}</p>
+          <p>{encounter.status === "shared" ? "Send the secure link yourself. Nothing is sent automatically." : `Creating a guest link also confirms your review, if you haven’t already. Shared recordings remain online for ${CLOUD_RECORDING_RETENTION_DAYS} days.`}</p>
           {participants.length > 1 ? (
             participants.map((person) => (
               <div className="guest-card" key={person.id}><strong>{person.name || "Guest participant"}</strong><small>{person.email || "No email added"}</small></div>

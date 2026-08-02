@@ -2,6 +2,8 @@
 
 Last updated: 2026-07-24
 
+> Historical foundation and initial market hypothesis. The current canonical product experience is defined in the [Product Source of Truth](./00-product-source-of-truth.md).
+
 ## Initial customer segment
 
 Independent consultants and fractional professionals who regularly meet potential clients, partners, and referrals; sell high-value professional services; and personally manage their follow-ups.

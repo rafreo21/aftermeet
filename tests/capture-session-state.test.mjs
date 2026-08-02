@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   isActiveCaptureSession,
+  isLiveRecordingSession,
   transitionCaptureSession,
 } from '../mobile/src/features/encounters/capture-session-state.ts';
 
@@ -44,5 +45,15 @@ describe('capture session state machine', () => {
     assert.equal(isActiveCaptureSession('review_ready'), false);
     assert.equal(isActiveCaptureSession('saved'), false);
     assert.equal(isActiveCaptureSession('failed'), false);
+  });
+
+  it('only treats microphone-owning sessions as live recordings', () => {
+    assert.equal(isLiveRecordingSession('recording'), true);
+    assert.equal(isLiveRecordingSession('paused'), true);
+    assert.equal(isLiveRecordingSession('processing'), false);
+    assert.equal(isLiveRecordingSession('draft'), false);
+    assert.equal(isLiveRecordingSession('review_ready'), false);
+    assert.equal(isLiveRecordingSession('saved'), false);
+    assert.equal(isLiveRecordingSession('failed'), false);
   });
 });

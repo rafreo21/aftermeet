@@ -4,10 +4,13 @@ import {
   ClockCounterClockwise,
   Microphone,
   Notebook,
+  Pause,
+  Play,
+  Stop,
   Trash,
   UserCircle,
 } from 'phosphor-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -19,7 +22,6 @@ import {
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { Body, Button, HeaderActionButton, PageHeader, ScreenFrame } from '@/components/ui';
-import { GreenHeroCard } from '@/components/green-hero-card';
 import { HistoryToolbar } from '@/components/history-toolbar';
 import { CaptureDeleteSheet } from '@/components/capture-delete-sheet';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
@@ -35,6 +37,12 @@ import {
 } from '@/features/encounters/capture-draft';
 import { deleteEncounter, fetchCaptureSessions, fetchEncounters, type EncounterSummary } from '@/features/encounters/encounter-api';
 import { deleteLocalRecording } from '@/features/encounters/local-recordings';
+import { formatDuration } from '@/features/encounters/local-recordings';
+import { isLiveRecordingSession } from '@/features/encounters/capture-session-state';
+import {
+  getActiveCaptureController,
+  subscribeToActiveCapture,
+} from '@/features/encounters/active-capture-controller';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type CaptureSort = 'recent' | 'oldest' | 'az';
@@ -93,8 +101,10 @@ function draftTitle(draft: CaptureDraftSummary) {
 
 function draftStateLabel(draft: CaptureDraftSummary) {
   if (draft.sessionStatus === 'failed') return 'Recording interrupted';
-  if (draft.sessionStatus === 'paused') return 'Recording paused';
-  if (draft.sessionStatus === 'recording') return 'Recording';
+  // A persisted snapshot is always a draft here. Only the in-memory active
+  // capture controller can prove that a microphone session is currently live.
+  if (draft.sessionStatus === 'paused') return 'Paused draft';
+  if (draft.sessionStatus === 'recording') return 'Unfinished draft';
   if (draft.sessionStatus === 'processing') return 'Preparing review';
   if (draft.sessionStatus === 'review_ready') return 'Ready to review';
   return stepLabel(draft.step);
@@ -114,13 +124,37 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<CaptureSort>('recent');
   const [sortOpen, setSortOpen] = useState(false);
+  const [captureBlockedOpen, setCaptureBlockedOpen] = useState(false);
+  const [syncNotice, setSyncNotice] = useState('');
+  const activeCapture = useSyncExternalStore(
+    subscribeToActiveCapture,
+    getActiveCaptureController,
+    getActiveCaptureController,
+  );
+  const activeCaptureId = activeCapture?.snapshot.encounterId;
+
+  const visibleDrafts = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const nonActiveDrafts = drafts.filter((draft) => draft.encounterId !== activeCaptureId);
+    if (!needle) return nonActiveDrafts;
+    return nonActiveDrafts.filter((draft) => [draftTitle(draft), draftStateLabel(draft), draft.transcriptPreview]
+      .some((value) => value.toLowerCase().includes(needle)));
+  }, [activeCaptureId, drafts, query]);
+
+  const pendingReviewEncounters = useMemo(
+    () => encounters.filter((encounter) => encounter.status === 'draft'),
+    [encounters],
+  );
 
   const visibleEncounters = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    // Unreviewed encounters live in the "Needs review" section on the
+    // landing screen, not History — History is for completed, reviewed work.
+    const reviewable = encounters.filter((encounter) => encounter.status !== 'draft');
     const filtered = needle
-      ? encounters.filter((encounter) => [encounter.personName, encounter.title, encounter.status]
+      ? reviewable.filter((encounter) => [encounter.personName, encounter.title, encounter.status]
         .some((value) => value?.toLowerCase().includes(needle)))
-      : [...encounters];
+      : [...reviewable];
     filtered.sort((left, right) => {
       if (sort === 'az') return (left.personName || left.title).localeCompare(right.personName || right.title);
       const leftTime = new Date(left.startedAt || left.endedAt || 0).getTime();
@@ -147,24 +181,37 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
     else setLoading(true);
     setErrorSheetOpen(false);
     setErrorMessage('');
+    setSyncNotice('');
 
     try {
       const draftList = await listCaptureDrafts();
       setDrafts(draftList);
 
       if (session?.access_token) {
-        const [rows, remoteSessions] = await Promise.all([
+        const [encounterResult, sessionResult] = await Promise.allSettled([
           fetchEncounters(session.access_token),
           fetchCaptureSessions(session.access_token),
         ]);
-        setEncounters(rows);
-        const localById = new Map(draftList.map((item) => [item.encounterId, item]));
-        for (const remoteSession of remoteSessions) {
-          const local = localById.get(remoteSession.encounterId);
-          if (local && new Date(local.updatedAt).getTime() >= new Date(remoteSession.updatedAt).getTime()) continue;
-          await writeCaptureDraft(captureDraftFromRemote(remoteSession));
+
+        if (encounterResult.status === 'fulfilled') {
+          setEncounters(encounterResult.value);
+        } else {
+          setEncounters([]);
         }
-        setDrafts(await listCaptureDrafts());
+
+        if (sessionResult.status === 'fulfilled') {
+          const localById = new Map(draftList.map((item) => [item.encounterId, item]));
+          for (const remoteSession of sessionResult.value) {
+            const local = localById.get(remoteSession.encounterId);
+            if (local && new Date(local.updatedAt).getTime() >= new Date(remoteSession.updatedAt).getTime()) continue;
+            await writeCaptureDraft(captureDraftFromRemote(remoteSession));
+          }
+          setDrafts(await listCaptureDrafts());
+        }
+
+        if (encounterResult.status === 'rejected' || sessionResult.status === 'rejected') {
+          setSyncNotice('Cloud sync is temporarily unavailable. You can still capture and save a draft on this device.');
+        }
       } else {
         setEncounters([]);
       }
@@ -184,12 +231,22 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
     }, [loadHome, params.exchange, params.slug]),
   );
 
-  async function beginFreshCapture() {
-    const draft = createFreshCaptureDraft();
+  async function beginFreshCapture(captureMode: 'recording' | 'quick_context' = 'recording') {
+    if (activeCapture && isLiveRecordingSession(activeCapture.snapshot.status)) {
+      setCaptureBlockedOpen(true);
+      return;
+    }
+    const draft = {
+      ...createFreshCaptureDraft(),
+      captureMode,
+    };
     await writeCaptureDraft(draft);
     router.navigate({
       pathname: '/capture/new',
-      params: { draftId: draft.encounterId },
+      params: {
+        draftId: draft.encounterId,
+        openConsent: captureMode === 'recording' ? '1' : undefined,
+      },
     });
   }
 
@@ -234,7 +291,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
         <View style={styles.header}>
           <PageHeader
             eyebrow={historyOnly ? 'History' : 'Capture'}
-            title={historyOnly ? 'Previous captures' : 'Context & follow-ups'}
+            title={historyOnly ? 'Previous captures' : 'Recordings & context'}
             titleStyle={styles.title}
             onBack={goBack}
             rightAction={!historyOnly ? (
@@ -253,47 +310,71 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void loadHome(true)} tintColor={colors.ink} />
           }>
-          {!historyOnly ? <View style={styles.heroBlock}>
-            <GreenHeroCard
-              icon={<Microphone size={28} color={colors.white} weight="fill" />}
-              title="Capture while it is fresh"
-              copy="Record the meeting, pull out private notes and a shared summary, then add a follow-up before you forget."
-              primaryLabel="Begin capture"
-              onPrimary={() => void beginFreshCapture()}
-              secondaryLabel={session ? undefined : 'Sign in to sync'}
-              onSecondary={session ? undefined : () => router.push('/auth')}
-            />
+          {!historyOnly ? <View style={styles.startActions}>
+            <Button onPress={() => void beginFreshCapture('recording')}>
+              <Microphone size={18} color={colors.ink} weight="fill" /> Start recording
+            </Button>
+            <Button variant="secondary" onPress={() => void beginFreshCapture('quick_context')}>
+              <Notebook size={18} color={colors.ink} weight="bold" /> Add notes
+            </Button>
+          </View> : null}
 
-            {!session && drafts.length ? (
-              <Text style={styles.localNote}>Saved on this device only · Sign in to sync across devices</Text>
-            ) : null}
-          </View> : (
-            <View style={styles.historyTools}>
-              <HistoryToolbar
-                query={query}
-                placeholder="Search capture history"
-                onChangeQuery={setQuery}
-                onPressSort={() => setSortOpen(true)}
-              />
-            </View>
-          )}
+          {historyOnly ? <View style={styles.historyTools}>
+            <HistoryToolbar
+              query={query}
+              placeholder="Search recordings and notes"
+              onChangeQuery={setQuery}
+              onPressSort={() => setSortOpen(true)}
+            />
+          </View> : null}
 
           <View style={styles.listBlock}>
             {loading ? <CaptureListSkeleton count={4} /> : null}
 
           {!historyOnly ? (
             <>
-              {!loading && drafts.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <ClockCounterClockwise size={28} color={colors.muted} weight="bold" />
-                  <Text style={styles.emptyTitle}>No drafts yet</Text>
-                  <Body style={styles.emptyCopy}>
-                    In-progress captures stay here until you save them. Start a new capture or continue where you left off.
-                  </Body>
+              {activeCapture ? (
+                <View style={styles.activeCard}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => continueCapture(activeCapture.snapshot.encounterId)}
+                    style={styles.activeSummary}>
+                    <View style={styles.activeIcon}>
+                      <Microphone size={20} color={colors.white} weight="fill" />
+                    </View>
+                    <View style={styles.activeCopy}>
+                      <Text style={styles.activeTitle}>
+                        {activeCapture.snapshot.status === 'paused' ? 'Recording paused' : 'Recording now'}
+                      </Text>
+                      <Text style={styles.activeDuration}>{formatDuration(activeCapture.snapshot.seconds)}</Text>
+                    </View>
+                  </Pressable>
+                  {activeCapture.snapshot.status !== 'processing' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={activeCapture.snapshot.status === 'paused' ? 'Resume recording' : 'Pause recording'}
+                      onPress={() => void activeCapture.pauseOrResume()}
+                      style={styles.activeControl}>
+                      {activeCapture.snapshot.status === 'paused'
+                        ? <Play size={19} color={colors.ink} weight="fill" />
+                        : <Pause size={19} color={colors.ink} weight="fill" />}
+                    </Pressable>
+                  ) : null}
+                  {activeCapture.snapshot.status !== 'processing' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Finish recording"
+                      onPress={() => void activeCapture.finish()}
+                      style={styles.activeFinish}>
+                      <Stop size={16} color={colors.white} weight="fill" />
+                      <Text style={styles.activeFinishText}>End</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
 
-              {drafts.map((draft) => (
+              {visibleDrafts.length ? <Text style={styles.sectionLabel}>In progress</Text> : null}
+              {visibleDrafts.map((draft) => (
                 <Pressable
                   key={draft.encounterId}
                   accessibilityRole="button"
@@ -333,6 +414,52 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
                   </View>
                 </Pressable>
               ))}
+
+              {pendingReviewEncounters.length ? <Text style={styles.sectionLabel}>Needs review</Text> : null}
+              {pendingReviewEncounters.map((encounter) => (
+                <Pressable
+                  key={encounter.id}
+                  accessibilityRole="button"
+                  onPress={() => router.navigate(`/capture/${encounter.id}`)}
+                  style={({ pressed }) => [styles.captureCard, pressed && styles.captureCardPressed]}>
+                  <View style={styles.captureTop}>
+                    <View style={styles.personRow}>
+                      <UserCircle size={18} color={colors.ink} weight="fill" />
+                      <Text style={styles.personName}>{encounter.personName || 'Someone new'}</Text>
+                    </View>
+                    <Text style={styles.when}>{formatRelative(encounter.endedAt || encounter.startedAt)}</Text>
+                  </View>
+                  <Text style={styles.captureTitle}>{encounter.title || `Meeting with ${encounter.personName || 'someone'}`}</Text>
+                  <View style={styles.cardFooter}>
+                    <Text style={styles.statusChip}>Ready to review</Text>
+                    <View style={styles.draftActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          setDeleteTarget(encounter);
+                        }}
+                        style={styles.discardButton}>
+                        <Trash size={14} color={colors.danger} weight="bold" />
+                        <Text style={styles.discardText}>Delete</Text>
+                      </Pressable>
+                      <View style={styles.openRow}>
+                        <Text style={styles.openText}>Review</Text>
+                        <ArrowRight size={14} color={colors.ink} weight="bold" />
+                      </View>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+
+              {!loading && visibleDrafts.length === 0 && pendingReviewEncounters.length === 0 && !activeCapture ? (
+                <View style={styles.emptyCard}>
+                  <Notebook size={28} color={colors.muted} weight="bold" />
+                  <Text style={styles.emptyTitle}>Nothing in progress</Text>
+                  <Body style={styles.emptyCopy}>Start a recording or add notes after a conversation.</Body>
+                </View>
+              ) : null}
             </>
           ) : (
             <>
@@ -345,6 +472,8 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
                   </Body>
                 </View>
               ) : null}
+
+              {encounters.length ? <Text style={styles.sectionLabel}>Completed captures</Text> : null}
 
               {visibleEncounters.map((encounter) => (
                 <Pressable
@@ -392,6 +521,13 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
 
           </View>
         </ScrollView>
+        {!historyOnly && (syncNotice || (!session && drafts.length > 0)) ? (
+          <View style={styles.syncFooter}>
+            <Text style={styles.syncFooterText}>
+              {syncNotice || 'Saved on this device · Sign in to sync across devices'}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <CaptureDeleteSheet
@@ -418,11 +554,33 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
           <Button variant={sort === 'az' ? 'primary' : 'secondary'} onPress={() => { setSort('az'); setSortOpen(false); }}>Person A–Z</Button>
         </View>
       </BottomSheet>
+
+      <BottomSheet
+        visible={captureBlockedOpen}
+        title="A recording is already live"
+        onClose={() => {
+          setCaptureBlockedOpen(false);
+        }}>
+        <View style={styles.blockedSheet}>
+          <Body>
+            AfterMeet keeps one live recording at a time so its audio, people, and transcript never get mixed together.
+          </Body>
+          <Button onPress={() => {
+            setCaptureBlockedOpen(false);
+            const encounterId = activeCapture?.snapshot.encounterId;
+            if (encounterId) continueCapture(encounterId);
+          }}>
+            Return to live recording
+          </Button>
+        </View>
+      </BottomSheet>
     </ScreenFrame>
   );
 }
 
-export default CaptureHomeScreen;
+export default function CaptureEntryScreen() {
+  return <CaptureHomeScreen />;
+}
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
@@ -432,22 +590,112 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.x6,
   },
+  startActions: {
+    paddingHorizontal: spacing.x5,
+    paddingTop: spacing.x2,
+    paddingBottom: spacing.x3,
+    flexDirection: 'row',
+    gap: spacing.x2,
+  },
+  activeCard: {
+    minHeight: 72,
+    padding: spacing.x2,
+    borderRadius: radius.large,
+    backgroundColor: colors.ink,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x2,
+  },
+  activeSummary: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    paddingHorizontal: spacing.x1,
+  },
+  activeIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.medium,
+    backgroundColor: '#2D6518',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeCopy: { minWidth: 0, flex: 1 },
+  activeTitle: { color: colors.white, fontSize: 15, fontWeight: '900' },
+  activeDuration: { color: '#CFE1C8', fontSize: 13, fontWeight: '800', marginTop: 2 },
+  activeControl: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.medium,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeFinish: {
+    height: 46,
+    paddingHorizontal: spacing.x3,
+    borderRadius: radius.medium,
+    backgroundColor: '#28120E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.x2,
+  },
+  activeFinishText: { color: colors.white, fontSize: 13, fontWeight: '900' },
   heroBlock: {
     paddingHorizontal: spacing.x5,
     paddingTop: spacing.x2,
     gap: spacing.x3,
   },
+  quickContextAction: {
+    minHeight: 72,
+    paddingHorizontal: spacing.x4,
+    paddingVertical: spacing.x3,
+    borderRadius: radius.large,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+  },
+  quickContextActionPressed: { opacity: 0.78 },
+  quickContextIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+  },
+  quickContextCopy: { flex: 1, gap: 2 },
+  quickContextTitle: { color: colors.ink, fontSize: 16, lineHeight: 20, fontWeight: '900' },
+  quickContextHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   listBlock: {
     paddingHorizontal: spacing.x5,
     paddingTop: spacing.x3,
     gap: spacing.x3,
   },
-  localNote: {
+  sectionLabel: {
+    marginTop: spacing.x2,
     color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
+  historyGroup: { gap: spacing.x3 },
+  syncFooter: {
+    minHeight: 38,
+    paddingHorizontal: spacing.x5,
+    paddingVertical: spacing.x2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  syncFooterText: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: '700', textAlign: 'center' },
   historyTools: {
     zIndex: 2,
     paddingHorizontal: spacing.x5,
@@ -461,6 +709,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   sortOptions: { gap: spacing.x2 },
+  blockedSheet: { gap: spacing.x3 },
   emptySearch: { textAlign: 'center', color: colors.muted, paddingVertical: spacing.x4 },
   emptyCard: {
     alignItems: 'flex-start',

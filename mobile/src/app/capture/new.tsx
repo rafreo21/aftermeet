@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { PaperPlaneTilt } from 'phosphor-react-native';
+import { CloudArrowUp, DeviceMobile, PaperPlaneTilt } from 'phosphor-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,7 +15,6 @@ import {
 import { CaptureContextStep } from '@/components/capture-context-step';
 import { CaptureErrorSheet } from '@/components/capture-error-sheet';
 import { CaptureInteractionStep } from '@/components/capture-interaction-step';
-import { CaptureLeaveSheet } from '@/components/capture-leave-sheet';
 import { FollowUpDuePicker } from '@/components/follow-up-due-picker';
 import { CaptureStepIndicator } from '@/components/capture-step-indicator';
 import { Body, Button, PageHeader } from '@/components/ui';
@@ -78,18 +77,26 @@ import {
   toggleFollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
 import { FOLLOW_UP_TEMPLATES } from '@/features/follow-ups/follow-up-templates';
-import { useCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/use-capture-recorder';
-import {
-  registerActiveCaptureController,
-  updateActiveCaptureSnapshot,
-} from '@/features/encounters/active-capture-controller';
+import { useSharedCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/capture-recorder-context';
 import { normalizeTranscriptForExtraction } from '@/lib/transcript-cleanup';
+import { notifyMeetingReviewReady } from '@/features/notifications/notification-service';
 import { useAppInsets } from '@/lib/safe-area';
 import { readEnv } from '@/lib/env';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type GenerationStatus = 'idle' | 'generating' | 'error';
 type CommitmentAssignment = { owner: 'me' | 'guest'; targetName: string };
+
+const CAPTURE_DRAFT_READ_TIMEOUT_MS = 2_000;
+
+async function readCaptureDraftWithoutBlocking(encounterId?: string): Promise<CaptureWizardDraft | null> {
+  return Promise.race([
+    readCaptureDraft(encounterId),
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), CAPTURE_DRAFT_READ_TIMEOUT_MS);
+    }),
+  ]);
+}
 
 function commitmentKey(commitment: EncounterExtractionCommitment, index: number): string {
   return `${index}:${commitment.title}:${commitment.channel}:${commitment.dueAt}`;
@@ -123,6 +130,7 @@ export default function CaptureWizardScreen() {
     personEmail?: string;
     sourceId?: string;
     contactId?: string;
+    openConsent?: string;
   }>();
   const { session } = useAuth();
   const insets = useAppInsets();
@@ -131,7 +139,6 @@ export default function CaptureWizardScreen() {
   const remoteSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedDraftAtRef = useRef('');
   const suppressNextRemoteSyncRef = useRef(false);
-  const [leaveSheetOpen, setLeaveSheetOpen] = useState(false);
   const [exchanges, setExchanges] = useState<InboundExchange[]>([]);
   const [uncertainFields, setUncertainFields] = useState<string[]>([]);
   const [commitmentSuggestions, setCommitmentSuggestions] = useState<EncounterExtractionCommitment[]>([]);
@@ -155,10 +162,26 @@ export default function CaptureWizardScreen() {
   const [connections, setConnections] = useState<ConnectionItem[]>([]);
   const [priorMeetingCounts, setPriorMeetingCounts] = useState<Record<string, number>>({});
   const [draftReady, setDraftReady] = useState(false);
+  const [interactionPathStarted, setInteractionPathStarted] = useState(false);
+  const [customFollowUpOpen, setCustomFollowUpOpen] = useState<boolean | null>(null);
+  const [privateNotesOpen, setPrivateNotesOpen] = useState<boolean | null>(null);
   const [googleDriveReady, setGoogleDriveReady] = useState(false);
   const [oneDriveReady, setOneDriveReady] = useState(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+
+  const hasStartedInteraction = interactionPathStarted
+    || (draftReady && draft.step === 0 && (
+      draft.captureMode === 'quick_context'
+      || draft.consent
+      || draft.people.length > 0
+      || Boolean(draft.recordingUri)
+      || Boolean(draft.transcript.trim())
+    ));
+  const isCustomFollowUpOpen = customFollowUpOpen
+    ?? (draft.step === 2 && (!commitmentSuggestions.length || Boolean(draft.followUp.trim())));
+  const isPrivateNotesOpen = privateNotesOpen
+    ?? (draft.step === 2 && Boolean(draft.privateNotes.trim()));
 
   const updateDraft = useCallback((changes: Partial<CaptureWizardDraft>) => {
     setDraft((current) => {
@@ -312,19 +335,31 @@ export default function CaptureWizardScreen() {
 
       setDraft((current) => {
         const extracted = applyExtractionDraft(current, result.draft!, { replace: true });
+        const hasManualFollowUp = Boolean(current.followUp.trim());
+        const hasManualChannels = current.followUpChannels.length > 0;
         return {
           ...current,
           ...extracted,
-          followUp: commitments.length ? '' : extracted.followUp,
-          followUpChannels: commitments.length
-            ? []
-            : result.draft?.followUp
-            ? normalizeFollowUpChannels([result.draft.followUpType])
-            : current.followUpChannels,
+          followUp: hasManualFollowUp
+            ? current.followUp
+            : commitments.length ? '' : extracted.followUp,
+          followUpType: hasManualChannels ? current.followUpType : extracted.followUpType,
+          followUpChannels: hasManualChannels
+            ? current.followUpChannels
+            : commitments.length
+              ? []
+              : result.draft?.followUp
+                ? normalizeFollowUpChannels([result.draft.followUpType])
+                : current.followUpChannels,
+          dueAt: current.dueAt,
         };
       });
       setUncertainFields(result.uncertainFields ?? []);
       setGenerationStatus('idle');
+      void notifyMeetingReviewReady({
+        encounterId: hints.encounterId,
+        title: result.draft?.title || hints.title,
+      });
     } catch (caught) {
       if (activeRequest !== requestRef.current) return;
       const message = caught instanceof Error ? caught.message : 'Could not generate meeting context right now.';
@@ -366,7 +401,7 @@ export default function CaptureWizardScreen() {
     }
   }, [updateDraft]);
 
-  const recorder = useCaptureRecorder({
+  const recorder = useSharedCaptureRecorder({
     transcript: draft.transcript,
     onTranscriptChange: handleTranscriptChange,
     onDurationChange: handleDurationChange,
@@ -376,7 +411,7 @@ export default function CaptureWizardScreen() {
     onImportStarted: handleImportStarted,
     onTranscriptFinalized: handleTranscriptFinalized,
     transcribeFromServer,
-  });
+  }, draft.encounterId);
 
   const recorderHydratedRef = useRef(false);
   const isTranscribing = recorder.transcriptStatus === 'transcribing'
@@ -384,42 +419,6 @@ export default function CaptureWizardScreen() {
     || recorder.serverTranscribePhase === 'transcribing'
     || recorder.serverTranscribePhase === 'revealing'
     || recorder.isFinishing;
-
-  useEffect(() => {
-    const status = isTranscribing
-      ? 'processing'
-      : recorder.recordingState === 'paused'
-        ? 'paused'
-        : recorder.recordingState === 'recording'
-          ? 'recording'
-          : null;
-    if (!status) return;
-    return registerActiveCaptureController({
-      pauseOrResume: recorder.pauseOrResume,
-      finish: recorder.stopRecording,
-    }, {
-      encounterId: draftRef.current.encounterId,
-      status,
-      seconds: recorder.seconds,
-    });
-  }, [isTranscribing, recorder.pauseOrResume, recorder.recordingState, recorder.seconds, recorder.stopRecording]);
-
-  useEffect(() => {
-    if (!draftReady) return;
-    const status = isTranscribing
-      ? 'processing'
-      : recorder.recordingState === 'paused'
-        ? 'paused'
-        : recorder.recordingState === 'recording'
-          ? 'recording'
-          : null;
-    if (!status) return;
-    updateActiveCaptureSnapshot({
-      encounterId: draft.encounterId,
-      status,
-      seconds: recorder.seconds,
-    });
-  }, [draft.encounterId, draftReady, isTranscribing, recorder.recordingState, recorder.seconds]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -463,52 +462,34 @@ export default function CaptureWizardScreen() {
   const captureHasProgress = hasCaptureDraftProgress(draft)
     || recorder.recordingState === 'recording'
     || recorder.recordingState === 'paused';
+  const activeRecording = recorder.recordingState === 'recording'
+    || recorder.recordingState === 'paused';
 
   const requestLeave = useCallback(() => {
     if (captureHasProgress) {
-      setLeaveSheetOpen(true);
-      return;
+      const current = draftRef.current;
+      const next = {
+        ...current,
+        recordingUri: current.recordingUri || recorder.recordingUri,
+        recordingSource: current.recordingSource || recorder.recordingSource || current.recordingSource,
+        transcript: current.transcript || recorder.displayTranscript.trim(),
+        durationSeconds: current.durationSeconds || recorder.seconds,
+      };
+      setDraft(next);
+      void writeCaptureDraft(next);
     }
-    router.replace('/capture');
-  }, [captureHasProgress]);
-
-  const confirmLeave = useCallback(async () => {
-    setLeaveSheetOpen(false);
-    await recorder.resetRecording();
-    await deleteCaptureDraft(draftRef.current.encounterId);
-    router.replace('/capture');
-  }, [recorder]);
-
-  const saveDraftAndLeave = useCallback(async () => {
-    setLeaveSheetOpen(false);
-    const current = draftRef.current;
-    const next = {
-      ...current,
-      recordingUri: current.recordingUri || recorder.recordingUri,
-      recordingSource: current.recordingSource || recorder.recordingSource || current.recordingSource,
-      transcript: current.transcript || recorder.displayTranscript.trim(),
-      durationSeconds: current.durationSeconds || recorder.seconds,
-    };
-    setDraft(next);
-    await writeCaptureDraft(next);
-    router.replace('/capture');
-  }, [recorder]);
+    if (router.canGoBack()) router.back();
+    else router.replace('/capture');
+  }, [captureHasProgress, recorder]);
 
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (leaveSheetOpen) {
-          setLeaveSheetOpen(false);
-          return true;
-        }
-        if (captureHasProgress) {
-          setLeaveSheetOpen(true);
-          return true;
-        }
-        return false;
+        requestLeave();
+        return true;
       });
       return () => subscription.remove();
-    }, [captureHasProgress, leaveSheetOpen]),
+    }, [requestLeave]),
   );
 
   useEffect(() => {
@@ -525,7 +506,7 @@ export default function CaptureWizardScreen() {
   }, [session?.access_token]);
 
   useEffect(() => {
-    if (!draftReady || draft.step !== 1) return;
+    if (!draftReady || draft.step < 1) return;
     const clean = draft.transcript.trim();
     if (clean.length < 20) return;
     if (generationStatus === 'generating') return;
@@ -561,8 +542,8 @@ export default function CaptureWizardScreen() {
     void (async () => {
       try {
         const stored = params.draftId
-          ? await readCaptureDraft(String(params.draftId))
-          : await readCaptureDraft();
+          ? await readCaptureDraftWithoutBlocking(String(params.draftId))
+          : await readCaptureDraftWithoutBlocking();
         let remote: CaptureWizardDraft | null = null;
         if (!stored && params.draftId && session?.access_token) {
           const sessions = await fetchCaptureSessions(session.access_token).catch(() => []);
@@ -591,8 +572,8 @@ export default function CaptureWizardScreen() {
             Object.assign(next, syncLegacyPersonFields(next.people));
           }
         }
-        if (!stored) await writeCaptureDraft(next);
         setDraft(next);
+        if (!stored) void writeCaptureDraft(next);
       } finally {
         setDraftReady(true);
       }
@@ -698,6 +679,8 @@ export default function CaptureWizardScreen() {
     void getCaptureDeviceIdentity().then((device) => { captureDeviceRef.current = device; });
     if (
       (draft.sessionStatus === 'recording' || draft.sessionStatus === 'paused')
+      && recorder.recordingState !== 'recording'
+      && recorder.recordingState !== 'paused'
       && !draft.recordingUri
       && (!draft.originDeviceId || draft.originDeviceId === captureDeviceRef.current?.id)
     ) {
@@ -849,10 +832,10 @@ export default function CaptureWizardScreen() {
     }
     if (draft.captureMode === 'recording' && !skipRecording && (recorder.recordingState === 'recording' || recorder.recordingState === 'paused')) {
       await recorder.stopRecording();
-    } else {
+    } else if (draft.captureMode !== 'recording') {
       await recorder.awaitPendingFinish();
     }
-    updateDraft({ step: 1 });
+    updateDraft({ step: draft.captureMode === 'recording' ? 2 : 1 });
   }
 
   function continueFromContext() {
@@ -1016,12 +999,42 @@ export default function CaptureWizardScreen() {
       ) : (
       <View style={styles.page}>
         <View style={styles.header}>
-          <PageHeader eyebrow="Capture context" title="What mattered in this meeting?" titleStyle={styles.title} onBack={requestLeave} />
+          <PageHeader
+            eyebrow={draft.step === 0
+              ? draft.captureMode === 'recording'
+                ? 'Get consent, then record'
+                : 'Write what mattered'
+              : 'Meeting context'}
+            title={draft.step === 0
+              ? draft.captureMode === 'recording'
+                ? 'Record this conversation'
+                : 'Add notes'
+              : 'What mattered in this meeting?'}
+            titleStyle={styles.title}
+            onBack={requestLeave}
+            rightAction={draft.step === 0 && !activeRecording ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={draft.captureMode === 'recording' ? 'Use notes instead' : 'Record instead'}
+                onPress={() => {
+                  updateDraft({
+                    captureMode: draft.captureMode === 'recording' ? 'quick_context' : 'recording',
+                  });
+                  setInteractionPathStarted(true);
+                }}
+                style={styles.headerModeAction}
+                hitSlop={8}>
+                <Text style={styles.headerModeActionText}>
+                  {draft.captureMode === 'recording' ? 'Use notes' : 'Record'}
+                </Text>
+              </Pressable>
+            ) : undefined}
+          />
         </View>
 
-        <View style={styles.stepperWrap}>
+        {!activeRecording && draft.step > 0 ? <View style={styles.stepperWrap}>
           <CaptureStepIndicator current={draft.step} onStep={goToStep} />
-        </View>
+        </View> : null}
 
         <ScrollView
           style={styles.scroll}
@@ -1044,9 +1057,8 @@ export default function CaptureWizardScreen() {
               onEnsureAuth={ensureAuth}
               getPriorMeetingCount={getPriorMeetingCount}
               knownConnectionEmails={connections.map((connection) => connection.email?.trim().toLowerCase() || '').filter(Boolean)}
-              googleDriveReady={googleDriveReady}
-              oneDriveReady={oneDriveReady}
-              onOpenConnectedAccounts={() => router.push('/settings/connected-accounts')}
+              onPathStateChange={setInteractionPathStarted}
+              openConsentOnMount={params.openConsent === '1'}
             />
           ) : null}
 
@@ -1074,6 +1086,17 @@ export default function CaptureWizardScreen() {
                 <Text style={styles.blockTitle}>What happens next?</Text>
               </View>
               <Body>Pick how you want to follow up, add any private notes, then save and review.</Body>
+              {isTranscribing || generationStatus === 'generating' ? (
+                <View style={styles.backgroundStatus}>
+                  <ActivityIndicator size="small" color={colors.ink} />
+                  <View style={styles.backgroundStatusCopy}>
+                    <Text style={styles.backgroundStatusTitle}>Preparing the meeting review</Text>
+                    <Text style={styles.backgroundStatusBody}>
+                      Set the follow-up, channel, and reminder now. We’ll notify you when the transcript is ready.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
               {commitmentSuggestions.length ? (
                 <View style={styles.commitmentPanel}>
                   <Text style={styles.commitmentTitle}>Suggested from the conversation</Text>
@@ -1130,52 +1153,106 @@ export default function CaptureWizardScreen() {
                   })}
                 </View>
               ) : null}
-              <Text style={styles.label}>Start with a template</Text>
-              <Text style={styles.fieldHint}>Choose a common next step, then make it specific.</Text>
-              <View style={styles.templateRow}>
-                {FOLLOW_UP_TEMPLATES.map((template) => (
-                  <Pressable
-                    key={template.id}
-                    accessibilityRole="button"
-                    onPress={() => updateDraft({
-                      followUp: template.buildTitle(formatPeopleNames(draft.people) || draft.personName),
-                      followUpChannels: [template.channel],
-                      followUpType: template.channel,
-                      dueAt: template.dueAt(),
-                    })}
-                    style={styles.templateChip}>
-                    <Text style={styles.templateChipText}>{template.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.label}>{selectedCommitmentKeys.length ? 'Add another follow-up' : 'Reviewed commitment'}</Text>
-              <Text style={styles.fieldHint}>{selectedCommitmentKeys.length ? 'Optional. Add a task that was not found in the conversation.' : 'Confirm or edit the concrete next step AfterMeet found in your context.'}</Text>
-              <TextInput
-                value={draft.followUp}
-                onChangeText={(value) => updateDraft({ followUp: value })}
-                placeholder="Send the proposal on Friday"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-              {(draft.people ?? []).length > 1 ? (
-                <View style={styles.followUpPeopleWrap}>
-                  <Text style={styles.label}>Applies to everyone</Text>
-                  <Text style={styles.fieldHint}>
-                    One reminder per person, tracked separately for each attendee.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isCustomFollowUpOpen }}
+                onPress={() => setCustomFollowUpOpen(!isCustomFollowUpOpen)}
+                style={styles.optionalSectionToggle}>
+                <View style={styles.optionalSectionCopy}>
+                  <Text style={styles.optionalSectionTitle}>
+                    {selectedCommitmentKeys.length ? 'Add another follow-up' : 'Create a follow-up'}
                   </Text>
-                  <View style={styles.followUpPeopleRow}>
-                    {(draft.people ?? []).map((person) => (
-                      <View key={person.id} style={styles.followUpPersonChip}>
-                        <Text style={styles.followUpPersonChipText}>
-                          {person.name.trim() || 'Guest'}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
+                  <Text style={styles.optionalSectionHint}>
+                    {draft.followUp.trim() || 'Add something the conversation did not identify.'}
+                  </Text>
                 </View>
-              ) : null}
-              <Text style={styles.label}>Private notes</Text>
-              <TextInput
+                <Text style={styles.optionalSectionAction}>{isCustomFollowUpOpen ? 'Hide' : 'Add'}</Text>
+              </Pressable>
+
+              {isCustomFollowUpOpen ? <View style={styles.optionalSectionBody}>
+                <Text style={styles.label}>Start with a template</Text>
+                <View style={styles.templateRow}>
+                  {FOLLOW_UP_TEMPLATES.map((template) => (
+                    <Pressable
+                      key={template.id}
+                      accessibilityRole="button"
+                      onPress={() => updateDraft({
+                        followUp: template.buildTitle(formatPeopleNames(draft.people) || draft.personName),
+                        followUpChannels: [template.channel],
+                        followUpType: template.channel,
+                        dueAt: template.dueAt(),
+                      })}
+                      style={styles.templateChip}>
+                      <Text style={styles.templateChipText}>{template.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.label}>Follow-up</Text>
+                <TextInput
+                  value={draft.followUp}
+                  onChangeText={(value) => updateDraft({ followUp: value })}
+                  placeholder="Send the proposal on Friday"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+                {(draft.people ?? []).length > 1 ? (
+                  <View style={styles.followUpPeopleWrap}>
+                    <Text style={styles.label}>Track with</Text>
+                    <View style={styles.followUpPeopleRow}>
+                      {(draft.people ?? []).map((person) => (
+                        <View key={person.id} style={styles.followUpPersonChip}>
+                          <Text style={styles.followUpPersonChipText}>
+                            {person.name.trim() || 'Guest'}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+                <Text style={styles.label}>Channel</Text>
+                <View style={styles.channelRow}>
+                  {FOLLOW_UP_CHANNELS.map((channel) => {
+                    const selected = draft.followUpChannels.includes(channel.id);
+                    return (
+                      <Pressable
+                        key={channel.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => {
+                          const next = toggleFollowUpChannel(draft.followUpChannels, channel.id);
+                          updateDraft({
+                            followUpChannels: next,
+                            followUpType: next[0] || 'email',
+                          });
+                        }}
+                        style={[styles.channelChip, selected && styles.channelChipActive]}>
+                        <Text style={[styles.channelText, selected && styles.channelTextActive]}>
+                          {channel.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <FollowUpDuePicker
+                  dueAt={draft.dueAt}
+                  onChange={(dueAt) => updateDraft({ dueAt })}
+                />
+              </View> : null}
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isPrivateNotesOpen }}
+                onPress={() => setPrivateNotesOpen(!isPrivateNotesOpen)}
+                style={styles.optionalSectionToggle}>
+                <View style={styles.optionalSectionCopy}>
+                  <Text style={styles.optionalSectionTitle}>Private notes</Text>
+                  <Text style={styles.optionalSectionHint}>
+                    {draft.privateNotes.trim() ? 'Saved for you only.' : 'Optional and never shared.'}
+                  </Text>
+                </View>
+                <Text style={styles.optionalSectionAction}>{isPrivateNotesOpen ? 'Hide' : 'Add'}</Text>
+              </Pressable>
+              {isPrivateNotesOpen ? <TextInput
                 value={draft.privateNotes}
                 onChangeText={(value) => updateDraft({ privateNotes: value })}
                 multiline
@@ -1183,36 +1260,54 @@ export default function CaptureWizardScreen() {
                 placeholder="Anything you want to remember for yourself…"
                 placeholderTextColor={colors.muted}
                 style={[styles.input, styles.textarea]}
-              />
-              <Text style={styles.label}>Follow-up channels</Text>
-              <Text style={styles.fieldHint}>Pick as many as you&apos;d like. Each channel becomes its own action.</Text>
-              <View style={styles.channelRow}>
-                {FOLLOW_UP_CHANNELS.map((channel) => {
-                  const selected = draft.followUpChannels.includes(channel.id);
-                  return (
-                    <Pressable
-                      key={channel.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        const next = toggleFollowUpChannel(draft.followUpChannels, channel.id);
-                        updateDraft({
-                          followUpChannels: next,
-                          followUpType: next[0] || 'email',
-                        });
-                      }}
-                      style={[styles.channelChip, selected && styles.channelChipActive]}>
-                      <Text style={[styles.channelText, selected && styles.channelTextActive]}>
-                        {channel.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <FollowUpDuePicker
-                dueAt={draft.dueAt}
-                onChange={(dueAt) => updateDraft({ dueAt })}
-              />
+              /> : null}
+
+              {draft.captureMode === 'recording' && (draft.recordingUri || recorder.recordingUri) ? (
+                <View style={styles.recordingAccessSection}>
+                  <View style={styles.recordingAccessHead}>
+                    <Text style={styles.recordingAccessTitle}>Recording access</Text>
+                    <Text style={styles.recordingAccessHint}>
+                      Choose where the finished audio lives. You can change this before saving.
+                    </Text>
+                  </View>
+                  <View style={styles.recordingAccessList}>
+                    {([
+                      { id: 'local_only', label: 'Only on this device', detail: 'Private local copy', icon: DeviceMobile, ready: true },
+                      { id: 'shared_3_days', label: 'Share online for 3 days', detail: 'Participants can listen or download', icon: CloudArrowUp, ready: true },
+                      { id: 'google_drive', label: 'Keep in Google Drive', detail: googleDriveReady ? 'Uses your connected Google account' : 'Reconnect Google to enable Drive', icon: CloudArrowUp, ready: googleDriveReady },
+                      { id: 'onedrive', label: 'Keep in OneDrive', detail: oneDriveReady ? 'Uses your connected Microsoft account' : 'Reconnect Microsoft to enable OneDrive', icon: CloudArrowUp, ready: oneDriveReady },
+                    ] as const).map((destination) => {
+                      const selected = draft.recordingDestination === destination.id;
+                      const Icon = destination.icon;
+                      return (
+                        <Pressable
+                          key={destination.id}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: selected, disabled: !destination.ready }}
+                          onPress={() => {
+                            if (!destination.ready) {
+                              router.push('/settings/connected-accounts');
+                              return;
+                            }
+                            updateDraft({ recordingDestination: destination.id });
+                          }}
+                          style={[
+                            styles.recordingAccessOption,
+                            selected && styles.recordingAccessOptionActive,
+                            !destination.ready && styles.recordingAccessOptionDisabled,
+                          ]}>
+                          <Icon size={18} color={colors.ink} weight="bold" />
+                          <View style={styles.recordingAccessCopy}>
+                            <Text style={styles.recordingAccessLabel}>{destination.label}</Text>
+                            <Text style={styles.recordingAccessDetail}>{destination.detail}</Text>
+                          </View>
+                          <View style={[styles.recordingAccessRadio, selected && styles.recordingAccessRadioActive]} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
             </View>
           ) : null}
 
@@ -1228,29 +1323,22 @@ export default function CaptureWizardScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={styles.footer}>
+        {!activeRecording ? <View style={styles.footer}>
           {draft.step > 0 ? (
             <Button variant="secondary" style={{ flex: 1 }} onPress={() => goToStep(draft.step - 1)}>
               Back
             </Button>
           ) : null}
-          {draft.step === 0 ? (
+          {draft.step === 0 && hasStartedInteraction ? (
             <>
-              {draft.captureMode === 'recording' && draft.consent && recorder.recordingState === 'idle' && !recorder.recordingUri ? (
-                <Button variant="secondary" style={{ flex: 1 }} onPress={() => void continueFromInteraction(true)}>
-                  Skip recording
-                </Button>
-              ) : null}
               <Button
                 style={{ flex: 1 }}
                 onPress={() => void continueFromInteraction(false)}
-                loading={isTranscribing}
                 disabled={
                   (draft.captureMode === 'recording' && !draft.consent)
                   || !hasValidGatherPeople(draft.people ?? [])
-                  || isTranscribing
                 }>
-                {isTranscribing ? 'Transcribing…' : draft.captureMode === 'quick_context' ? 'Add context' : 'Next'}
+                {draft.captureMode === 'quick_context' ? 'Add context' : 'Set follow-up'}
               </Button>
             </>
           ) : null}
@@ -1268,15 +1356,9 @@ export default function CaptureWizardScreen() {
               Save & review
             </Button>
           ) : null}
-        </View>
+        </View> : null}
       </View>
       )}
-      <CaptureLeaveSheet
-        visible={leaveSheetOpen}
-        onStay={() => setLeaveSheetOpen(false)}
-        onSaveDraft={() => void saveDraftAndLeave()}
-        onDiscard={() => void confirmLeave()}
-      />
       <CaptureErrorSheet
         visible={errorSheetOpen}
         message={error}
@@ -1297,6 +1379,17 @@ const styles = StyleSheet.create({
   loadingCopy: { color: colors.muted, fontSize: 14 },
   page: { flex: 1 },
   header: { paddingHorizontal: spacing.x5 },
+  headerModeAction: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.x2,
+  },
+  headerModeActionText: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
   title: { fontSize: 30, lineHeight: 32 },
   stepperWrap: { marginTop: spacing.x5, paddingHorizontal: spacing.x5 },
   scroll: { flex: 1, marginTop: spacing.x4 },
@@ -1311,6 +1404,17 @@ const styles = StyleSheet.create({
   },
   blockHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
   blockTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  backgroundStatus: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.x3,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surfaceMuted,
+  },
+  backgroundStatusCopy: { flex: 1, gap: spacing.x1 },
+  backgroundStatusTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  backgroundStatusBody: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   sourcePanel: {
     gap: spacing.x3,
     padding: spacing.x4,
@@ -1324,6 +1428,42 @@ const styles = StyleSheet.create({
   sourceHint: { color: colors.muted, fontSize: 12, lineHeight: 18 },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   fieldHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  recordingAccessSection: {
+    gap: spacing.x3,
+    paddingTop: spacing.x2,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  recordingAccessHead: { gap: spacing.x1 },
+  recordingAccessTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  recordingAccessHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  recordingAccessList: { gap: spacing.x2 },
+  recordingAccessOption: {
+    minHeight: 68,
+    paddingHorizontal: spacing.x4,
+    paddingVertical: spacing.x3,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+  },
+  recordingAccessOptionActive: { borderColor: colors.ink, backgroundColor: colors.surfaceMuted },
+  recordingAccessOptionDisabled: { opacity: 0.62 },
+  recordingAccessCopy: { flex: 1, minWidth: 0 },
+  recordingAccessLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  recordingAccessDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 2 },
+  recordingAccessRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.line,
+    backgroundColor: colors.canvas,
+  },
+  recordingAccessRadioActive: { borderColor: colors.ink, backgroundColor: colors.accent },
   input: {
     minHeight: 48,
     paddingHorizontal: spacing.x4,
@@ -1369,6 +1509,29 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   followUpPersonChipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
+  optionalSectionToggle: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.canvas,
+  },
+  optionalSectionCopy: { flex: 1, gap: 3 },
+  optionalSectionTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  optionalSectionHint: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  optionalSectionAction: { color: colors.ink, fontSize: 12, fontWeight: '900', textDecorationLine: 'underline' },
+  optionalSectionBody: {
+    gap: spacing.x3,
+    padding: spacing.x4,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surfaceMuted,
+  },
   templateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   commitmentPanel: {
     gap: spacing.x2,

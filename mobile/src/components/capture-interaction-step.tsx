@@ -1,20 +1,19 @@
 import { router } from 'expo-router';
 import {
-  CaretDown,
   CaretRight,
-  CaretUp,
   CheckCircle,
-  CloudArrowUp,
-  DeviceMobile,
   IdentificationCard,
   Microphone,
-  NotePencil,
+  Pause,
   PencilSimple,
+  Play,
+  Plus,
   QrCode,
   Scan,
+  Stop,
   Trash,
 } from 'phosphor-react-native';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -58,9 +57,8 @@ type CaptureInteractionStepProps = {
   onEnsureAuth: () => Promise<string | null>;
   getPriorMeetingCount?: (email: string) => number;
   knownConnectionEmails?: string[];
-  googleDriveReady?: boolean;
-  oneDriveReady?: boolean;
-  onOpenConnectedAccounts?: () => void;
+  onPathStateChange?: (started: boolean) => void;
+  openConsentOnMount?: boolean;
 };
 
 function metBeforeLabelForPerson(
@@ -174,40 +172,6 @@ function PersonFields({
   );
 }
 
-function ActionChip({
-  icon,
-  label,
-  onPress,
-  disabled,
-  badge,
-}: {
-  icon: ReactNode;
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  badge?: number;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionChip,
-        pressed && !disabled && styles.actionChipPressed,
-        disabled && styles.actionChipDisabled,
-      ]}>
-      <View style={styles.actionChipIcon}>{icon}</View>
-      <Text style={styles.actionChipLabel}>{label}</Text>
-      {badge && badge > 0 ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{badge}</Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
 export function CaptureInteractionStep({
   draft,
   onDraftChange,
@@ -223,12 +187,14 @@ export function CaptureInteractionStep({
   onEnsureAuth,
   getPriorMeetingCount,
   knownConnectionEmails = [],
-  googleDriveReady = false,
-  oneDriveReady = false,
-  onOpenConnectedAccounts,
+  onPathStateChange,
+  openConsentOnMount = false,
 }: CaptureInteractionStepProps) {
   const { card, publicUrl } = useCard();
-  const [consentSheetOpen, setConsentSheetOpen] = useState(false);
+  const [consentIntent, setConsentIntent] = useState<'confirm' | 'record' | null>(() => (
+    openConsentOnMount && recorder.recordingState === 'idle' ? 'record' : null
+  ));
+  const [addPersonSheetOpen, setAddPersonSheetOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [scansOpen, setScansOpen] = useState(false);
@@ -236,9 +202,8 @@ export function CaptureInteractionStep({
   const [personError, setPersonError] = useState('');
   const [formPerson, setFormPerson] = useState<GatherPerson>(createGatherPerson());
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
-  const [liveTranscriptOpen, setLiveTranscriptOpen] = useState(true);
-
   const people = draft.people ?? [];
+  const pathStarted = true;
   const atCapacity = people.length >= MAX_GATHER_PEOPLE;
   const methodLabel = consentMethod === 'verbal' ? 'Verbal consent' : 'Written consent';
   const isRecording = recorder.recordingState === 'recording' || recorder.recordingState === 'paused';
@@ -248,15 +213,6 @@ export function CaptureInteractionStep({
     || recorder.serverTranscribePhase === 'transcribing'
     || recorder.serverTranscribePhase === 'revealing'
     || recorder.transcriptStatus === 'transcribing';
-  const showLiveTranscript =
-    isRecording
-    || recorder.recordingComplete
-    || isTranscribingImport
-    || Boolean(recorder.displayTranscript.trim())
-    || recorder.serverTranscribePhase === 'failed'
-    || recorder.serverTranscribePhase === 'preparing'
-    || recorder.serverTranscribePhase === 'transcribing'
-    || recorder.serverTranscribePhase === 'revealing';
 
   const liveTranscriptHint = (() => {
     switch (recorder.serverTranscribePhase) {
@@ -289,6 +245,10 @@ export function CaptureInteractionStep({
           ? (isImported ? 'Imported recording' : 'Recording ready')
           : 'Ready to capture';
 
+  useEffect(() => {
+    onPathStateChange?.(true);
+  }, [onPathStateChange]);
+
   function updatePeople(nextPeople: GatherPerson[]) {
     onDraftChange(syncLegacyPersonFields(nextPeople.slice(0, MAX_GATHER_PEOPLE)));
   }
@@ -303,6 +263,25 @@ export function CaptureInteractionStep({
       setEditingPersonId(null);
     }
     setManualOpen(true);
+  }
+
+  function openFromPersonChooser(action: 'manual' | 'qr' | 'scans') {
+    setAddPersonSheetOpen(false);
+    requestAnimationFrame(() => {
+      if (action === 'manual') {
+        openManualSheet();
+        return;
+      }
+      if (action === 'qr') {
+        setQrOpen(true);
+        return;
+      }
+      if (signedIn) {
+        setScansOpen(true);
+      } else {
+        void onEnsureAuth();
+      }
+    });
   }
 
   function validatePerson(person: GatherPerson) {
@@ -334,38 +313,32 @@ export function CaptureInteractionStep({
     updatePeople(people.filter((person) => person.id !== personId));
   }
 
+  function requestRecordingStart() {
+    setConsentIntent('record');
+  }
+
+  function closeConsentSheet() {
+    setConsentIntent(null);
+  }
+
+  function confirmConsent() {
+    const shouldStartRecording = consentIntent === 'record';
+    setConsentIntent(null);
+    if (!shouldStartRecording) return;
+    requestAnimationFrame(() => {
+      void recorder.startRecording(true);
+    });
+  }
+
   return (
     <View style={styles.stack}>
-      <View style={styles.modeCard}>
-        <Text style={styles.modeTitle}>How do you want to capture this?</Text>
-        <Text style={styles.modeHint}>Record the conversation, or write the useful context without recording.</Text>
-        <View style={styles.modeRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: draft.captureMode === 'recording' }}
-            onPress={() => onDraftChange({ captureMode: 'recording' })}
-            style={[styles.modeOption, draft.captureMode === 'recording' && styles.modeOptionActive]}>
-            <Microphone size={19} color={colors.ink} weight="bold" />
-            <Text style={styles.modeOptionTitle}>Record</Text>
-            <Text style={styles.modeOptionHint}>Audio + transcript</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: draft.captureMode === 'quick_context' }}
-            onPress={() => onDraftChange({ captureMode: 'quick_context' })}
-            style={[styles.modeOption, draft.captureMode === 'quick_context' && styles.modeOptionActive]}>
-            <NotePencil size={19} color={colors.ink} weight="bold" />
-            <Text style={styles.modeOptionTitle}>Quick context</Text>
-            <Text style={styles.modeOptionHint}>No recording</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {draft.captureMode === 'recording' ? (
+      {pathStarted && draft.captureMode === 'recording' ? (
       <>
       <Pressable
         accessibilityRole="button"
-        onPress={() => setConsentSheetOpen(true)}
+        accessibilityState={{ disabled: isRecording }}
+        disabled={isRecording}
+        onPress={() => setConsentIntent('confirm')}
         style={[styles.consentChip, consent && styles.consentChipConfirmed]}>
         {consent ? (
           <CheckCircle size={18} color={colors.ink} weight="fill" />
@@ -378,8 +351,7 @@ export function CaptureInteractionStep({
         <CaretRight size={14} color={colors.muted} weight="bold" />
       </Pressable>
 
-      {consent ? (
-        <View style={[styles.recorderCard, isRecording && styles.recorderCardActive]}>
+      <View style={styles.recorderCard}>
           <View style={styles.recorderRow}>
             {recorder.recordingState === 'stopped' && recorder.recordingUri ? (
               <RecordingPlayOrb uri={recorder.recordingUri} durationSeconds={recorder.seconds} size={44} />
@@ -393,9 +365,15 @@ export function CaptureInteractionStep({
               </View>
             )}
             <View style={styles.recorderMeta}>
-              <Text style={styles.recorderTitle}>{recorderTitle}</Text>
+              <Text style={styles.recorderTitle}>
+                {isRecording
+                  ? recorder.recordingState === 'paused' ? 'Recording paused' : 'Recording in progress'
+                  : recorderTitle}
+              </Text>
               <Text style={styles.recorderHint}>
-                {isTranscribingImport ? liveTranscriptHint : recorder.transcriptStatusLabel}
+                {isRecording
+                  ? 'Add people while you listen. Your private transcript stays with you.'
+                  : isTranscribingImport ? liveTranscriptHint : recorder.transcriptStatusLabel}
               </Text>
             </View>
             <Text style={styles.recorderTime}>{recorder.formattedDuration}</Text>
@@ -417,125 +395,52 @@ export function CaptureInteractionStep({
 
           <View style={styles.recorderActions}>
             {recorder.recordingState === 'idle' ? (
-              <Button style={styles.flexButton} onPress={() => void recorder.startRecording(consent)}>
+              <Button style={styles.flexButton} onPress={requestRecordingStart}>
                 Record
               </Button>
             ) : null}
             {isRecording ? (
               <>
-                <Button variant="secondary" style={styles.flexButton} onPress={() => void recorder.pauseOrResume()}>
-                  {recorder.recordingState === 'paused' ? 'Resume' : 'Pause'}
-                </Button>
-                <Button style={styles.flexButton} onPress={() => void recorder.stopRecording()}>
-                  Finish
-                </Button>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={recorder.recordingState === 'paused' ? 'Resume recording' : 'Pause recording'}
+                  onPress={() => void recorder.pauseOrResume()}
+                  style={styles.liveControlButton}>
+                  {recorder.recordingState === 'paused'
+                    ? <Play size={18} color={colors.ink} weight="fill" />
+                    : <Pause size={18} color={colors.ink} weight="fill" />}
+                  <Text style={styles.liveControlText}>
+                    {recorder.recordingState === 'paused' ? 'Resume' : 'Pause'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="End recording"
+                  onPress={() => void recorder.stopRecording()}
+                  style={styles.liveEndButton}>
+                  <Stop size={17} color={colors.white} weight="fill" />
+                  <Text style={styles.liveEndText}>End</Text>
+                </Pressable>
               </>
             ) : null}
             {recorder.recordingState === 'stopped' ? (
-              <Button variant="secondary" onPress={() => void recorder.resetRecording()}>
+              <Button
+                variant="secondary"
+                onPress={() => {
+                  void recorder.resetRecording();
+                  onConsentChange(false);
+                  setConsentIntent('record');
+                }}>
                 Record again
               </Button>
             ) : null}
           </View>
 
-          {showLiveTranscript ? (
-            <View style={styles.liveTranscriptPanel}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: liveTranscriptOpen }}
-                onPress={() => setLiveTranscriptOpen((open) => !open)}
-                style={styles.liveTranscriptHead}>
-                <View style={styles.liveTranscriptHeadCopy}>
-                  <Text style={styles.liveTranscriptTitle}>Live transcript</Text>
-                  <Text style={styles.liveTranscriptHint}>{liveTranscriptHint}</Text>
-                </View>
-                {isTranscribingImport ? (
-                  <ActivityIndicator color={colors.ink} size="small" />
-                ) : liveTranscriptOpen ? (
-                  <CaretUp size={16} color={colors.ink} weight="bold" />
-                ) : (
-                  <CaretDown size={16} color={colors.ink} weight="bold" />
-                )}
-              </Pressable>
-              {liveTranscriptOpen ? (
-                <>
-                  <TextInput
-                    value={recorder.displayTranscript}
-                    onChangeText={recorder.updateTranscriptFromUser}
-                    placeholder={
-                      isTranscribingImport
-                        ? 'Words will appear here as we transcribe your import…'
-                        : 'Your transcript appears here while you record, or paste one manually…'
-                    }
-                    placeholderTextColor={colors.muted}
-                    multiline
-                    scrollEnabled
-                    style={styles.liveTranscriptField}
-                  />
-                  {recorder.serverTranscribePhase === 'failed' ? (
-                    <View style={styles.transcribeFailRow}>
-                      <Text style={styles.transcribeFailText}>{recorder.serverTranscribeError}</Text>
-                      <Button variant="secondary" onPress={() => void recorder.retryTranscription()}>
-                        Retry transcription
-                      </Button>
-                    </View>
-                  ) : null}
-                </>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={styles.destinationWrap}>
-            <Text style={styles.destinationTitle}>Where should the recording live?</Text>
-            <View style={styles.destinationList}>
-              {([
-                { id: 'local_only', label: 'Only on this device', detail: 'Private local copy', icon: DeviceMobile },
-                { id: 'shared_3_days', label: 'Share online for 3 days', detail: 'Participant can listen or download', icon: CloudArrowUp },
-                { id: 'google_drive', label: 'Keep in Google Drive', detail: googleDriveReady ? 'Uses your connected Google account' : 'Reconnect Google to enable Drive', icon: CloudArrowUp },
-                { id: 'onedrive', label: 'Keep in OneDrive', detail: oneDriveReady ? 'Uses your connected Microsoft account' : 'Reconnect Microsoft to enable OneDrive', icon: CloudArrowUp },
-              ] as const).map((destination) => {
-                const selected = draft.recordingDestination === destination.id;
-                const Icon = destination.icon;
-                return (
-                  <Pressable
-                    key={destination.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    onPress={() => {
-                      if ((destination.id === 'google_drive' && !googleDriveReady)
-                        || (destination.id === 'onedrive' && !oneDriveReady)) {
-                        onOpenConnectedAccounts?.();
-                        return;
-                      }
-                      onDraftChange({ recordingDestination: destination.id });
-                    }}
-                    style={[styles.destinationOption, selected && styles.destinationOptionActive]}>
-                    <Icon size={18} color={colors.ink} weight="bold" />
-                    <View style={styles.destinationCopy}>
-                      <Text style={styles.destinationLabel}>{destination.label}</Text>
-                      <Text style={styles.destinationDetail}>{destination.detail}</Text>
-                    </View>
-                    <View style={[styles.radio, selected && styles.radioActive]} />
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-        </View>
-      ) : null}
+      </View>
       </>
-      ) : (
-        <View style={styles.quickContextBanner}>
-          <NotePencil size={20} color={colors.ink} weight="bold" />
-          <View style={styles.quickContextCopy}>
-            <Text style={styles.quickContextTitle}>No microphone needed</Text>
-            <Text style={styles.quickContextHint}>Add who you met below, then write or paste what mattered on the next step.</Text>
-          </View>
-        </View>
-      )}
+      ) : null}
 
-      <View style={styles.peopleSection}>
+      {pathStarted && (draft.captureMode === 'quick_context' || consent) ? <View style={styles.peopleSection}>
         <View style={styles.sectionHead}>
           <IdentificationCard size={18} color={colors.ink} weight="bold" />
           <View style={styles.sectionHeadCopy}>
@@ -564,44 +469,32 @@ export function CaptureInteractionStep({
               </Pressable>
             ) : null}
           </View>
-        ) : (
-          <View style={styles.emptyPeople}>
-            <Text style={styles.emptyPeopleText}>No one added yet. Use the options below.</Text>
-          </View>
-        )}
+        ) : null}
 
-        <View style={styles.actionRow}>
-          <ActionChip
-            icon={<PencilSimple size={20} color={colors.ink} weight="bold" />}
-            label="Add manually"
-            onPress={() => openManualSheet()}
-            disabled={atCapacity}
-          />
-          <ActionChip
-            icon={<QrCode size={20} color={colors.ink} weight="bold" />}
-            label="Share QR"
-            onPress={() => setQrOpen(true)}
-          />
-          <ActionChip
-            icon={<Scan size={20} color={colors.ink} weight="bold" />}
-            label="Recent scans"
-            onPress={() => (signedIn ? setScansOpen(true) : void onEnsureAuth())}
-            badge={exchanges.length}
-          />
-        </View>
-      </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add a person to this meeting"
+          onPress={() => setAddPersonSheetOpen(true)}
+          style={({ pressed }) => [styles.addPersonButton, pressed && styles.addPersonButtonPressed]}>
+          <Plus size={22} color={colors.ink} weight="bold" />
+          <Text style={styles.addPersonButtonText}>Add person</Text>
+          {exchanges.length > 0 ? <View style={styles.addPersonBadge}>
+            <Text style={styles.addPersonBadgeText}>{exchanges.length}</Text>
+          </View> : null}
+        </Pressable>
+      </View> : null}
 
       <BottomSheet
-        visible={consentSheetOpen}
-        title="Recording consent"
-        onClose={() => setConsentSheetOpen(false)}
+        visible={consentIntent !== null}
+        title="Before you record"
+        onClose={closeConsentSheet}
         footer={
-          <Button onPress={() => setConsentSheetOpen(false)}>
-            {consent ? 'Done' : 'Close'}
+          <Button disabled={!consent} onPress={confirmConsent}>
+            {consentIntent === 'record' ? 'Confirm and record' : 'Confirm consent'}
           </Button>
         }>
         <Body>
-          Ask clearly: “Is everyone comfortable with me recording this conversation so I can remember the agreed next steps?”
+          Ask clearly: “Is everyone comfortable with me recording this conversation so I can remember the agreed next steps?” Nothing is shared until you review it.
         </Body>
         <View style={styles.consentRow}>
           <Text style={styles.consentLabel}>Everyone agreed</Text>
@@ -625,6 +518,57 @@ export function CaptureInteractionStep({
               </Text>
             </Pressable>
           ))}
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={addPersonSheetOpen}
+        title="Add someone"
+        onClose={() => setAddPersonSheetOpen(false)}>
+        <Body>Choose the quickest way to connect this person to the meeting.</Body>
+        <View style={styles.personChoiceList}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={atCapacity}
+            onPress={() => openFromPersonChooser('manual')}
+            style={[styles.personChoice, atCapacity && styles.personChoiceDisabled]}>
+            <View style={styles.personChoiceIcon}>
+              <PencilSimple size={20} color={colors.ink} weight="bold" />
+            </View>
+            <View style={styles.personChoiceCopy}>
+              <Text style={styles.personChoiceTitle}>Add manually</Text>
+              <Text style={styles.personChoiceHint}>{atCapacity ? 'Meeting is at its participant limit' : 'Enter their name and contact details'}</Text>
+            </View>
+            <CaretRight size={16} color={colors.muted} weight="bold" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => openFromPersonChooser('qr')}
+            style={styles.personChoice}>
+            <View style={styles.personChoiceIcon}>
+              <QrCode size={20} color={colors.ink} weight="bold" />
+            </View>
+            <View style={styles.personChoiceCopy}>
+              <Text style={styles.personChoiceTitle}>Share QR code</Text>
+              <Text style={styles.personChoiceHint}>Let them scan your card and return their details</Text>
+            </View>
+            <CaretRight size={16} color={colors.muted} weight="bold" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => openFromPersonChooser('scans')}
+            style={styles.personChoice}>
+            <View style={styles.personChoiceIcon}>
+              <Scan size={20} color={colors.ink} weight="bold" />
+            </View>
+            <View style={styles.personChoiceCopy}>
+              <Text style={styles.personChoiceTitle}>Recent scans</Text>
+              <Text style={styles.personChoiceHint}>{exchanges.length ? `${exchanges.length} available to add` : 'Choose someone who recently scanned your card'}</Text>
+            </View>
+            {exchanges.length > 0 ? <View style={styles.choiceCount}>
+              <Text style={styles.choiceCountText}>{exchanges.length}</Text>
+            </View> : <CaretRight size={16} color={colors.muted} weight="bold" />}
+          </Pressable>
         </View>
       </BottomSheet>
 
@@ -730,43 +674,6 @@ export function CaptureInteractionStep({
 
 const styles = StyleSheet.create({
   stack: { gap: spacing.x5 },
-  modeCard: {
-    padding: spacing.x5,
-    borderRadius: radius.large,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    gap: spacing.x3,
-  },
-  modeTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
-  modeHint: { color: colors.muted, fontSize: 13, lineHeight: 19 },
-  modeRow: { flexDirection: 'row', gap: spacing.x2 },
-  modeOption: {
-    flex: 1,
-    minHeight: 94,
-    padding: spacing.x4,
-    borderRadius: radius.medium,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.canvas,
-    gap: 4,
-  },
-  modeOptionActive: { borderColor: colors.ink, backgroundColor: colors.surfaceMuted },
-  modeOptionTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  modeOptionHint: { color: colors.muted, fontSize: 11 },
-  quickContextBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.x3,
-    padding: spacing.x5,
-    borderRadius: radius.large,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  quickContextCopy: { flex: 1, gap: 3 },
-  quickContextTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
-  quickContextHint: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   destinationWrap: { gap: spacing.x3 },
   destinationTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   destinationList: { gap: spacing.x2 },
@@ -834,7 +741,61 @@ const styles = StyleSheet.create({
   },
   audioBar: { flex: 1, borderRadius: 2, backgroundColor: colors.accent },
   recorderActions: { flexDirection: 'row', gap: spacing.x3 },
+  liveControlButton: {
+    minHeight: 52,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.x2,
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  liveControlText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  liveEndButton: {
+    minHeight: 52,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.x2,
+    borderRadius: radius.round,
+    backgroundColor: colors.ink,
+  },
+  liveEndText: { color: colors.white, fontSize: 15, fontWeight: '800' },
   flexButton: { flex: 1 },
+  addPersonButton: {
+    width: '100%',
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.x2,
+    paddingHorizontal: spacing.x4,
+    paddingVertical: spacing.x3,
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    position: 'relative',
+  },
+  addPersonButtonPressed: { backgroundColor: colors.surfaceMuted },
+  addPersonButtonText: { color: colors.ink, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  addPersonBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
+  addPersonBadgeText: { color: colors.ink, fontSize: 10, fontWeight: '900' },
   liveTranscriptPanel: {
     gap: spacing.x3,
     padding: spacing.x4,
@@ -924,43 +885,40 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   emptyPeopleText: { color: colors.muted, fontSize: 13, textAlign: 'center' },
-  actionRow: { flexDirection: 'row', gap: spacing.x2 },
-  actionChip: {
-    flex: 1,
+  personChoiceList: { gap: spacing.x2, marginTop: spacing.x3 },
+  personChoice: {
+    minHeight: 72,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.x2,
-    paddingVertical: spacing.x3,
-    paddingHorizontal: spacing.x2,
+    gap: spacing.x3,
+    padding: spacing.x3,
     borderRadius: radius.medium,
-    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
-    position: 'relative',
+    backgroundColor: colors.surface,
   },
-  actionChipPressed: { opacity: 0.75 },
-  actionChipDisabled: { opacity: 0.45 },
-  actionChipIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.medium,
+  personChoiceDisabled: { opacity: 0.45 },
+  personChoiceIcon: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: radius.medium,
     backgroundColor: colors.surfaceMuted,
   },
-  actionChipLabel: { color: colors.ink, fontSize: 11, fontWeight: '800', textAlign: 'center' },
-  badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+  personChoiceCopy: { flex: 1, gap: 2 },
+  personChoiceTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  personChoiceHint: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  choiceCount: {
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: spacing.x2,
+    borderRadius: radius.round,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.ink,
-    paddingHorizontal: 4,
+    backgroundColor: colors.accent,
   },
-  badgeText: { color: colors.white, fontSize: 10, fontWeight: '900' },
+  choiceCountText: { color: colors.ink, fontSize: 11, fontWeight: '900' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   input: {
     minHeight: 48,

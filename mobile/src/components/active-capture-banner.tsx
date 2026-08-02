@@ -20,7 +20,9 @@ export function ActiveCaptureBanner() {
     getActiveCaptureController,
   );
 
-  if (!active || pathname === '/capture/new') return null;
+  // Capture owns its recorder controls inline. The global mini-recorder is for
+  // every other destination, so it must never duplicate those controls here.
+  if (!active || pathname.startsWith('/capture')) return null;
 
   const { snapshot } = active;
   const isProcessing = snapshot.status === 'processing';

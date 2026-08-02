@@ -15,6 +15,13 @@
 .dashboard-score span { margin-top: 12px; font-weight: 800; }
 .dashboard-score small { margin-top: 8px; color: var(--p-muted); line-height: 1.45; }
 .dashboard-score > a { margin-top: 16px; align-self: flex-start; }
+.home-followup-summary { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--p-line); border-radius: 12px; background: white; color: var(--p-ink); text-decoration: none; transition: transform .16s ease, box-shadow .16s ease; }
+.home-followup-summary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(20,65,0,.08); }
+.home-followup-summary > span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: var(--p-mist); }
+.home-followup-summary > span.attention { background: #fff0dc; }
+.home-followup-summary > div { min-width: 0; display: grid; gap: 3px; }
+.home-followup-summary strong { font-size: 20px; line-height: 1.2; }
+.home-followup-summary small { color: var(--p-muted); font-size: 14px; line-height: 1.4; }
 
 .quick-follow-up-page { max-width: 860px; }
 .quick-follow-up-form { display: grid; gap: 22px; }

@@ -1,5 +1,5 @@
 import type { EncounterAction, EncounterParticipant, EncounterPayload } from '@/features/encounters/encounter-api';
-import { mobileFetch } from '@/lib/mobile-api';
+import { mobileFetch, readMobileApiJson } from '@/lib/mobile-api';
 import { sortFollowUps } from '@/lib/due-date';
 import type { ContactMethod } from '@/features/card/types';
 import { requestFollowUpNotificationSync } from '@/features/notifications/notification-sync-events';
@@ -57,7 +57,10 @@ export async function fetchFollowUps(
   if (connection?.exchangeId?.trim()) params.set('exchangeId', connection.exchangeId.trim());
   const query = params.toString();
   const response = await mobileFetch(`/api/follow-ups${query ? `?${query}` : ''}`, accessToken);
-  const payload = await response.json() as { followUps?: Array<Record<string, unknown>>; error?: string };
+  const payload = await readMobileApiJson<{ followUps?: Array<Record<string, unknown>>; error?: string }>(
+    response,
+    'Could not read follow-ups from AfterMeet.',
+  );
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load follow-ups.');
   }
@@ -89,7 +92,10 @@ export async function completeFollowUp(accessToken: string, encounterId: string,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'completed' }),
   });
-  const payload = await response.json() as { ok?: boolean; error?: string };
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string }>(
+    response,
+    'Could not read the follow-up completion response.',
+  );
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not complete this follow-up.');
   }
@@ -102,7 +108,10 @@ export async function reopenFollowUp(accessToken: string, encounterId: string, a
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'open' }),
   });
-  const payload = await response.json() as { ok?: boolean; error?: string };
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string }>(
+    response,
+    'Could not read the follow-up reopening response.',
+  );
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not reopen this follow-up.');
   }
@@ -111,7 +120,10 @@ export async function reopenFollowUp(accessToken: string, encounterId: string, a
 
 export async function fetchEncounterRecords(accessToken: string) {
   const response = await mobileFetch('/api/encounters', accessToken);
-  const payload = await response.json() as { encounters?: Array<Record<string, unknown>>; error?: string };
+  const payload = await readMobileApiJson<{ encounters?: Array<Record<string, unknown>>; error?: string }>(
+    response,
+    'Could not read meetings from AfterMeet.',
+  );
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load encounters.');
   }
@@ -129,7 +141,10 @@ export async function fetchEncountersForConnection(
   if (input.exchangeId?.trim()) params.set('exchangeId', input.exchangeId.trim());
 
   const response = await mobileFetch(`/api/encounters?${params.toString()}`, accessToken);
-  const payload = await response.json() as { encounters?: Array<Record<string, unknown>>; error?: string };
+  const payload = await readMobileApiJson<{ encounters?: Array<Record<string, unknown>>; error?: string }>(
+    response,
+    'Could not read meetings for this person.',
+  );
   if (!response.ok) {
     throw new Error(payload.error || 'Could not load meetings.');
   }
@@ -190,7 +205,10 @@ export async function requestContactField(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  const payload = await response.json() as { ok?: boolean; error?: string };
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string }>(
+    response,
+    'Could not read the contact request response.',
+  );
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not send this request.');
   }
