@@ -15,7 +15,6 @@ import {
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button } from '@/components/ui';
 import { BottomSheet } from '@/components/bottom-sheet';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { Skeleton, SkeletonCircle, SkeletonLine } from '@/components/skeleton';
@@ -281,26 +280,6 @@ export default function HomeScreen() {
                 ))}
               </View>
             ) : null}
-
-            <View style={styles.quickActions}>
-              <Button style={styles.quickActionPrimary} onPress={() => router.push('/capture')}>
-                <Microphone size={18} color={colors.ink} weight="bold" />
-                Capture context
-              </Button>
-              <Button
-                variant="secondary"
-                style={styles.quickActionSecondary}
-                onPress={() => {
-                  if (card.status === 'published') {
-                    router.navigate(`/share-card?id=${card.id}`);
-                  } else {
-                    router.navigate(`/edit-card?id=${card.id}`);
-                  }
-                }}>
-                <QrCode size={18} color={colors.ink} weight="bold" />
-                Share my card
-              </Button>
-            </View>
 
             <View style={styles.section}>
               <View style={styles.sectionHead}>
@@ -575,9 +554,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   activeWorkLabel: { flex: 1, color: colors.ink, fontSize: 13, fontWeight: '700' },
-  quickActions: { flexDirection: 'row', gap: spacing.x3 },
-  quickActionPrimary: { flex: 1 },
-  quickActionSecondary: { flex: 1 },
   section: { gap: spacing.x3 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
@@ -640,7 +616,7 @@ const styles = StyleSheet.create({
   skeletonPersonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
   fab: {
     position: 'absolute',
-    left: spacing.x5,
+    right: spacing.x5,
     width: 56,
     height: 56,
     borderRadius: radius.round,
