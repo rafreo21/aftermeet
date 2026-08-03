@@ -76,7 +76,7 @@ export default function HomeDashboard() {
   const [followUpsFailed, setFollowUpsFailed] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const [latestDraftId, setLatestDraftId] = useState("");
-  const [connections, setConnections] = useState<ConnectionItem[]>([]);
+  const [sortedConnections, setSortedConnections] = useState<ConnectionItem[]>([]);
   const [connectionsFailed, setConnectionsFailed] = useState(false);
   const [card, setCard] = useState<LibraryCard | null>(null);
   const [hasCards, setHasCards] = useState(false);
@@ -101,7 +101,7 @@ export default function HomeDashboard() {
   function loadConnections() {
     return fetchAllConnectionsMerged()
       .then((items) => {
-        setConnections(sortConnections(items, "date").slice(0, 5));
+        setSortedConnections(sortConnections(items, "date"));
         setConnectionsFailed(false);
       })
       .catch(() => setConnectionsFailed(true));
@@ -168,6 +168,8 @@ export default function HomeDashboard() {
     return items;
   }, [reviewCount, latestDraftId]);
 
+  const recentPeople = useMemo(() => sortedConnections.slice(0, 3), [sortedConnections]);
+
   const cardSubtitle = card
     ? [card.name, [card.role, card.company].filter(Boolean).join(" · ")].filter(Boolean).join(" · ")
     : "";
@@ -220,12 +222,17 @@ export default function HomeDashboard() {
             </div>
 
             <section className="home-section">
-              <h2>Recent people</h2>
+              <div className="home-section-head">
+                <h2>Recent people</h2>
+                {sortedConnections.length > 3 ? (
+                  <Link className="home-view-all" href="/app/people" prefetch={false}>View all</Link>
+                ) : null}
+              </div>
               {connectionsFailed ? (
                 <p className="home-inline-error">Could not load recent people. <button type="button" onClick={() => void loadConnections()}>Retry</button></p>
-              ) : connections.length ? (
+              ) : recentPeople.length ? (
                 <div className="home-people-list">
-                  {connections.map((connection) => {
+                  {recentPeople.map((connection) => {
                     const openFollowUp = followUps.find((item) => (
                       item.status !== "completed"
                       && ((item.personEmail || "").trim().toLowerCase() === (connection.email || "").trim().toLowerCase()

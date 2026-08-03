@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Bell, CaretRight, CloudArrowUp, DeviceMobile, ListChecks, Scan } from 'phosphor-react-native';
+import { Bell, CaretRight, CloudArrowUp, DeviceMobile, ListChecks, Microphone, Scan, UsersThree } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -56,6 +56,34 @@ export default function SettingsScreen() {
         <Title>Settings</Title>
         <Body>Manage your account, synchronization and mobile capabilities.</Body>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/capture')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <Microphone size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Capture context</Text>
+          </View>
+          <Text style={styles.linkHint}>Recordings, drafts, and captures needing review</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/connections')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <UsersThree size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>My connections</Text>
+          </View>
+          <Text style={styles.linkHint}>People you&apos;ve met and cards you&apos;ve saved</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"
