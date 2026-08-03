@@ -10,12 +10,53 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { createWidget } from 'expo-widgets';
 
-import {
-  connectionSlots,
-  dialUrl,
-  messageUrl,
-  WIDGET_COLORS,
-} from './widget-shared';
+// Widget bundles are compiled per-file; a helper imported from a sibling
+// module (./widget-shared) resolves at edit time but fails at native widget
+// runtime with "Can't find variable". Keep each widget file self-contained.
+const WIDGET_COLORS = {
+  canvas: '#141814',
+  accent: '#9FE870',
+  text: '#FFFFFF',
+  subtle: '#8FA088',
+};
+
+type WidgetConnectionRecord = {
+  name: string;
+  subtitle: string;
+  phone?: string;
+  email?: string;
+};
+
+const DEMO_CONNECTIONS: WidgetConnectionRecord[] = [
+  { name: 'Jordan Lee', subtitle: 'Shared via your card' },
+  { name: 'Cameron Williamson', subtitle: 'Shared via your card' },
+];
+
+function connectionSlots(props: Record<string, string | number | undefined>) {
+  const rows = [1, 2, 3].map((slot) => {
+    const name = String(props[`connection${slot}Name`] || '').trim();
+    if (!name) return null;
+    return {
+      name,
+      subtitle: String(props[`connection${slot}Subtitle`] || 'Shared via your card').trim(),
+      phone: String(props[`connection${slot}Phone`] || '').trim(),
+      email: String(props[`connection${slot}Email`] || '').trim(),
+    };
+  }).filter(Boolean) as WidgetConnectionRecord[];
+
+  return rows.length ? rows : DEMO_CONNECTIONS;
+}
+
+function dialUrl(phone: string) {
+  const digits = phone.replace(/[^\d+]/g, '');
+  return digits ? `tel:${digits}` : '';
+}
+
+function messageUrl(email: string, phone: string) {
+  if (phone.trim()) return `sms:${phone.replace(/\s+/g, '')}`;
+  if (email.trim()) return `mailto:${email.trim()}`;
+  return '';
+}
 
 export type RecentConnectionsWidgetProps = {
   connectionsDeepLink?: string;

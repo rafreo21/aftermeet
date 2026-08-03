@@ -254,14 +254,17 @@ export default function HomeScreen() {
                 onPress={() => router.push('/settings/follow-ups')}
                 style={({ pressed }) => [styles.attentionCard, pressed && styles.attentionCardPressed]}>
                 {attention.hasData ? (
-                  <ProgressRing
-                    size={54}
-                    strokeWidth={4}
-                    progress={attention.rate}
-                    trackColor={attention.urgent ? '#f7d9d3' : colors.surfaceMuted}
-                    progressColor={attention.urgent ? colors.danger : colors.accent}>
-                    <ListChecks size={20} color={attention.urgent ? colors.danger : colors.ink} weight="bold" />
-                  </ProgressRing>
+                  <View style={styles.attentionRingWrap}>
+                    <ProgressRing
+                      size={54}
+                      strokeWidth={4}
+                      progress={attention.rate}
+                      trackColor={colors.surfaceMuted}
+                      progressColor={colors.accent}>
+                      <ListChecks size={20} color={colors.ink} weight="bold" />
+                    </ProgressRing>
+                    {attention.urgent ? <View style={styles.attentionUrgentDot} /> : null}
+                  </View>
                 ) : (
                   <View style={[styles.attentionIcon]}>
                     <ListChecks size={20} color={colors.ink} weight="bold" />
@@ -413,6 +416,18 @@ export default function HomeScreen() {
             accessibilityRole="button"
             onPress={() => {
               setFabOpen(false);
+              router.push('/quick-follow-up');
+            }}
+            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
+            <View style={styles.fabOptionIcon}>
+              <ListChecks size={20} color={colors.ink} weight="bold" />
+            </View>
+            <Text style={styles.fabOptionLabel}>Quick follow-up</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setFabOpen(false);
               router.push('/scanner');
             }}
             style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
@@ -546,6 +561,18 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   attentionCardPressed: { opacity: 0.92 },
+  attentionRingWrap: { width: 54, height: 54 },
+  attentionUrgentDot: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    width: 14,
+    height: 14,
+    borderRadius: radius.round,
+    backgroundColor: colors.danger,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
   attentionIcon: {
     width: 54,
     height: 54,

@@ -275,6 +275,14 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
               </HeaderActionButton>
             ) : undefined}
           />
+          {!historyOnly ? <View style={styles.startActions}>
+            <Button onPress={() => void beginFreshCapture('recording')}>
+              <Microphone size={18} color={colors.ink} weight="fill" /> Start recording
+            </Button>
+            <Button variant="secondary" onPress={() => void beginFreshCapture('quick_context')}>
+              <Notebook size={18} color={colors.ink} weight="bold" /> Add notes
+            </Button>
+          </View> : null}
         </View>
 
         <ScrollView
@@ -285,15 +293,6 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void loadHome(true)} tintColor={colors.ink} />
           }>
-          {!historyOnly ? <View style={styles.startActions}>
-            <Button onPress={() => void beginFreshCapture('recording')}>
-              <Microphone size={18} color={colors.ink} weight="fill" /> Start recording
-            </Button>
-            <Button variant="secondary" onPress={() => void beginFreshCapture('quick_context')}>
-              <Notebook size={18} color={colors.ink} weight="bold" /> Add notes
-            </Button>
-          </View> : null}
-
           {historyOnly ? <View style={styles.historyTools}>
             <HistoryToolbar
               query={query}
@@ -560,16 +559,14 @@ export default function CaptureEntryScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.canvas },
-  header: { paddingHorizontal: spacing.x5, marginBottom: spacing.x2 },
+  header: { paddingHorizontal: spacing.x5, paddingBottom: spacing.x3 },
   title: { fontSize: 30, lineHeight: 32 },
   scroll: { flex: 1 },
   scrollContent: {
     paddingBottom: spacing.x6,
   },
   startActions: {
-    paddingHorizontal: spacing.x5,
     paddingTop: spacing.x2,
-    paddingBottom: spacing.x3,
     flexDirection: 'row',
     gap: spacing.x2,
   },

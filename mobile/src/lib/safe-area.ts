@@ -15,5 +15,7 @@ export function useAppInsets() {
 
 export function useTabBarHeight() {
   const insets = useAppInsets();
-  return 56 + Math.max(insets.bottom, 12);
+  // Matches AppTabBar's real rendered height: item height (52) + the bar's
+  // own vertical padding (6+6) + its marginTop (8) + marginBottom.
+  return 72 + Math.max(insets.bottom, 12);
 }

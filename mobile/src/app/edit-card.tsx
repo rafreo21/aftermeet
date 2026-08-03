@@ -8,7 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import { CardPublishSheet } from '@/components/card-publish-sheet';
 import { MethodListEditor } from '@/components/method-list-editor';
 import { MobileCardPreview } from '@/components/mobile-card';
-import { Body, Button, PageHeader } from '@/components/ui';
+import { Body, Button, FooterBackButton, PageHeader } from '@/components/ui';
 import { cardDraftSignature, cardNeedsPublish } from '@/lib/card-draft';
 import {
   ensurePublishedBaseline,
@@ -461,11 +461,7 @@ export default function EditCardScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          {step > 0 ? (
-            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setStep(step - 1)}>
-              Back
-            </Button>
-          ) : null}
+          {step > 0 ? <FooterBackButton onPress={() => setStep(step - 1)} /> : null}
           {step < 2 ? (
             <Button style={{ flex: 1 }} onPress={() => setStep(step + 1)}>
               Continue

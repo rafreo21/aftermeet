@@ -135,6 +135,19 @@ export function BackButton({ onPress, style }: { onPress?: () => void; style?: V
   );
 }
 
+/** Icon-only back button for step-flow footers, sized to sit beside a full-width primary Button. */
+export function FooterBackButton({ onPress, style }: { onPress?: () => void; style?: ViewStyle }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+      onPress={onPress ?? (() => router.back())}
+      style={({ pressed }) => [styles.footerBackButton, pressed && styles.buttonPressed, style]}>
+      <ArrowLeft size={20} color={colors.ink} weight="bold" />
+    </Pressable>
+  );
+}
+
 export function PageHeader({
   eyebrow,
   title,
@@ -285,6 +298,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.round,
     backgroundColor: colors.surface,
     alignSelf: 'flex-start',
+  },
+  footerBackButton: {
+    width: 48,
+    height: 48,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.small,
+    backgroundColor: colors.surfaceMuted,
   },
   headerActionButton: {
     width: 42,

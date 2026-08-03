@@ -18,7 +18,7 @@ import { CaptureErrorSheet } from '@/components/capture-error-sheet';
 import { CaptureInteractionStep } from '@/components/capture-interaction-step';
 import { FollowUpDuePicker } from '@/components/follow-up-due-picker';
 import { CaptureStepIndicator } from '@/components/capture-step-indicator';
-import { Body, Button, PageHeader } from '@/components/ui';
+import { Body, Button, FooterBackButton, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
   createFreshCaptureDraft,
@@ -1542,11 +1542,7 @@ export default function CaptureWizardScreen() {
         </ScrollView>
 
         {!activeRecording ? <View style={styles.footer}>
-          {draft.step > 0 ? (
-            <Button variant="secondary" style={{ flex: 1 }} onPress={() => goToStep(draft.step - 1)}>
-              Back
-            </Button>
-          ) : null}
+          {draft.step > 0 ? <FooterBackButton onPress={() => goToStep(draft.step - 1)} /> : null}
           {draft.step === 0 && hasStartedInteraction ? (
             <>
               <Button

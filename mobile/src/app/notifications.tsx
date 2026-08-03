@@ -13,7 +13,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Body, PageHeader, ScreenFrame } from '@/components/ui';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
+import { FollowUpAudienceSheet } from '@/components/follow-up-audience-sheet';
+import { FollowUpMissingSheet } from '@/components/follow-up-missing-sheet';
 import { useAuth } from '@/features/auth/auth-context';
+import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -23,6 +27,8 @@ import {
   type NotificationType,
 } from '@/features/notifications/notification-center-api';
 import { colors, radius, spacing } from '@/theme/tokens';
+
+const FOLLOW_UP_NOTIFICATION_TYPES = new Set<NotificationType>(['follow_up_due', 'follow_up_overdue']);
 
 function formatRelative(iso: string) {
   if (!iso) return '';
@@ -54,20 +60,41 @@ function iconForType(type: NotificationType) {
 export default function NotificationCenterScreen() {
   const { session } = useAuth();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
+  const {
+    runFollowUp,
+    missingOpen,
+    missingExecution,
+    missingLoading,
+    closeMissing,
+    requestMissingField,
+    draftRequestEmail,
+    audienceOpen,
+    audienceItem,
+    audienceParticipants,
+    confirmAudience,
+    closeAudience,
+  } = useFollowUpActions(session?.access_token, { allFollowUps: followUps });
 
   const load = useCallback(async () => {
     if (!session?.access_token) {
       setNotifications([]);
+      setFollowUps([]);
       setLoading(false);
       return;
     }
     try {
-      const { notifications: rows } = await fetchNotifications(session.access_token);
-      setNotifications(rows);
+      const [notificationsResult, followUpsResult] = await Promise.allSettled([
+        fetchNotifications(session.access_token),
+        fetchFollowUps(session.access_token),
+      ]);
+      if (notificationsResult.status === 'fulfilled') setNotifications(notificationsResult.value.notifications);
+      else throw notificationsResult.reason;
+      if (followUpsResult.status === 'fulfilled') setFollowUps(followUpsResult.value);
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Could not load your notifications.');
       setErrorSheetOpen(true);
@@ -86,6 +113,17 @@ export default function NotificationCenterScreen() {
       )));
       void markNotificationRead(session.access_token, notification.id).catch(() => undefined);
     }
+
+    if (FOLLOW_UP_NOTIFICATION_TYPES.has(notification.type) && notification.encounterId) {
+      const matchingItem = followUps.find((item) => (
+        item.encounterId === notification.encounterId && item.actionId === notification.actionId
+      ));
+      if (matchingItem) {
+        runFollowUp(matchingItem);
+        return;
+      }
+    }
+
     const destination = notificationDeepLink(notification);
     if (destination) router.push(destination as never);
   }
@@ -175,6 +213,23 @@ export default function NotificationCenterScreen() {
           setErrorSheetOpen(false);
           setErrorMessage('');
         }}
+      />
+
+      <FollowUpMissingSheet
+        visible={missingOpen}
+        execution={missingExecution}
+        loading={missingLoading}
+        onClose={closeMissing}
+        onRequest={() => void requestMissingField()}
+        onDraftEmail={() => void draftRequestEmail()}
+      />
+
+      <FollowUpAudienceSheet
+        visible={audienceOpen}
+        item={audienceItem}
+        participants={audienceParticipants}
+        onClose={closeAudience}
+        onConfirm={confirmAudience}
       />
     </ScreenFrame>
   );

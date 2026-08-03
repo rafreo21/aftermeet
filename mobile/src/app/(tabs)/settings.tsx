@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Bell, CaretRight, CloudArrowUp, DeviceMobile, ListChecks, Microphone, Scan, UsersThree } from 'phosphor-react-native';
+import { Bell, CaretRight, CloudArrowUp, DeviceMobile, IdentificationBadge, ListChecks, Microphone, Scan, UsersThree } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -50,12 +50,27 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <Eyebrow>AfterMeet mobile</Eyebrow>
-        <Title>Settings</Title>
-        <Body>Manage your account, synchronization and mobile capabilities.</Body>
-      </View>
+    <Screen
+      header={
+        <View style={styles.header}>
+          <Eyebrow>AfterMeet mobile</Eyebrow>
+          <Title>My Profile</Title>
+          <Body>Manage your account, synchronization and mobile capabilities.</Body>
+        </View>
+      }>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/settings/edit-profile')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <IdentificationBadge size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Edit profile</Text>
+          </View>
+          <Text style={styles.linkHint}>Full name, email, and phone number</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"
@@ -227,7 +242,7 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.x5, gap: spacing.x3 },
+  header: { gap: spacing.x3 },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   value: { marginTop: 8, color: colors.ink, fontSize: 17, fontWeight: '800' },
   hint: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 },
