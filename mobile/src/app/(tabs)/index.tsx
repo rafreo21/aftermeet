@@ -7,6 +7,7 @@ import {
   IdentificationCard,
   ListChecks,
   Microphone,
+  Notebook,
   Plus,
   QrCode,
   Scan,
@@ -35,11 +36,10 @@ import {
   sortConnections,
   type ConnectionItem,
 } from '@/features/connections/connections-api';
-import { fetchFollowUps, followUpsForPerson, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { summarizeFollowUpNudges } from '@/features/follow-ups/follow-up-nudges';
 import { resolveFollowUpUserName } from '@/features/follow-ups/follow-up-participants';
 import { fetchNotifications } from '@/features/notifications/notification-center-api';
-import { dueTone, formatDueLabel } from '@/lib/due-date';
 import { formatRelativeTime } from '@/lib/relative-time';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -183,7 +183,7 @@ export default function HomeScreen() {
       }
       items.push({
         key: 'capture',
-        icon: ListChecks,
+        icon: Notebook,
         label: parts.join(' · '),
         onPress: () => router.push('/capture'),
       });
@@ -293,7 +293,7 @@ export default function HomeScreen() {
               {session && recentPeople.length ? (
                 <View style={styles.peopleList}>
                   {recentPeople.map((connection) => (
-                    <RecentPersonRow key={connection.id} connection={connection} followUps={followUps} />
+                    <RecentPersonRow key={connection.id} connection={connection} />
                   ))}
                 </View>
               ) : session ? (
@@ -409,12 +409,16 @@ export default function HomeScreen() {
   );
 }
 
-function RecentPersonRow({ connection, followUps }: { connection: ConnectionItem; followUps: FollowUpItem[] }) {
+function isRecentConnection(connectedAt?: string) {
+  if (!connectedAt) return false;
+  const connected = new Date(connectedAt).getTime();
+  if (Number.isNaN(connected)) return false;
+  return Date.now() - connected < 48 * 60 * 60 * 1000;
+}
+
+function RecentPersonRow({ connection }: { connection: ConnectionItem }) {
   const avatar = connection.photoUrl || connectionAvatarUrl(connection);
-  const openFollowUp = followUpsForPerson(followUps, connection.name, connection.email)
-    .find((item) => item.status !== 'completed');
-  const dueLabel = openFollowUp ? formatDueLabel(openFollowUp.dueAt) : null;
-  const tone = openFollowUp ? dueTone(openFollowUp.dueAt) : 'default';
+  const isNew = isRecentConnection(connection.connectedAt);
 
   return (
     <Pressable
@@ -428,9 +432,9 @@ function RecentPersonRow({ connection, followUps }: { connection: ConnectionItem
           {connection.subtitle}{connection.connectedAt ? ` · ${formatRelativeTime(connection.connectedAt)}` : ''}
         </Text>
       </View>
-      {dueLabel ? (
-        <View style={[styles.personTag, tone === 'overdue' && styles.personTagOverdue]}>
-          <Text style={[styles.personTagText, tone === 'overdue' && styles.personTagTextOverdue]}>{dueLabel}</Text>
+      {isNew ? (
+        <View style={styles.personTag}>
+          <Text style={styles.personTagText}>New</Text>
         </View>
       ) : null}
       <CaretRight size={14} color={colors.muted} weight="bold" />
@@ -578,11 +582,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.x2,
     paddingVertical: 3,
     borderRadius: radius.round,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.accent,
   },
-  personTagOverdue: { backgroundColor: '#fdece9' },
   personTagText: { color: colors.ink, fontSize: 10, fontWeight: '800' },
-  personTagTextOverdue: { color: colors.danger },
   myCardRow: {
     flexDirection: 'row',
     alignItems: 'center',

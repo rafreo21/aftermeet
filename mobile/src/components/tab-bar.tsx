@@ -5,8 +5,8 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-const ITEM_SIZE = 52;
-const BADGE_SIZE = 40;
+const ITEM_SIZE = 44;
+const BADGE_SIZE = 32;
 
 type TabIcon = (props: { focused: boolean; color: string; size: number }) => ReactNode;
 
@@ -62,7 +62,7 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
                   {options.tabBarIcon?.({
                     focused: isFocused,
                     color: isFocused ? colors.ink : colors.line,
-                    size: 21,
+                    size: 18,
                   })}
                 </View>
                 {isFocused ? (
@@ -88,10 +88,10 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.x4,
+    marginHorizontal: spacing.x8,
     marginTop: spacing.x2,
-    padding: 6,
-    gap: 6,
+    padding: 4,
+    gap: 4,
     borderRadius: radius.round,
     backgroundColor: colors.ink,
     shadowColor: '#000000',
@@ -112,8 +112,8 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    gap: spacing.x2,
+    paddingHorizontal: 5,
+    gap: spacing.x1,
   },
   badge: {
     width: BADGE_SIZE,
@@ -124,5 +124,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   badgeActive: { backgroundColor: colors.accent },
-  label: { color: colors.white, fontSize: 14, fontWeight: '800', flexShrink: 1 },
+  label: { color: colors.white, fontSize: 13, fontWeight: '800', flexShrink: 1 },
 });
