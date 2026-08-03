@@ -20,6 +20,7 @@ import {
 } from '@/features/notifications/notification-service';
 import {
   deactivatePushToken,
+  pushDeliveryConfigured,
   registerPushToken,
 } from '@/features/notifications/push-token-service';
 import {
@@ -45,6 +46,7 @@ export default function SettingsScreen() {
   const [deviceSaving, setDeviceSaving] = useState(false);
   const [devicePermission, setDevicePermission] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [pushActive, setPushActive] = useState(false);
   const [reminderTime, setReminderTime] = useState<ReminderTime>('09:00');
   const [typePreferences, setTypePreferences] = useState<NotificationPreferences | null>(null);
   const [typePreferencesSaving, setTypePreferencesSaving] = useState<NotificationType | null>(null);
@@ -121,6 +123,7 @@ export default function SettingsScreen() {
       if (!value) {
         await setDeviceNotificationsEnabled(false);
         setDeviceEnabled(false);
+        setPushActive(false);
         if (session?.access_token) void deactivatePushToken(session.access_token);
         return;
       }
@@ -138,7 +141,7 @@ export default function SettingsScreen() {
       if (session?.access_token) {
         const followUps = await fetchFollowUps(session.access_token);
         await syncFollowUpNotifications(followUps);
-        void registerPushToken(session.access_token);
+        setPushActive(await registerPushToken(session.access_token));
       }
       setNotificationMessage('Device reminders are on. AfterMeet will remind you when a follow-up is due.');
     } catch {
@@ -254,6 +257,13 @@ export default function SettingsScreen() {
                 ))}
               </View>
               <Text style={styles.linkHint}>Uses this phone’s local time.</Text>
+              <Text style={styles.linkHint}>
+                {pushActive
+                  ? 'Background alerts are active on this device.'
+                  : pushDeliveryConfigured()
+                    ? 'Background alerts could not be enabled on this device. Reminders still work while AfterMeet is open or recently used.'
+                    : 'Background alerts (for a locked or closed phone) need a one-time app update and aren’t available in this build yet. Reminders still work while AfterMeet is open or recently used.'}
+              </Text>
             </View>
           ) : null}
           {typePreferences ? (

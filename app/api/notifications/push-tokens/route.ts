@@ -13,12 +13,14 @@ export async function POST(request: Request) {
     platform?: unknown;
     expoPushToken?: unknown;
     deviceLabel?: unknown;
+    deviceModel?: unknown;
   } | null;
 
   const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim().slice(0, 200) : "";
   const platform = typeof body?.platform === "string" ? body.platform.trim() : "";
   const expoPushToken = typeof body?.expoPushToken === "string" ? body.expoPushToken.trim().slice(0, 400) : "";
   const deviceLabel = typeof body?.deviceLabel === "string" ? body.deviceLabel.trim().slice(0, 160) : "";
+  const deviceModel = typeof body?.deviceModel === "string" ? body.deviceModel.trim().slice(0, 160) : "";
 
   if (!deviceId || !PLATFORMS.has(platform) || !expoPushToken) {
     return NextResponse.json({ error: "A device id, platform, and push token are required." }, { status: 400 });
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
     platform,
     expo_push_token: expoPushToken,
     device_label: deviceLabel,
+    device_model: deviceModel,
     last_seen_at: new Date().toISOString(),
     disabled_at: null,
   }, { onConflict: "user_id,device_id" });

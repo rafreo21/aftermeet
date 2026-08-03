@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "../../../../../../lib/supabase/server";
 import { createServiceSupabaseClient } from "../../../../../../lib/supabase/service";
 import { createNotification, notificationTypeEnabled } from "../../../../../../lib/notifications-server";
+import { dispatchPushForUser } from "../../../../../../lib/push-dispatch-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function notifyHostOfGuestFollowUp(
@@ -26,15 +27,26 @@ async function notifyHostOfGuestFollowUp(
       .maybeSingle();
     if (!notificationTypeEnabled(owner?.notification_preferences, "shared_meeting_update")) return;
 
-    await createNotification(service, {
+    const title = "A guest committed to a follow-up";
+    const body = "They said they'll follow up too — see the details on the meeting.";
+    const created = await createNotification(service, {
       userId: ownerId,
       workspaceId: encounter.workspace_id,
       type: "shared_meeting_update",
-      title: "A guest committed to a follow-up",
-      body: "They said they'll follow up too — see the details on the meeting.",
+      title,
+      body,
       encounterId: encounter.id,
       dedupeKey: `shared_meeting_update:${encounter.id}:${committedAt}`,
     });
+    if (created) {
+      await dispatchPushForUser(service, {
+        userId: ownerId,
+        type: "shared_meeting_update",
+        title,
+        body,
+        encounterId: encounter.id,
+      });
+    }
   } catch {
     // Best-effort: never let a missed notification block the guest's commitment.
   }

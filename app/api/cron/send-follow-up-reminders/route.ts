@@ -4,6 +4,7 @@ import { encounterFromApi } from "../../../../lib/encounters";
 import { fetchParticipantsByEncounter } from "../../../../lib/encounter-participants-server";
 import { dueDateBucket, flattenOpenFollowUps, type FollowUpItem } from "../../../../lib/follow-ups-server";
 import { createNotification, notificationTypeEnabled } from "../../../../lib/notifications-server";
+import { dispatchPushForUser } from "../../../../lib/push-dispatch-server";
 import { buildReminderDigestEmail, reminderQualifies } from "../../../../lib/reminder-email";
 import { sendEmail } from "../../../../lib/send-email";
 import { createServiceSupabaseClient } from "../../../../lib/supabase/service";
@@ -127,19 +128,29 @@ export async function GET(request: Request) {
         const type = bucket === "overdue" ? "follow_up_overdue" : "follow_up_due";
         if (!notificationTypeEnabled(user.notification_preferences, type)) continue;
         try {
+          const title = bucket === "overdue" ? `Overdue: ${item.title}` : `Due today: ${item.title}`;
+          const notificationBody = item.personName.trim() ? `With ${item.personName.trim()}` : "";
           const created = await createNotification(service, {
             userId: user.id,
             workspaceId: membership.workspace_id,
             type,
-            title: bucket === "overdue"
-              ? `Overdue: ${item.title}`
-              : `Due today: ${item.title}`,
-            body: item.personName.trim() ? `With ${item.personName.trim()}` : "",
+            title,
+            body: notificationBody,
             encounterId: item.encounterId,
             actionId: item.actionId,
             dedupeKey: `${type}:${item.encounterId}:${item.actionId}`,
           });
-          if (created) notificationsCreated += 1;
+          if (created) {
+            notificationsCreated += 1;
+            await dispatchPushForUser(service, {
+              userId: user.id,
+              type,
+              title,
+              body: notificationBody,
+              encounterId: item.encounterId,
+              actionId: item.actionId,
+            });
+          }
         } catch {
           // A missed in-app notification must not block the email digest below.
         }

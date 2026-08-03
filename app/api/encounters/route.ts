@@ -7,7 +7,9 @@ import { fetchParticipantsByEncounter } from "../../../lib/encounter-participant
 import { fetchGuestFollowUpsByEncounter } from "../../../lib/encounter-guest-follow-ups-server";
 import { encounterMatchesConnection } from "../../../lib/follow-ups-server";
 import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
+import { detectEncounterConflict } from "../../../lib/encounter-conflict";
 import { createNotification, notificationTypeEnabled } from "../../../lib/notifications-server";
+import { dispatchPushForUser } from "../../../lib/push-dispatch-server";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
 
@@ -126,10 +128,24 @@ export async function POST(request: Request) {
   const supabase = await createApiSupabaseClient(request);
   const { data: existingRow } = await supabase
     .from("encounters")
-    .select("recording_metadata")
+    .select("recording_metadata, updated_at")
     .eq("id", body.id)
     .eq("workspace_id", user.workspaceId)
     .maybeSingle();
+
+  // Optimistic concurrency: a caller that knows the row it last read (via
+  // expectedUpdatedAt) gets rejected if someone else has written to it
+  // since, rather than silently overwriting their edit. Callers that don't
+  // send it (the capture wizard's in-progress autosave, where one device
+  // owns the draft) keep today's last-write-wins behavior unchanged.
+  const expectedUpdatedAt = typeof body.expectedUpdatedAt === "string" ? body.expectedUpdatedAt : "";
+  if (detectEncounterConflict(existingRow?.updated_at, expectedUpdatedAt)) {
+    return NextResponse.json({
+      error: "This meeting changed on another device. Reload to see the latest version before saving your changes.",
+      conflict: true,
+      serverUpdatedAt: existingRow?.updated_at,
+    }, { status: 409 });
+  }
 
   const existingRecording = existingRow?.recording_metadata && typeof existingRow.recording_metadata === "object"
     ? existingRow.recording_metadata as Record<string, unknown>
@@ -152,6 +168,7 @@ export async function POST(request: Request) {
     email: projection.personEmail,
   });
 
+  const nextUpdatedAt = new Date().toISOString();
   const { error } = await supabase.from("encounters").upsert({
     id: body.id,
     workspace_id: user.workspaceId,
@@ -173,7 +190,7 @@ export async function POST(request: Request) {
     recording_metadata: recordingMetadata,
     status: typeof body.status === "string" && allowedStatuses.has(body.status) ? body.status : "draft",
     share_token: typeof body.shareToken === "string" ? body.shareToken : crypto.randomUUID().replaceAll("-", ""),
-    updated_at: new Date().toISOString(),
+    updated_at: nextUpdatedAt,
   }, { onConflict: "id" });
 
   if (error) {
@@ -200,20 +217,30 @@ export async function POST(request: Request) {
         const title = projection.personName.trim()
           ? `Ready to review: ${projection.personName.trim()}`
           : "A capture is ready to review";
-        await createNotification(supabase, {
+        const notificationBody = "Your follow-up choices are saved. Confirm the review to activate them.";
+        const created = await createNotification(supabase, {
           userId: user.id,
           workspaceId: user.workspaceId,
           type: "review_ready",
           title,
-          body: "Your follow-up choices are saved. Confirm the review to activate them.",
+          body: notificationBody,
           encounterId: body.id,
           dedupeKey: `review_ready:${body.id}`,
         });
+        if (created) {
+          await dispatchPushForUser(supabase, {
+            userId: user.id,
+            type: "review_ready",
+            title,
+            body: notificationBody,
+            encounterId: body.id,
+          });
+        }
       }
     } catch {
       // Best-effort: a missed notification must never fail the save itself.
     }
   }
 
-  return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ ok: true, updatedAt: nextUpdatedAt }, { headers: { "Cache-Control": "private, no-store" } });
 }
