@@ -18,6 +18,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
+import { ProgressRing } from '@/components/progress-ring';
 import { Skeleton, SkeletonCircle, SkeletonLine } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
@@ -137,12 +138,12 @@ export default function HomeScreen() {
     const total = followUps.length;
     const rate = total ? Math.round((completed / total) * 100) : 0;
     if (nudge) {
-      return { headline: nudge.headline, copy: `${completed} completed · ${rate}% of ${total} kept`, urgent: true };
+      return { headline: nudge.headline, completed, total, rate, urgent: true, hasData: true };
     }
     if (total) {
-      return { headline: 'You’re all caught up', copy: `${completed} completed · ${rate}% of ${total} kept`, urgent: false };
+      return { headline: 'You’re all caught up', completed, total, rate, urgent: false, hasData: true };
     }
-    return { headline: 'No follow-ups yet', copy: 'Your commitments will appear here.', urgent: false };
+    return { headline: 'No follow-ups yet', completed: 0, total: 0, rate: 0, urgent: false, hasData: false };
   }, [followUps]);
 
   const pendingReviewCount = useMemo(
@@ -252,14 +253,31 @@ export default function HomeScreen() {
                 accessibilityLabel={`${attention.headline}. Open follow-ups`}
                 onPress={() => router.push('/settings/follow-ups')}
                 style={({ pressed }) => [styles.attentionCard, pressed && styles.attentionCardPressed]}>
-                <View style={[styles.attentionIcon, attention.urgent && styles.attentionIconUrgent]}>
-                  <ListChecks size={20} color={attention.urgent ? colors.danger : colors.ink} weight="bold" />
-                </View>
+                {attention.hasData ? (
+                  <ProgressRing
+                    size={54}
+                    strokeWidth={4}
+                    progress={attention.rate}
+                    trackColor={attention.urgent ? '#f7d9d3' : colors.surfaceMuted}
+                    progressColor={attention.urgent ? colors.danger : colors.accent}>
+                    <ListChecks size={20} color={attention.urgent ? colors.danger : colors.ink} weight="bold" />
+                  </ProgressRing>
+                ) : (
+                  <View style={[styles.attentionIcon]}>
+                    <ListChecks size={20} color={colors.ink} weight="bold" />
+                  </View>
+                )}
                 <View style={styles.attentionCopy}>
                   <Text style={styles.attentionHeadline}>{attention.headline}</Text>
-                  <Text style={styles.attentionSubline}>{attention.copy}</Text>
+                  {attention.hasData ? (
+                    <Text style={styles.attentionSubline}>
+                      <Text style={styles.attentionStat}>{attention.rate}%</Text> kept · {attention.completed} of {attention.total} completed
+                    </Text>
+                  ) : (
+                    <Text style={styles.attentionSubline}>Your commitments will appear here.</Text>
+                  )}
                 </View>
-                <CaretRight size={16} color={colors.ink} weight="bold" />
+                <CaretRight size={18} color={colors.muted} weight="bold" />
               </Pressable>
             ) : null}
 
@@ -515,26 +533,31 @@ const styles = StyleSheet.create({
   attentionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.x3,
-    padding: spacing.x4,
-    borderRadius: radius.medium,
+    gap: spacing.x4,
+    padding: spacing.x5,
+    borderRadius: radius.large,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,
+    shadowColor: colors.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 2,
   },
   attentionCardPressed: { opacity: 0.92 },
   attentionIcon: {
-    width: 40,
-    height: 40,
+    width: 54,
+    height: 54,
     borderRadius: radius.round,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
   },
-  attentionIconUrgent: { backgroundColor: '#fdece9' },
-  attentionCopy: { flex: 1, gap: 2 },
-  attentionHeadline: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  attentionSubline: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  attentionCopy: { flex: 1, gap: 4 },
+  attentionHeadline: { color: colors.ink, fontSize: 19, fontWeight: '800', letterSpacing: -0.3 },
+  attentionSubline: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  attentionStat: { color: colors.ink, fontWeight: '800' },
   activeWork: { gap: spacing.x2 },
   activeWorkRow: {
     flexDirection: 'row',
