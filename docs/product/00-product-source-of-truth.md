@@ -245,7 +245,8 @@ Notifications are alerts about work, not a second follow-up system.
 - Badges count unresolved (unread) notifications, not every historical event.
 - Settings contain one coherent Device Notifications area for permission, timing, per-type toggles, and reminder preferences, shared in shape (not in per-device state) between mobile and web.
 - Email reminders remain a separate delivery-channel preference, not a duplicate settings section.
-- Remote push delivery (a server-sent push landing on a locked/backgrounded device) requires an EAS project id, which this app does not yet have configured. Push-token storage (`public.push_tokens`, multi-device, deactivatable) is fully built and ready to receive tokens the moment that one-time setup happens; until then, mobile relies on local scheduling and the in-app centre.
+- Remote push delivery is implemented server-side: a dispatcher (`lib/push-dispatch-server.ts`) sends a real Expo push for all four notification types, respecting each per-type preference, recording per-token delivery status/error (no secrets) for debugging, and deactivating a token the moment Expo reports it as unregistered. Every dispatch is best-effort — a failed or unconfigured push never blocks the notification row from being created, and never fails the request that triggered it (an encounter save, the reminder cron, or a guest committing to a follow-up).
+- The one remaining gap is obtaining a valid push token to dispatch *to*: that requires an EAS project id, created by running `eas init` against an authenticated Expo account — a one-time step this repo cannot perform on its own (no Expo account access). Until it exists, `registerPushToken()` on each device correctly no-ops rather than claiming success; Settings only ever reports "background alerts are active" when a token was genuinely registered. Local scheduled notifications and the in-app Supabase-backed centre work fully regardless.
 
 ### 19. Settings and Connected Accounts
 
@@ -297,7 +298,8 @@ Every flow must include:
 - Native background recording and interruption recovery
 - Reliable transcription and speaker assignment
 - Capture draft/review lifecycle shared across clients
-- Remote push delivery to a backgrounded/locked device (requires an EAS project id — see Notifications)
+- An EAS project id, the one remaining external step before any device can hold a valid push token for the already-built remote-push dispatcher to send to (see Notifications)
+- Explicit conflict protection for cross-device edits is implemented for Encounters only; Cards, Contacts, and other user-editable records remain last-write-wins
 - Three-day recording-sharing lifecycle and expiry jobs
 - Shared component and copy contracts across mobile and consumer web
 - Connected storage/provider health and recovery
