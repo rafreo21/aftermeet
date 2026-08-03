@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CaretDown } from 'phosphor-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -24,14 +24,24 @@ export function PhoneInput({ label, value, onChange, placeholder }: PhoneInputPr
   const [parts, setParts] = useState<PhoneParts>(() => parseStoredPhone(value, defaultIso));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
+  // parseStoredPhone can't always tell a short in-progress national number
+  // apart from a bare dial code (it needs >=4 remaining digits to trust a
+  // match), so round-tripping every keystroke through it corrupts the
+  // number. Only re-parse when `value` changes for a reason other than our
+  // own onChange echoing back — e.g. the initial fetched value.
+  const lastEmitted = useRef<string | null>(value || null);
 
   useEffect(() => {
+    if (value === lastEmitted.current) return;
+    lastEmitted.current = value;
     void Promise.resolve().then(() => setParts(parseStoredPhone(value, defaultIso)));
   }, [value, defaultIso]);
 
   function update(next: PhoneParts) {
     setParts(next);
-    onChange(formatPhoneE164(next));
+    const formatted = formatPhoneE164(next);
+    lastEmitted.current = formatted;
+    onChange(formatted);
   }
 
   const country = countryByIso(parts.countryIso);

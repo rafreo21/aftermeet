@@ -35,7 +35,9 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.bar, { marginBottom: Math.max(insets.bottom, spacing.x3) }]}>
+      <Animated.View
+        layout={LinearTransition.duration(220)}
+        style={[styles.bar, { marginBottom: Math.max(insets.bottom, spacing.x3) }]}>
         {visibleRoutes.map((route) => {
           const { options } = descriptors[route.key];
           const routeIndex = state.routes.findIndex((item) => item.key === route.key);
@@ -78,7 +80,7 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
             </Animated.View>
           );
         })}
-      </View>
+      </Animated.View>
     </View>
   );
 }
