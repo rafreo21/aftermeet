@@ -280,7 +280,7 @@ export default function HomeScreen() {
                     <Text style={styles.attentionSubline}>Your commitments will appear here.</Text>
                   )}
                 </View>
-                <CaretRight size={18} color={colors.muted} weight="bold" />
+                <CaretRight size={14} color={colors.muted} weight="bold" />
               </Pressable>
             ) : null}
 
