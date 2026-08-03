@@ -1,101 +1,224 @@
+import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import { Bell, CaretRight, ListChecks, QrCode, Scan } from 'phosphor-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import {
+  Bell,
+  CaretRight,
+  Clock,
+  IdentificationCard,
+  ListChecks,
+  Microphone,
+  Notebook,
+  QrCode,
+  UsersThree,
+} from 'phosphor-react-native';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BrandMark } from '@/components/brand-mark';
-import { Body, Button, Eyebrow, HeaderActionButton, Title } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { MiniPromptCard } from '@/components/mini-prompt-card';
+import { Skeleton, SkeletonCircle, SkeletonLine } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
-import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
+import {
+  getActiveCaptureController,
+  subscribeToActiveCapture,
+} from '@/features/encounters/active-capture-controller';
+import { fetchEncounters, type EncounterSummary } from '@/features/encounters/encounter-api';
+import { formatDuration } from '@/features/encounters/local-recordings';
+import { listCaptureDrafts, type CaptureDraftSummary } from '@/features/encounters/capture-draft';
+import {
+  connectionAvatarUrl,
+} from '@/features/connections/connection-public-card';
+import {
+  fetchAllConnectionsMerged,
+  sortConnections,
+  type ConnectionItem,
+} from '@/features/connections/connections-api';
+import { fetchFollowUps, followUpsForPerson, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { summarizeFollowUpNudges } from '@/features/follow-ups/follow-up-nudges';
+import { resolveFollowUpUserName } from '@/features/follow-ups/follow-up-participants';
 import { fetchNotifications } from '@/features/notifications/notification-center-api';
+import { dueTone, formatDueLabel } from '@/lib/due-date';
+import { formatRelativeTime } from '@/lib/relative-time';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-const SECONDARY_STEPS = [
-  {
-    num: '02',
-    title: 'Capture context',
-    copy: 'Record what mattered while the meeting is fresh.',
-    route: '/capture' as const,
-  },
-  {
-    num: '03',
-    title: 'Connections',
-    copy: 'People who shared with you and cards you saved.',
-    route: '/connections' as const,
-  },
-];
+function timeGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 5) return 'Good night';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+type ActiveWorkItem = {
+  key: string;
+  icon: typeof Microphone;
+  label: string;
+  onPress: () => void;
+};
 
 export default function HomeScreen() {
   const insets = useAppInsets();
   const { session } = useAuth();
-  const { card } = useCard();
+  const { card, cards, loading: cardLoading } = useCard();
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [encounters, setEncounters] = useState<EncounterSummary[]>([]);
+  const [drafts, setDrafts] = useState<CaptureDraftSummary[]>([]);
+  const [connections, setConnections] = useState<ConnectionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  const loadFollowUps = useCallback(async () => {
+  const activeCapture = useSyncExternalStore(
+    subscribeToActiveCapture,
+    getActiveCaptureController,
+    getActiveCaptureController,
+  );
+
+  const greetingName = useMemo(() => {
+    const name = resolveFollowUpUserName({
+      activeCardName: card.name,
+      cards,
+      authName: String(session?.user.user_metadata?.full_name || session?.user.user_metadata?.name || ''),
+      authEmail: session?.user.email || '',
+    });
+    return name.split(' ')[0] || '';
+  }, [card.name, cards, session?.user.email, session?.user.user_metadata]);
+
+  const load = useCallback(async () => {
+    setLoadError('');
+    const draftList = await listCaptureDrafts();
+    setDrafts(draftList);
+
     if (!session?.access_token) {
       setFollowUps([]);
-      return;
-    }
-    try {
-      setFollowUps(await fetchFollowUps(session.access_token));
-    } catch {
-      setFollowUps([]);
-    }
-  }, [session]);
-
-  const loadUnreadNotifications = useCallback(async () => {
-    if (!session?.access_token) {
       setUnreadNotifications(0);
+      setEncounters([]);
+      setConnections([]);
       return;
     }
-    try {
-      const { unreadCount } = await fetchNotifications(session.access_token);
-      setUnreadNotifications(unreadCount);
-    } catch {
-      // Leave the last known count rather than flash it to zero on a transient failure.
+
+    const token = session.access_token;
+    const [followUpsResult, notificationsResult, encountersResult, connectionsResult] = await Promise.allSettled([
+      fetchFollowUps(token),
+      fetchNotifications(token),
+      fetchEncounters(token),
+      fetchAllConnectionsMerged(token),
+    ]);
+
+    if (followUpsResult.status === 'fulfilled') setFollowUps(followUpsResult.value);
+    if (notificationsResult.status === 'fulfilled') setUnreadNotifications(notificationsResult.value.unreadCount);
+    if (encountersResult.status === 'fulfilled') setEncounters(encountersResult.value);
+    if (connectionsResult.status === 'fulfilled') setConnections(connectionsResult.value);
+
+    if ([followUpsResult, notificationsResult, encountersResult, connectionsResult].every((result) => result.status === 'rejected')) {
+      setLoadError('Could not load your Home data. Check your connection and try again.');
     }
   }, [session]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadFollowUps();
-      void loadUnreadNotifications();
-      const interval = setInterval(() => {
-        void loadFollowUps();
-        void loadUnreadNotifications();
-      }, 30_000);
+      void load().finally(() => {
+        setLoading(false);
+        setHasLoadedOnce(true);
+      });
+      const interval = setInterval(() => void load(), 30_000);
       return () => clearInterval(interval);
-    }, [loadFollowUps, loadUnreadNotifications]),
+    }, [load]),
   );
 
-  const nudge = useMemo(() => summarizeFollowUpNudges(followUps), [followUps]);
-  const followUpProgress = useMemo(() => {
+  const attention = useMemo(() => {
+    const nudge = summarizeFollowUpNudges(followUps);
     const completed = followUps.filter((item) => item.status === 'completed').length;
     const total = followUps.length;
-    return { completed, total, rate: total ? Math.round((completed / total) * 100) : 0 };
+    const rate = total ? Math.round((completed / total) * 100) : 0;
+    if (nudge) {
+      return { headline: nudge.headline, copy: `${completed} completed · ${rate}% of ${total} kept`, urgent: true };
+    }
+    if (total) {
+      return { headline: 'You’re all caught up', copy: `${completed} completed · ${rate}% of ${total} kept`, urgent: false };
+    }
+    return { headline: 'No follow-ups yet', copy: 'Your commitments will appear here.', urgent: false };
   }, [followUps]);
+
+  const pendingReviewCount = useMemo(
+    () => encounters.filter((item) => item.status === 'draft').length,
+    [encounters],
+  );
+
+  const activeCaptureId = activeCapture?.snapshot.encounterId;
+  const draftCount = useMemo(
+    () => drafts.filter((item) => item.encounterId !== activeCaptureId).length,
+    [drafts, activeCaptureId],
+  );
+
+  const activeWorkItems = useMemo<ActiveWorkItem[]>(() => {
+    if (activeCapture) {
+      const { status, seconds } = activeCapture.snapshot;
+      const openCapture = () => router.navigate({
+        pathname: '/capture/new',
+        params: { draftId: activeCapture.snapshot.encounterId },
+      });
+      if (status === 'processing') {
+        return [{ key: 'processing', icon: Clock, label: 'Preparing your transcript', onPress: openCapture }];
+      }
+      const label = status === 'paused'
+        ? `Recording paused · ${formatDuration(seconds)}`
+        : `Recording in progress · ${formatDuration(seconds)}`;
+      return [{ key: 'recording', icon: Microphone, label, onPress: openCapture }];
+    }
+
+    const items: ActiveWorkItem[] = [];
+    if (pendingReviewCount > 0) {
+      items.push({
+        key: 'review',
+        icon: ListChecks,
+        label: pendingReviewCount === 1 ? 'Ready to review' : `${pendingReviewCount} ready to review`,
+        onPress: () => router.push('/capture'),
+      });
+    }
+    if (draftCount > 0) {
+      items.push({
+        key: 'drafts',
+        icon: Notebook,
+        label: draftCount === 1 ? '1 draft to finish' : `${draftCount} drafts to finish`,
+        onPress: () => router.push('/capture'),
+      });
+    }
+    return items;
+  }, [activeCapture, pendingReviewCount, draftCount]);
+
+  const recentPeople = useMemo(
+    () => sortConnections(connections, 'date').slice(0, 5),
+    [connections],
+  );
+
+  const hasCard = cards.length > 0;
 
   return (
     <View style={styles.safe}>
       <View style={[styles.fixedBar, { paddingTop: insets.top + spacing.x2 }]}>
-        <View style={styles.brandRow}>
-          <BrandMark size={32} />
-          <Eyebrow>AfterMeet</Eyebrow>
+        <View style={styles.greetingBlock}>
+          <Text style={styles.greetingTitle} numberOfLines={1}>
+            {greetingName ? `${timeGreeting()}, ${greetingName}` : timeGreeting()}
+          </Text>
+          <Text style={styles.greetingSubtitle} numberOfLines={1}>Here’s what needs your attention.</Text>
         </View>
-        <HeaderActionButton
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={unreadNotifications ? `${unreadNotifications} unread notifications` : 'Notifications'}
-          onPress={() => router.push('/notifications')}>
+          hitSlop={4}
+          onPress={() => router.push('/notifications')}
+          style={({ pressed }) => [styles.bellButton, pressed && styles.bellButtonPressed]}>
           <Bell size={21} color={colors.ink} weight="bold" />
           {unreadNotifications ? (
             <View style={styles.bellBadge}>
               <Text style={styles.bellBadgeText}>{Math.min(unreadNotifications, 9)}</Text>
             </View>
           ) : null}
-        </HeaderActionButton>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -103,86 +226,184 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
-        <Title style={styles.title}>Share your card in seconds</Title>
-        <Body style={styles.lead}>
-          Show your QR first. Capture the meeting and follow up after.
-        </Body>
+        {loading && !hasLoadedOnce ? (
+          <HomeSkeleton />
+        ) : (
+          <>
+            {loadError ? (
+              <MiniPromptCard
+                icon={<ListChecks size={18} color={colors.ink} weight="bold" />}
+                title="Could not load Home"
+                copy={loadError}
+                onPress={() => void load()}
+              />
+            ) : null}
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroNum}>01</Text>
-          </View>
-          <Text style={styles.heroTitle}>Show my QR</Text>
-          <Text style={styles.heroCopy}>
-            {card.status === 'published'
-              ? `${card.name || 'Your card'} is ready to share.`
-              : 'Publish your card to unlock your public QR link.'}
-          </Text>
-          <Button
-            onPress={() => {
-              if (card.status === 'published') {
-                router.navigate(`/share-card?id=${card.id}`);
-              } else {
-                router.navigate(`/edit-card?id=${card.id}`);
-              }
-            }}>
-            <QrCode size={18} color={colors.ink} weight="bold" />
-            {card.status === 'published' ? 'Open Quick Share' : 'Publish card'}
-          </Button>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Scan someone else's card"
-            onPress={() => router.navigate('/scanner')}
-            style={({ pressed }) => [styles.heroScanOverlay, pressed && styles.heroScanOverlayPressed]}>
-            <Scan size={18} color={colors.accent} weight="bold" />
-            <Text style={styles.heroScanOverlayText}>Scan someone else&apos;s card</Text>
-          </Pressable>
-        </View>
+            {session ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${attention.headline}. Open follow-ups`}
+                onPress={() => router.push('/settings/follow-ups')}
+                style={({ pressed }) => [styles.attentionCard, pressed && styles.attentionCardPressed]}>
+                <View style={[styles.attentionIcon, attention.urgent && styles.attentionIconUrgent]}>
+                  <ListChecks size={20} color={attention.urgent ? colors.danger : colors.ink} weight="bold" />
+                </View>
+                <View style={styles.attentionCopy}>
+                  <Text style={styles.attentionHeadline}>{attention.headline}</Text>
+                  <Text style={styles.attentionSubline}>{attention.copy}</Text>
+                </View>
+                <CaretRight size={16} color={colors.ink} weight="bold" />
+              </Pressable>
+            ) : null}
 
-        {session ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={nudge ? `${nudge.headline}. Open follow-ups` : 'Open follow-up progress'}
-            onPress={() => router.push('/settings/follow-ups')}
-            style={({ pressed }) => [styles.progressCard, pressed && styles.progressCardPressed]}>
-            <View style={[styles.progressIcon, nudge && styles.progressIconAttention]}>
-              <ListChecks size={20} color={colors.ink} weight="bold" />
-            </View>
-            <View style={styles.progressCopy}>
-              <Text style={styles.progressValue}>
-                {nudge?.headline
-                  ?? (followUpProgress.total ? `${followUpProgress.completed} completed` : 'No follow-ups yet')}
-              </Text>
-              <Text style={styles.progressLabel}>
-                {followUpProgress.total
-                  ? `${followUpProgress.completed} completed · ${followUpProgress.rate}% of ${followUpProgress.total} kept`
-                  : 'Your progress will appear here.'}
-              </Text>
-            </View>
-            <CaretRight size={16} color={colors.ink} weight="bold" />
-          </Pressable>
-        ) : null}
-
-        <View style={styles.steps}>
-          {SECONDARY_STEPS.map((step) => (
-            <Pressable
-              key={step.num}
-              accessibilityRole="button"
-              onPress={() => router.navigate(step.route)}
-              style={({ pressed }) => [styles.stepCard, pressed && styles.stepCardPressed]}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepNum}>{step.num}</Text>
+            {activeWorkItems.length ? (
+              <View style={styles.activeWork}>
+                {activeWorkItems.map((item) => (
+                  <Pressable
+                    key={item.key}
+                    accessibilityRole="button"
+                    onPress={item.onPress}
+                    style={({ pressed }) => [styles.activeWorkRow, pressed && styles.activeWorkRowPressed]}>
+                    <View style={styles.activeWorkIcon}>
+                      <item.icon size={17} color={colors.ink} weight="bold" />
+                    </View>
+                    <Text style={styles.activeWorkLabel} numberOfLines={1}>{item.label}</Text>
+                    <CaretRight size={14} color={colors.muted} weight="bold" />
+                  </Pressable>
+                ))}
               </View>
-              <Text style={styles.stepTitle}>{step.title}</Text>
-              <Text style={styles.stepCopy}>{step.copy}</Text>
-              <View style={styles.stepAction}>
-                <Text style={styles.stepActionText}>Open</Text>
-                <CaretRight size={14} color={colors.accent} weight="bold" />
-              </View>
-            </Pressable>
-          ))}
-        </View>
+            ) : null}
+
+            <View style={styles.quickActions}>
+              <Button style={styles.quickActionPrimary} onPress={() => router.push('/capture')}>
+                <Microphone size={18} color={colors.ink} weight="bold" />
+                Capture context
+              </Button>
+              <Button
+                variant="secondary"
+                style={styles.quickActionSecondary}
+                onPress={() => {
+                  if (card.status === 'published') {
+                    router.navigate(`/share-card?id=${card.id}`);
+                  } else {
+                    router.navigate(`/edit-card?id=${card.id}`);
+                  }
+                }}>
+                <QrCode size={18} color={colors.ink} weight="bold" />
+                Share my card
+              </Button>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Recent people</Text>
+              {session && recentPeople.length ? (
+                <View style={styles.peopleList}>
+                  {recentPeople.map((connection) => (
+                    <RecentPersonRow key={connection.id} connection={connection} followUps={followUps} />
+                  ))}
+                </View>
+              ) : session ? (
+                <MiniPromptCard
+                  icon={<UsersThree size={18} color={colors.ink} weight="fill" />}
+                  title="No recent people yet."
+                  copy="Scan a card or add someone after your next conversation."
+                  onPress={() => router.push('/scanner')}
+                />
+              ) : (
+                <MiniPromptCard
+                  icon={<UsersThree size={18} color={colors.ink} weight="fill" />}
+                  title="Sign in to see recent people"
+                  copy="People you scan or add will show up here."
+                  onPress={() => router.push('/auth')}
+                />
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>My card</Text>
+              {!cardLoading && hasCard ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/card/${card.id}`)}
+                  style={({ pressed }) => [styles.myCardRow, pressed && styles.myCardRowPressed]}>
+                  {card.photo ? (
+                    <Image source={card.photo} style={styles.myCardAvatar} contentFit="cover" alt="" />
+                  ) : (
+                    <View style={styles.myCardAvatarFallback}>
+                      <IdentificationCard size={20} color={colors.ink} weight="bold" />
+                    </View>
+                  )}
+                  <View style={styles.myCardCopy}>
+                    <Text style={styles.myCardLabel} numberOfLines={1}>{card.label || 'My card'}</Text>
+                    <Text style={styles.myCardMeta} numberOfLines={1}>
+                      {[card.name, [card.role, card.company].filter(Boolean).join(' · ')].filter(Boolean).join(' · ') || 'Add your details'}
+                    </Text>
+                  </View>
+                  <Text style={styles.myCardAction}>Open card</Text>
+                  <CaretRight size={14} color={colors.muted} weight="bold" />
+                </Pressable>
+              ) : !cardLoading ? (
+                <MiniPromptCard
+                  icon={<IdentificationCard size={18} color={colors.ink} weight="bold" />}
+                  title="Create your first card"
+                  copy="Publish a card so people can save your details instantly."
+                  onPress={() => router.push(`/edit-card?id=${card.id}`)}
+                />
+              ) : null}
+            </View>
+          </>
+        )}
       </ScrollView>
+    </View>
+  );
+}
+
+function RecentPersonRow({ connection, followUps }: { connection: ConnectionItem; followUps: FollowUpItem[] }) {
+  const avatar = connection.photoUrl || connectionAvatarUrl(connection);
+  const openFollowUp = followUpsForPerson(followUps, connection.name, connection.email)
+    .find((item) => item.status !== 'completed');
+  const dueLabel = openFollowUp ? formatDueLabel(openFollowUp.dueAt) : null;
+  const tone = openFollowUp ? dueTone(openFollowUp.dueAt) : 'default';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push(`/connections/${encodeURIComponent(connection.id)}`)}
+      style={({ pressed }) => [styles.personRow, pressed && styles.personRowPressed]}>
+      <Image source={avatar} style={styles.personAvatar} contentFit="cover" alt={`${connection.name} profile photo`} />
+      <View style={styles.personCopy}>
+        <Text style={styles.personName} numberOfLines={1}>{connection.name}</Text>
+        <Text style={styles.personSubtitle} numberOfLines={1}>
+          {connection.subtitle}{connection.connectedAt ? ` · ${formatRelativeTime(connection.connectedAt)}` : ''}
+        </Text>
+      </View>
+      {dueLabel ? (
+        <View style={[styles.personTag, tone === 'overdue' && styles.personTagOverdue]}>
+          <Text style={[styles.personTagText, tone === 'overdue' && styles.personTagTextOverdue]}>{dueLabel}</Text>
+        </View>
+      ) : null}
+      <CaretRight size={14} color={colors.muted} weight="bold" />
+    </Pressable>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <View style={styles.skeletonWrap}>
+      <Skeleton style={styles.skeletonAttention} />
+      <View style={styles.skeletonRow}>
+        <Skeleton style={styles.skeletonButton} />
+        <Skeleton style={styles.skeletonButton} />
+      </View>
+      {[0, 1, 2].map((index) => (
+        <View key={index} style={styles.skeletonPersonRow}>
+          <SkeletonCircle size={40} />
+          <View style={{ flex: 1, gap: spacing.x1 }}>
+            <SkeletonLine width="60%" />
+            <SkeletonLine width="40%" height={10} />
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -191,16 +412,31 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   fixedBar: {
     paddingHorizontal: spacing.x5,
-    paddingBottom: spacing.x2,
+    paddingBottom: spacing.x3,
     backgroundColor: colors.canvas,
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
     zIndex: 2,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: spacing.x3,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  greetingBlock: { flex: 1, minWidth: 0, gap: 2 },
+  greetingTitle: { color: colors.ink, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  greetingSubtitle: { color: colors.muted, fontSize: 13 },
+  bellButton: {
+    width: 42,
+    height: 42,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  bellButtonPressed: { backgroundColor: colors.surfaceMuted },
   bellBadge: {
     position: 'absolute',
     top: -2,
@@ -219,43 +455,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: spacing.x5,
-    paddingTop: spacing.x3,
-    paddingBottom: spacing.x4,
-    gap: spacing.x3,
+    paddingTop: spacing.x4,
+    paddingBottom: spacing.x6,
+    gap: spacing.x4,
   },
-  title: { fontSize: 32, lineHeight: 35 },
-  lead: { marginTop: -spacing.x1 },
-  heroCard: {
-    padding: spacing.x4,
-    borderRadius: radius.medium,
-    backgroundColor: colors.ink,
-    gap: spacing.x2,
-  },
-  heroBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-  },
-  heroNum: { color: colors.ink, fontSize: 12, fontWeight: '900' },
-  heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800' },
-  heroCopy: { color: '#C5D3BF', fontSize: 14, lineHeight: 20 },
-  heroScanOverlay: {
-    marginTop: spacing.x2,
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.x2,
-    paddingHorizontal: spacing.x4,
-    borderRadius: radius.medium,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  heroScanOverlayPressed: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  heroScanOverlayText: { color: colors.white, fontSize: 14, fontWeight: '800' },
-  progressCard: {
+  attentionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.x3,
@@ -265,8 +469,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  progressCardPressed: { opacity: 0.92 },
-  progressIcon: {
+  attentionCardPressed: { opacity: 0.92 },
+  attentionIcon: {
     width: 40,
     height: 40,
     borderRadius: radius.round,
@@ -274,29 +478,90 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
   },
-  progressIconAttention: { backgroundColor: '#fff0dc' },
-  progressCopy: { flex: 1, gap: 2 },
-  progressValue: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  progressLabel: { color: colors.muted, fontSize: 12, lineHeight: 17 },
-  steps: { gap: spacing.x2 },
-  stepCard: {
-    padding: spacing.x4,
+  attentionIconUrgent: { backgroundColor: '#fdece9' },
+  attentionCopy: { flex: 1, gap: 2 },
+  attentionHeadline: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  attentionSubline: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  activeWork: { gap: spacing.x2 },
+  activeWorkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    padding: spacing.x3,
     borderRadius: radius.medium,
-    backgroundColor: colors.ink,
-    gap: spacing.x2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
-  stepCardPressed: { opacity: 0.92 },
-  stepBadge: {
-    width: 34,
-    height: 34,
+  activeWorkRowPressed: { opacity: 0.9 },
+  activeWorkIcon: {
+    width: 32,
+    height: 32,
     borderRadius: radius.round,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.surfaceMuted,
   },
-  stepNum: { color: colors.ink, fontSize: 12, fontWeight: '900' },
-  stepTitle: { color: colors.white, fontSize: 22, fontWeight: '800' },
-  stepCopy: { color: '#C5D3BF', fontSize: 14, lineHeight: 20 },
-  stepAction: { marginTop: spacing.x2, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  stepActionText: { color: colors.accent, fontSize: 13, fontWeight: '800' },
+  activeWorkLabel: { flex: 1, color: colors.ink, fontSize: 13, fontWeight: '700' },
+  quickActions: { flexDirection: 'row', gap: spacing.x3 },
+  quickActionPrimary: { flex: 1 },
+  quickActionSecondary: { flex: 1 },
+  section: { gap: spacing.x3 },
+  sectionTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  peopleList: { gap: spacing.x2 },
+  personRow: {
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    paddingHorizontal: spacing.x3,
+    paddingVertical: spacing.x3,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  personRowPressed: { opacity: 0.9 },
+  personAvatar: { width: 40, height: 40, borderRadius: radius.round, backgroundColor: colors.surfaceMuted },
+  personCopy: { flex: 1, minWidth: 0, gap: 1 },
+  personName: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  personSubtitle: { color: colors.muted, fontSize: 11.5, lineHeight: 15 },
+  personTag: {
+    paddingHorizontal: spacing.x2,
+    paddingVertical: 3,
+    borderRadius: radius.round,
+    backgroundColor: colors.surfaceMuted,
+  },
+  personTagOverdue: { backgroundColor: '#fdece9' },
+  personTagText: { color: colors.ink, fontSize: 10, fontWeight: '800' },
+  personTagTextOverdue: { color: colors.danger },
+  myCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+    padding: spacing.x3,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  myCardRowPressed: { opacity: 0.9 },
+  myCardAvatar: { width: 44, height: 44, borderRadius: radius.round, backgroundColor: colors.surfaceMuted },
+  myCardAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+  },
+  myCardCopy: { flex: 1, minWidth: 0, gap: 1 },
+  myCardLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  myCardMeta: { color: colors.muted, fontSize: 12 },
+  myCardAction: { color: colors.link, fontSize: 12, fontWeight: '800' },
+  skeletonWrap: { gap: spacing.x4 },
+  skeletonAttention: { height: 72, borderRadius: radius.medium },
+  skeletonRow: { flexDirection: 'row', gap: spacing.x3 },
+  skeletonButton: { flex: 1, height: 48, borderRadius: radius.small },
+  skeletonPersonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
 });

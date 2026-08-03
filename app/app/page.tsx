@@ -1,16 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
-import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { AppShell } from "../components/AppShell";
 import { LinkButton } from "../components/Button";
+import { PageSkeleton } from "../components/AsyncState";
+import { useAppUser } from "../components/AppUserContext";
+import {
+  connectionAvatarUrl,
+  fetchAllConnectionsMerged,
+  formatConnectionDate,
+  sortConnections,
+  type ConnectionItem,
+} from "../../lib/connections";
+import { getActiveCardId, readCardLibrary, type LibraryCard } from "../../lib/card-library";
+import { readEncounters } from "../../lib/encounters";
+
+type FollowUpRow = {
+  status?: string;
+  owner?: string;
+  dueAt?: string;
+  personName?: string;
+  personEmail?: string;
+};
 
 type FollowUpNudge = {
   openCount: number;
@@ -29,31 +47,94 @@ function isDueNow(dueAt: string) {
   return due.getTime() <= today.getTime();
 }
 
-export default function HomeDashboard() {
-  const [nudge, setNudge] = useState<FollowUpNudge>({ openCount: 0, urgentCount: 0, completedCount: 0, completionRate: 0 });
+function isOverdue(dueAt: string) {
+  if (!dueAt.trim()) return false;
+  const due = new Date(`${dueAt.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return due.getTime() < today.getTime();
+}
 
-  function loadDashboard() {
-    return fetch("/api/follow-ups", { cache: "no-store" }).then(async (followUpsResponse) => {
-      if (followUpsResponse.ok) {
-        const payload = await followUpsResponse.json() as {
-          followUps?: Array<{ status?: string; owner?: string; dueAt?: string }>;
-        };
-        const items = payload.followUps ?? [];
-        const completedCount = items.filter((item) => item.status === "completed").length;
-        const openCount = items.filter((item) => item.status !== "completed").length;
-        const urgentCount = items.filter((item) => (
-          item.status !== "completed" && item.owner === "me" && isDueNow(item.dueAt ?? "")
-        )).length;
-        const completionRate = items.length ? Math.round((completedCount / items.length) * 100) : 0;
-        setNudge({ openCount, urgentCount, completedCount, completionRate });
-      }
-    }).catch(() => undefined);
+function timeGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 5) return "Good night";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+export default function HomeDashboard() {
+  const user = useAppUser();
+  const firstName = (user.displayName || user.email.split("@")[0] || "").trim().split(/\s+/)[0] || "";
+
+  const [hydrated, setHydrated] = useState(false);
+  const [greeting, setGreeting] = useState("Welcome back");
+  const [nudge, setNudge] = useState<FollowUpNudge>({ openCount: 0, urgentCount: 0, completedCount: 0, completionRate: 0 });
+  const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
+  const [followUpsFailed, setFollowUpsFailed] = useState(false);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [latestDraftId, setLatestDraftId] = useState("");
+  const [connections, setConnections] = useState<ConnectionItem[]>([]);
+  const [connectionsFailed, setConnectionsFailed] = useState(false);
+  const [card, setCard] = useState<LibraryCard | null>(null);
+  const [hasCards, setHasCards] = useState(false);
+
+  function loadFollowUps() {
+    return fetch("/api/follow-ups", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("Could not load follow-ups");
+      const payload = await response.json() as { followUps?: FollowUpRow[] };
+      const items = payload.followUps ?? [];
+      setFollowUps(items);
+      const completedCount = items.filter((item) => item.status === "completed").length;
+      const openCount = items.filter((item) => item.status !== "completed").length;
+      const urgentCount = items.filter((item) => (
+        item.status !== "completed" && item.owner === "me" && isDueNow(item.dueAt ?? "")
+      )).length;
+      const completionRate = items.length ? Math.round((completedCount / items.length) * 100) : 0;
+      setNudge({ openCount, urgentCount, completedCount, completionRate });
+      setFollowUpsFailed(false);
+    }).catch(() => setFollowUpsFailed(true));
+  }
+
+  function loadConnections() {
+    return fetchAllConnectionsMerged()
+      .then((items) => {
+        setConnections(sortConnections(items, "date").slice(0, 5));
+        setConnectionsFailed(false);
+      })
+      .catch(() => setConnectionsFailed(true));
+  }
+
+  function loadLocalData() {
+    const encounters = readEncounters();
+    const draftEncounters = encounters.filter((item) => item.status === "draft");
+    setReviewCount(draftEncounters.length);
+    const mostRecent = [...draftEncounters].sort((left, right) => (
+      new Date(right.startedAt || 0).getTime() - new Date(left.startedAt || 0).getTime()
+    ))[0];
+    setLatestDraftId(mostRecent?.id || "");
+
+    const library = readCardLibrary(localStorage);
+    setHasCards(library.length > 0);
+    const activeId = getActiveCardId(localStorage, library);
+    setCard(library.find((item) => item.id === activeId) || library[0] || null);
   }
 
   useEffect(() => {
-    void loadDashboard();
+    void Promise.resolve().then(async () => {
+      setGreeting(timeGreeting());
+      loadLocalData();
+      await Promise.allSettled([loadFollowUps(), loadConnections()]);
+      setHydrated(true);
+    });
     function refreshWhenVisible() {
-      if (document.visibilityState !== "hidden") void loadDashboard();
+      if (document.visibilityState !== "hidden") {
+        loadLocalData();
+        void loadFollowUps();
+        void loadConnections();
+      }
     }
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
@@ -65,89 +146,147 @@ export default function HomeDashboard() {
     };
   }, []);
 
+  const attentionHeadline = nudge.urgentCount
+    ? `${nudge.urgentCount} follow-up${nudge.urgentCount === 1 ? "" : "s"} need you`
+    : (nudge.completedCount || nudge.openCount)
+      ? "You’re all caught up"
+      : "No follow-ups yet";
+  const attentionCopy = (nudge.completedCount || nudge.openCount)
+    ? `${nudge.completedCount} completed · ${nudge.completionRate}% of ${nudge.completedCount + nudge.openCount} kept`
+    : "Your commitments will appear here.";
+
+  const activeWork = useMemo(() => {
+    const items: Array<{ key: string; icon: typeof ListChecksIcon; label: string; href: string }> = [];
+    if (reviewCount > 0 && latestDraftId) {
+      items.push({
+        key: "review",
+        icon: ListChecksIcon,
+        label: reviewCount === 1 ? "Ready to review" : `${reviewCount} ready to review`,
+        href: `/app/encounters/${latestDraftId}`,
+      });
+    }
+    return items;
+  }, [reviewCount, latestDraftId]);
+
+  const cardSubtitle = card
+    ? [card.name, [card.role, card.company].filter(Boolean).join(" · ")].filter(Boolean).join(" · ")
+    : "";
+
   return (
     <AppShell
       active="home"
       title="Home"
-      subtitle="Share your card. Capture the meeting. Follow up after."
-      actions={<LinkButton size="small" href="/app/encounters/new"><MicrophoneIcon size={16} weight="fill" />Capture</LinkButton>}
+      subtitle="What needs your attention."
     >
-      <div className="flow-page">
-        <section className="dashboard-hero">
+      <div className="flow-page home-page">
+        <div className="flow-heading">
           <div>
-            <span className="step-pill">Consumer</span>
-            <h1>Share your card in seconds</h1>
-            <p>Same loop as mobile: show QR first, capture what mattered, then finish the follow-up.</p>
+            <h1>{firstName ? `${greeting}, ${firstName}` : greeting}</h1>
+            <p>Here’s what needs your attention.</p>
           </div>
-        </section>
-
-        <Link className="home-followup-summary" href="/app/followups" prefetch={false}>
-          <span className={nudge.urgentCount ? "attention" : ""}>
-            <ListChecksIcon size={25} weight="bold" />
-          </span>
-          <div>
-            <strong>{nudge.urgentCount
-              ? `${nudge.urgentCount} follow-up${nudge.urgentCount === 1 ? "" : "s"} need you`
-              : nudge.openCount
-                ? `${nudge.openCount} follow-up${nudge.openCount === 1 ? "" : "s"} coming up`
-                : nudge.completedCount
-                  ? "You’re all caught up"
-                  : "No follow-ups yet"}</strong>
-            <small>{nudge.completedCount || nudge.openCount
-              ? `${nudge.completedCount} completed · ${nudge.completionRate}% of ${nudge.completedCount + nudge.openCount} kept`
-              : "Your commitments will appear here."}</small>
-          </div>
-          <ArrowRightIcon size={19} weight="bold" />
-        </Link>
-
-        <section className="journey-panel">
-          <header>
-            <div>
-              <span>Core journey</span>
-              <h2>From introduction to action.</h2>
-            </div>
-            <small>Matches mobile</small>
-          </header>
-          <div className="journey-grid">
-            {[
-              ["01", QrCodeIcon, "Show my QR", "Open your card and share instantly.", "/app/cards#share"],
-              ["02", MicrophoneIcon, "Capture context", "Record with consent while the meeting is fresh.", "/app/encounters/new"],
-              ["03", UsersThreeIcon, "Connections", "People who shared with you and cards you saved.", "/app/people"],
-              ["04", PaperPlaneTiltIcon, "Follow-ups", "Finish the next promised action.", "/app/followups"],
-            ].map(([number, Icon, title, text, href]) => (
-              <Link className="journey-step" href={String(href)} key={String(number)} prefetch={false}>
-                <span>{String(number)}</span>
-                <Icon size={23} weight="bold" />
-                <div><h3>{String(title)}</h3><p>{String(text)}</p></div>
-                <ArrowRightIcon size={17} weight="bold" />
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <div className="dashboard-grid">
-          <article className="dashboard-card dashboard-card-primary">
-            <span>01 · Share</span>
-            <IdentificationCardIcon size={30} weight="bold" />
-            <h2>Ready to share</h2>
-            <p>Your card, QR, wallet, and NFC tools live here, the same share surface as mobile.</p>
-            <LinkButton href="/app/cards#share">Show my QR <ArrowRightIcon size={16} weight="bold" /></LinkButton>
-          </article>
-          <article className="dashboard-card">
-            <span>02 · Capture</span>
-            <MicrophoneIcon size={30} weight="fill" />
-            <h2>Start an encounter</h2>
-            <p>Record with consent, keep private notes, and review every shared next step.</p>
-            <LinkButton variant="secondary" href="/app/encounters/new">Start capture <ArrowRightIcon size={16} weight="bold" /></LinkButton>
-          </article>
-          <article className="dashboard-card">
-            <span>03 · Connections</span>
-            <UsersThreeIcon size={30} weight="bold" />
-            <h2>People you’ve met</h2>
-            <p>Exchanges and saved cards, not the business CRM directory.</p>
-            <LinkButton variant="secondary" href="/app/people">Open connections <ArrowRightIcon size={16} weight="bold" /></LinkButton>
-          </article>
         </div>
+
+        {!hydrated ? (
+          <PageSkeleton rows={3} />
+        ) : (
+          <>
+            <Link className="home-followup-summary" href="/app/followups" prefetch={false}>
+              <span className={nudge.urgentCount ? "attention" : ""}>
+                <ListChecksIcon size={25} weight="bold" />
+              </span>
+              <div>
+                <strong>{attentionHeadline}</strong>
+                <small>{attentionCopy}</small>
+              </div>
+              <ArrowRightIcon size={19} weight="bold" />
+            </Link>
+            {followUpsFailed ? <p className="home-inline-error">Could not load follow-ups. <button type="button" onClick={() => void loadFollowUps()}>Retry</button></p> : null}
+
+            {activeWork.length ? (
+              <div className="home-active-work">
+                {activeWork.map((item) => (
+                  <Link className="home-active-work-row" href={item.href} key={item.key} prefetch={false}>
+                    <span><item.icon size={17} weight="bold" /></span>
+                    <strong>{item.label}</strong>
+                    <ArrowRightIcon size={15} weight="bold" />
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="home-quick-actions">
+              <LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture context</LinkButton>
+              <LinkButton variant="secondary" href="/app/cards#share"><QrCodeIcon size={17} weight="bold" />Share my card</LinkButton>
+            </div>
+
+            <section className="home-section">
+              <h2>Recent people</h2>
+              {connectionsFailed ? (
+                <p className="home-inline-error">Could not load recent people. <button type="button" onClick={() => void loadConnections()}>Retry</button></p>
+              ) : connections.length ? (
+                <div className="home-people-list">
+                  {connections.map((connection) => {
+                    const openFollowUp = followUps.find((item) => (
+                      item.status !== "completed"
+                      && ((item.personEmail || "").trim().toLowerCase() === (connection.email || "").trim().toLowerCase()
+                        || (item.personName || "").trim().toLowerCase() === connection.name.trim().toLowerCase())
+                    ));
+                    return (
+                      <Link className="home-person-row" href={`/app/people/${encodeURIComponent(connection.id)}`} key={connection.id} prefetch={false}>
+                        <img className="connections-avatar" src={connection.photoUrl || connectionAvatarUrl(connection)} alt="" />
+                        <span>
+                          <strong>{connection.name}</strong>
+                          <small>{connection.subtitle}{connection.connectedAt ? ` · ${formatConnectionDate(connection.connectedAt)}` : ""}</small>
+                        </span>
+                        {openFollowUp ? (
+                          <em className={isOverdue(openFollowUp.dueAt ?? "") ? "home-person-tag home-person-tag-overdue" : "home-person-tag"}>
+                            {isOverdue(openFollowUp.dueAt ?? "") ? "Overdue" : "Follow-up due"}
+                          </em>
+                        ) : null}
+                        <ArrowRightIcon size={15} weight="bold" />
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="home-empty-compact">
+                  <UsersThreeIcon size={20} weight="fill" />
+                  <div>
+                    <strong>No recent people yet.</strong>
+                    <p>Scan a card or add someone after your next conversation.</p>
+                  </div>
+                  <LinkButton size="small" variant="secondary" href="/app/scan">Scan</LinkButton>
+                </div>
+              )}
+            </section>
+
+            <section className="home-section">
+              <h2>My card</h2>
+              {hasCards && card ? (
+                <Link className="home-card-row" href="/app/cards" prefetch={false}>
+                  {card.photo ? <img className="home-card-avatar" src={card.photo} alt="" /> : (
+                    <span className="home-card-avatar home-card-avatar-fallback"><IdentificationCardIcon size={20} weight="bold" /></span>
+                  )}
+                  <span>
+                    <strong>{card.label || "My card"}</strong>
+                    <small>{cardSubtitle || "Add your details"}</small>
+                  </span>
+                  <em>Open card</em>
+                  <ArrowRightIcon size={15} weight="bold" />
+                </Link>
+              ) : (
+                <div className="home-empty-compact">
+                  <IdentificationCardIcon size={20} weight="bold" />
+                  <div>
+                    <strong>Create your first card</strong>
+                    <p>Publish a card so people can save your details instantly.</p>
+                  </div>
+                  <LinkButton size="small" variant="secondary" href="/app/cards">Create card</LinkButton>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
     </AppShell>
   );
