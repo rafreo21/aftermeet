@@ -465,8 +465,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.x5,
     paddingBottom: spacing.x3,
     backgroundColor: colors.canvas,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
     zIndex: 2,
     flexDirection: 'row',
     alignItems: 'flex-start',

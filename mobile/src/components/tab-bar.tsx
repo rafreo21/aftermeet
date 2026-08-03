@@ -1,0 +1,128 @@
+import type { ReactNode } from 'react';
+import { Pressable, StyleSheet, View, type GestureResponderEvent } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+
+import { useAppInsets } from '@/lib/safe-area';
+import { colors, radius, spacing } from '@/theme/tokens';
+
+const ITEM_SIZE = 52;
+const BADGE_SIZE = 40;
+
+type TabIcon = (props: { focused: boolean; color: string; size: number }) => ReactNode;
+
+type TabBarProps = {
+  state: { routes: { key: string; name: string }[]; index: number };
+  descriptors: Record<string, {
+    options: {
+      title?: string;
+      tabBarIcon?: TabIcon;
+      tabBarItemStyle?: unknown;
+      tabBarAccessibilityLabel?: string;
+    };
+  }>;
+  navigation: {
+    navigate: (name: string) => void;
+    emit: (event: { type: 'tabPress'; target: string; canPreventDefault: true }) => { defaultPrevented: boolean };
+  };
+};
+
+export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
+  const insets = useAppInsets();
+  const visibleRoutes = state.routes.filter((route) => {
+    const style = descriptors[route.key]?.options.tabBarItemStyle as { display?: string } | undefined | null;
+    return style?.display !== 'none';
+  });
+
+  return (
+    <View style={styles.wrap}>
+      <View style={[styles.bar, { marginBottom: Math.max(insets.bottom, spacing.x3) }]}>
+        {visibleRoutes.map((route) => {
+          const { options } = descriptors[route.key];
+          const routeIndex = state.routes.findIndex((item) => item.key === route.key);
+          const isFocused = state.index === routeIndex;
+          const label = options.title ?? route.name;
+
+          function onPress(_event: GestureResponderEvent) {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+          }
+
+          return (
+            <Animated.View
+              key={route.key}
+              layout={LinearTransition.duration(220)}
+              style={[styles.item, isFocused && styles.itemActive]}>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isFocused }}
+                accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+                onPress={onPress}
+                style={styles.itemPressable}>
+                <View style={[styles.badge, isFocused && styles.badgeActive]}>
+                  {options.tabBarIcon?.({
+                    focused: isFocused,
+                    color: isFocused ? colors.ink : colors.line,
+                    size: 21,
+                  })}
+                </View>
+                {isFocused ? (
+                  <Animated.Text
+                    entering={FadeIn.duration(160).delay(60)}
+                    exiting={FadeOut.duration(120)}
+                    numberOfLines={1}
+                    style={styles.label}>
+                    {label}
+                  </Animated.Text>
+                ) : null}
+              </Pressable>
+            </Animated.View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { backgroundColor: colors.canvas },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.x4,
+    marginTop: spacing.x2,
+    padding: 6,
+    gap: 6,
+    borderRadius: radius.round,
+    backgroundColor: colors.ink,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  item: {
+    height: ITEM_SIZE,
+    width: ITEM_SIZE,
+    borderRadius: radius.round,
+    backgroundColor: colors.inkSoft,
+    overflow: 'hidden',
+  },
+  itemActive: { flex: 1, width: undefined },
+  itemPressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    gap: spacing.x2,
+  },
+  badge: {
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  badgeActive: { backgroundColor: colors.accent },
+  label: { color: colors.white, fontSize: 14, fontWeight: '800', flexShrink: 1 },
+});
