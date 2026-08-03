@@ -107,7 +107,18 @@ export type EncounterPayload = {
   recording?: LocalRecordingMetadata;
   guestFollowUp?: GuestFollowUp;
   guestFollowUps?: GuestFollowUp[];
+  /** Server's last-write timestamp, used for optimistic-concurrency checks on save. Absent for local-only/never-synced encounters. */
+  updatedAt?: string;
 };
+
+export class EncounterConflictError extends Error {
+  serverUpdatedAt?: string;
+  constructor(message: string, serverUpdatedAt?: string) {
+    super(message);
+    this.name = 'EncounterConflictError';
+    this.serverUpdatedAt = serverUpdatedAt;
+  }
+}
 
 export type InboundExchange = {
   id: string;
@@ -657,7 +668,11 @@ export async function uploadEncounterRecordingToOneDrive(
   return payload.recording;
 }
 
-export async function saveEncounter(accessToken: string, encounter: EncounterPayload) {
+export async function saveEncounter(
+  accessToken: string,
+  encounter: EncounterPayload,
+  options?: { expectedUpdatedAt?: string },
+): Promise<{ updatedAt?: string }> {
   const response = await mobileFetch('/api/encounters', accessToken, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -680,6 +695,7 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
       participants: encounter.participants,
       status: encounter.status,
       shareToken: encounter.shareToken,
+      ...(options?.expectedUpdatedAt ? { expectedUpdatedAt: options.expectedUpdatedAt } : {}),
       recording: encounter.recording
         ? {
             durationSeconds: encounter.recording.durationSeconds,
@@ -701,14 +717,21 @@ export async function saveEncounter(accessToken: string, encounter: EncounterPay
         : null,
     }),
   });
-  const payload = await readMobileApiJson<{ ok?: boolean; error?: string }>(
+  const payload = await readMobileApiJson<{ ok?: boolean; error?: string; conflict?: boolean; serverUpdatedAt?: string; updatedAt?: string }>(
     response,
     'Could not read the meeting save response.',
   );
+  if (response.status === 409 && payload.conflict) {
+    throw new EncounterConflictError(
+      payload.error || 'This meeting changed on another device. Reload to see the latest version before saving your changes.',
+      payload.serverUpdatedAt,
+    );
+  }
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || 'Could not save this meeting.');
   }
   requestFollowUpNotificationSync();
+  return { updatedAt: payload.updatedAt };
 }
 
 export async function getEncounter(accessToken: string, id: string) {

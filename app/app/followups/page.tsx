@@ -42,9 +42,13 @@ export default function FollowupsPage() {
   const [done, setDone] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [retrying, setRetrying] = useState(false);
   const [scope, setScope] = useState<FollowUpScope>("current");
 
-  async function loadEncounters() {
+  async function loadEncounters(isRetry = false) {
+    if (isRetry) setRetrying(true);
+    setError("");
     try { const value = localStorage.getItem("aftermeet-last-contact-v1"); if (value) setContact(JSON.parse(value)); } catch {}
     try {
       const [, nextEncounters] = await Promise.all([
@@ -52,13 +56,16 @@ export default function FollowupsPage() {
         hydrateEncountersFromServer(),
       ]);
       setEncounters(nextEncounters);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Couldn’t load your follow-ups. Check your connection and try again.");
     } finally {
       setHydrated(true);
+      setRetrying(false);
     }
   }
 
   useEffect(() => {
-    void Promise.resolve().then(loadEncounters);
+    void Promise.resolve().then(() => loadEncounters());
   }, []);
 
   useEffect(() => {
@@ -163,6 +170,14 @@ export default function FollowupsPage() {
       <div className="flow-page">
         <div className="flow-heading"><div><h1>Keep the promise.</h1><p>Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton variant="secondary" href="/app/followups/new"><PlusIcon size={17} weight="bold" />Add follow-up</LinkButton><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture</LinkButton></div></div>
         {message && <StatusMessage tone="success" action={<Button size="small" variant="ghost" onClick={() => setMessage("")}>Dismiss</Button>}>{message}</StatusMessage>}
+        {error && (
+          <StatusMessage
+            tone="error"
+            action={<Button size="small" variant="secondary" disabled={retrying} onClick={() => void loadEncounters(true)}>{retrying ? "Retrying…" : "Retry"}</Button>}
+          >
+            {error}
+          </StatusMessage>
+        )}
         <div className="followups-tabs">
           <button type="button" className={scope === "current" ? "active" : ""} onClick={() => setScope("current")}>Current</button>
           <button type="button" className={scope === "past" ? "active" : ""} onClick={() => setScope("past")}>Past</button>
@@ -273,7 +288,18 @@ export default function FollowupsPage() {
               ))}
             </div>
           </section>
-        ) : scope === "current" && contact ? <div className="follow-list"><article className="follow-card"><div><span className="step-pill">{done ? "Completed" : "Legacy follow-up"}</span><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : <div className="empty-state"><div><span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span><h2>{scope === "current" ? "Your Inbox is clear" : "No past follow-ups yet"}</h2><p>{scope === "current" ? "Add a next step directly, or capture a conversation and turn its commitments into follow-ups." : "Completed follow-ups will appear here after you check them off."}</p>{scope === "current" ? <div className="empty-state-actions"><LinkButton href="/app/followups/new"><PlusIcon size={16} weight="bold" />Add follow-up</LinkButton><LinkButton variant="secondary" href="/app/encounters/new">Capture conversation</LinkButton></div> : null}</div></div>}
+        ) : scope === "current" && contact ? <div className="follow-list"><article className="follow-card"><div><span className="step-pill">{done ? "Completed" : "Legacy follow-up"}</span><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : error ? (
+          <div className="empty-state">
+            <div>
+              <span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span>
+              <h2>Couldn’t load your follow-ups</h2>
+              <p>We couldn’t confirm whether anything is due — this isn’t the same as being caught up. Check your connection and try again.</p>
+              <div className="empty-state-actions">
+                <Button disabled={retrying} onClick={() => void loadEncounters(true)}>{retrying ? "Retrying…" : "Retry"}</Button>
+              </div>
+            </div>
+          </div>
+        ) : <div className="empty-state"><div><span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span><h2>{scope === "current" ? "Your Inbox is clear" : "No past follow-ups yet"}</h2><p>{scope === "current" ? "Add a next step directly, or capture a conversation and turn its commitments into follow-ups." : "Completed follow-ups will appear here after you check them off."}</p>{scope === "current" ? <div className="empty-state-actions"><LinkButton href="/app/followups/new"><PlusIcon size={16} weight="bold" />Add follow-up</LinkButton><LinkButton variant="secondary" href="/app/encounters/new">Capture conversation</LinkButton></div> : null}</div></div>}
       </div>
     </AppShell>
   );

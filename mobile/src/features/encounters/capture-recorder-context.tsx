@@ -1,4 +1,5 @@
 import { createContext, type MutableRefObject, type PropsWithChildren, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import {
   registerActiveCaptureController,
@@ -99,6 +100,11 @@ export function CaptureRecorderProvider({ children }: PropsWithChildren) {
     });
   }, [activeStatus, recorder.pauseOrResume, recorder.stopRecording]);
 
+  const checkpointRef = useRef({ activeStatus, seconds: recorder.seconds });
+  useLayoutEffect(() => {
+    checkpointRef.current = { activeStatus, seconds: recorder.seconds };
+  }, [activeStatus, recorder.seconds]);
+
   useEffect(() => {
     const encounterId = handlersRef.current.encounterId;
     if (!activeStatus || !encounterId) return;
@@ -111,6 +117,25 @@ export function CaptureRecorderProvider({ children }: PropsWithChildren) {
       });
     }
   }, [activeStatus, recorder.seconds]);
+
+  // The 5-second interval above only fires on a whole-second boundary. A
+  // background/inactive transition can land mid-interval, so force an
+  // immediate checkpoint rather than risking up to 5s of unsaved recording
+  // state if the OS kills the app while backgrounded.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'background' && nextState !== 'inactive') return;
+      const encounterId = handlersRef.current.encounterId;
+      const { activeStatus: status, seconds } = checkpointRef.current;
+      if (!status || !encounterId) return;
+      void persistRecorderDraft(encounterId, {
+        durationSeconds: seconds,
+        sessionStatus: status,
+        failureReason: '',
+      });
+    });
+    return () => subscription.remove();
+  }, []);
 
   return (
     <CaptureRecorderHandlersContext.Provider value={handlersRef}>

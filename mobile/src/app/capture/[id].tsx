@@ -19,6 +19,7 @@ import {
   updateLocalRecordingSharedUrl,
 } from '@/features/encounters/local-recordings';
 import {
+  EncounterConflictError,
   getEncounter,
   saveEncounter,
   uploadEncounterRecording,
@@ -193,6 +194,36 @@ export default function CaptureDetailScreen() {
   );
   const canApprove = uploadStatus !== 'uploading';
 
+  /**
+   * Saves with optimistic-concurrency protection: if this encounter changed
+   * on another device since it was loaded here, the server rejects the
+   * write (409) instead of silently overwriting it. On conflict, the server
+   * record wins — reload it and surface a clear, recoverable message rather
+   * than losing either device's edit silently.
+   */
+  async function saveWithConflictGuard(next: EncounterPayload): Promise<EncounterPayload | null> {
+    if (!session?.access_token) return null;
+    try {
+      const result = await saveEncounter(session.access_token, next, { expectedUpdatedAt: encounter?.updatedAt });
+      const saved = { ...next, updatedAt: result.updatedAt ?? next.updatedAt };
+      setEncounter(saved);
+      return saved;
+    } catch (caught) {
+      if (caught instanceof EncounterConflictError) {
+        try {
+          const latest = await getEncounter(session.access_token, next.id);
+          setEncounter(latest);
+        } catch {
+          // If the reload itself fails, at least the stale local edit was not written over the server's copy.
+        }
+        setErrorMessage('This meeting changed on another device. We loaded the latest version below — please redo your change if it’s still needed.');
+        setErrorSheetOpen(true);
+        return null;
+      }
+      throw caught;
+    }
+  }
+
   function toggleGuestSharing(next: boolean) {
     setApproveHint('');
 
@@ -206,8 +237,7 @@ export default function CaptureDetailScreen() {
     if (isShared && encounter && session?.access_token) {
       const reverted = { ...encounter, status: 'reviewed' as const };
       setApproving(true);
-      saveEncounter(session.access_token, reverted)
-        .then(() => setEncounter(reverted))
+      saveWithConflictGuard(reverted)
         .catch((caught) => {
           setErrorMessage(caught instanceof Error ? caught.message : 'Could not turn off guest sharing.');
           setErrorSheetOpen(true);
@@ -221,10 +251,11 @@ export default function CaptureDetailScreen() {
     setSaving(true);
     setApproveHint('');
     try {
-      await saveEncounter(session.access_token, next);
-      setEncounter(next);
-      setSuccessMessage('Changes saved.');
-      setSuccessSheetOpen(true);
+      const saved = await saveWithConflictGuard(next);
+      if (saved) {
+        setSuccessMessage('Changes saved.');
+        setSuccessSheetOpen(true);
+      }
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Could not save changes.');
       setErrorSheetOpen(true);
@@ -290,10 +321,11 @@ export default function CaptureDetailScreen() {
     const next = { ...encounter, status: 'reviewed' as const };
     setConfirmingReview(true);
     try {
-      await saveEncounter(session.access_token, next);
-      setEncounter(next);
-      setSuccessMessage('Review confirmed. Your follow-ups are now active.');
-      setSuccessSheetOpen(true);
+      const saved = await saveWithConflictGuard(next);
+      if (saved) {
+        setSuccessMessage('Review confirmed. Your follow-ups are now active.');
+        setSuccessSheetOpen(true);
+      }
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Could not confirm this review.');
       setErrorSheetOpen(true);
@@ -332,11 +364,12 @@ export default function CaptureDetailScreen() {
     const next = { ...encounter, status: 'shared' as const };
     setApproving(true);
     try {
-      await saveEncounter(session.access_token, next);
-      setEncounter(next);
-      setApproveHint('');
-      setSuccessMessage('Guest view approved.');
-      setSuccessSheetOpen(true);
+      const saved = await saveWithConflictGuard(next);
+      if (saved) {
+        setApproveHint('');
+        setSuccessMessage('Guest view approved.');
+        setSuccessSheetOpen(true);
+      }
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Could not approve the guest view.');
       setErrorSheetOpen(true);

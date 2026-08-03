@@ -149,6 +149,8 @@ export type Encounter = {
   shareToken: string;
   guestFollowUp?: GuestFollowUp;
   guestFollowUps?: GuestFollowUp[];
+  /** Server's last-write timestamp, used for optimistic-concurrency checks on save. Absent for local-only/never-synced encounters. */
+  updatedAt?: string;
 };
 
 const STORAGE_KEY = "aftermeet-encounters-v1";
@@ -216,6 +218,7 @@ type EncounterRow = {
   share_token: string;
   guest_follow_up: GuestFollowUp | null;
   guest_follow_ups?: GuestFollowUp[];
+  updated_at?: string;
 };
 
 export function encounterFromApi(row: EncounterRow | Record<string, unknown>): Encounter {
@@ -246,6 +249,7 @@ export function encounterFromApi(row: EncounterRow | Record<string, unknown>): E
     shareToken: record.share_token,
     guestFollowUp: record.guest_follow_up ?? undefined,
     guestFollowUps: Array.isArray(record.guest_follow_ups) ? record.guest_follow_ups : [],
+    updatedAt: typeof record.updated_at === "string" ? record.updated_at : undefined,
   };
 }
 
