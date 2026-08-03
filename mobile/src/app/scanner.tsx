@@ -113,11 +113,13 @@ export default function ScannerScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={[styles.permission, { paddingTop: insets.top + spacing.x5, paddingBottom: insets.bottom + spacing.x5 }]}>
+      <View style={[styles.permission, { paddingTop: insets.top + spacing.x2, paddingBottom: insets.bottom + spacing.x5 }]}>
         <BackButton />
-        <Text style={styles.permissionTitle}>Camera access is needed to scan a card.</Text>
-        <Button onPress={async () => { await requestPermission(); }}>Allow camera</Button>
-        <Button variant="ghost" onPress={() => router.back()}>Not now</Button>
+        <View style={styles.permissionContent}>
+          <Text style={styles.permissionTitle}>Camera access is needed to scan a card.</Text>
+          <Button onPress={async () => { await requestPermission(); }}>Allow camera</Button>
+          <Button variant="ghost" onPress={() => router.back()}>Not now</Button>
+        </View>
       </View>
     );
   }
@@ -193,6 +195,7 @@ const styles = StyleSheet.create({
   },
   errorWrap: { marginTop: spacing.x4, gap: spacing.x2, alignItems: 'center' },
   errorText: { color: colors.white, textAlign: 'center', fontWeight: '600' },
-  permission: { flex: 1, paddingHorizontal: spacing.x6, justifyContent: 'center', gap: spacing.x4, backgroundColor: colors.canvas },
+  permission: { flex: 1, paddingHorizontal: spacing.x6, backgroundColor: colors.canvas },
+  permissionContent: { flex: 1, justifyContent: 'center', gap: spacing.x4 },
   permissionTitle: { color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '800' },
 });

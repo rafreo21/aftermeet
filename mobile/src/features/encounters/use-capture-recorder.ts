@@ -456,7 +456,7 @@ export function useCaptureRecorder({
         } else if (cleaned.trim()) {
           onTranscriptFinalizedRef.current?.(cleaned);
           onErrorRef.current(
-            'Transcript is ready, but no audio file was saved. Tap Record again — we need the file for playback and guest sharing.',
+            'Transcript is ready, but no audio file was saved. Tap Record again. We need the file for playback and guest sharing.',
           );
         } else {
           onErrorRef.current('Finish stopped the session, but no audio was saved. Tap Record and try again.');

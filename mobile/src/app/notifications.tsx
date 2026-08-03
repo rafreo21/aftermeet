@@ -10,7 +10,7 @@ import {
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Body, HeaderActionButton, PageHeader, ScreenFrame } from '@/components/ui';
+import { Body, PageHeader, ScreenFrame } from '@/components/ui';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
@@ -121,9 +121,14 @@ export default function NotificationCenterScreen() {
         title="Notifications"
         onBack={goBack}
         rightAction={unreadCount ? (
-          <HeaderActionButton accessibilityLabel="Mark all as read" onPress={() => void markAllRead()}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mark all as read"
+            hitSlop={4}
+            onPress={() => void markAllRead()}
+            style={({ pressed }) => [styles.markAllButton, pressed && styles.markAllButtonPressed]}>
             <Text style={styles.markAllText}>Mark all read</Text>
-          </HeaderActionButton>
+          </Pressable>
         ) : undefined}
       />
 
@@ -177,11 +182,22 @@ export default function NotificationCenterScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: spacing.x5,
     paddingTop: spacing.x2,
     paddingBottom: spacing.x6,
     gap: spacing.x2,
   },
+  markAllButton: {
+    height: 42,
+    paddingHorizontal: spacing.x4,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.round,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  markAllButtonPressed: { backgroundColor: colors.surfaceMuted },
   markAllText: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   emptyCard: {
     alignItems: 'flex-start',

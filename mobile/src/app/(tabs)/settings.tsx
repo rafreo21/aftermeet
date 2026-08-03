@@ -1,155 +1,44 @@
 import { router } from 'expo-router';
-import { Bell, CalendarCheck, CaretRight, CheckCircle, ClockCounterClockwise, EnvelopeSimple, ListChecks, ShareNetwork } from 'phosphor-react-native';
+import { Bell, CaretRight, CloudArrowUp, DeviceMobile, ListChecks, Scan } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BottomSheet } from '@/components/bottom-sheet';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
 import { SettingsSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
-import { getSupabase } from '@/lib/supabase';
-import { fetchFollowUps } from '@/features/follow-ups/follow-up-api';
+import { fetchConnectedAccounts, type ConnectedAccountStatus } from '@/features/integrations/integrations-api';
+import { deactivatePushToken } from '@/features/notifications/push-token-service';
 import {
-  deviceNotificationsEnabled,
-  followUpReminderTime,
-  notificationPermissionGranted,
-  REMINDER_TIME_OPTIONS,
-  requestNotificationPermission,
-  setDeviceNotificationsEnabled,
-  setFollowUpReminderTime,
-  syncFollowUpNotifications,
-  type ReminderTime,
-} from '@/features/notifications/notification-service';
-import {
-  deactivatePushToken,
-  pushDeliveryConfigured,
-  registerPushToken,
-} from '@/features/notifications/push-token-service';
-import {
-  fetchNotificationPreferences,
-  updateNotificationPreferences,
-  type NotificationPreferences,
-  type NotificationType,
-} from '@/features/notifications/notification-center-api';
-import { colors, spacing } from '@/theme/tokens';
-
-const NOTIFICATION_TYPE_ROWS: Array<{ type: NotificationType; icon: typeof Bell; label: string; hint: string }> = [
-  { type: 'review_ready', icon: CheckCircle, label: 'Transcript ready', hint: 'A capture is ready for your review' },
-  { type: 'follow_up_due', icon: CalendarCheck, label: 'Follow-up due', hint: 'A reviewed follow-up is due today' },
-  { type: 'follow_up_overdue', icon: ClockCounterClockwise, label: 'Follow-up overdue', hint: 'A reviewed follow-up is overdue' },
-  { type: 'shared_meeting_update', icon: ShareNetwork, label: 'Shared meeting updates', hint: 'A guest commits to their own follow-up' },
-];
+  readRecordingStorageDestination,
+  recordingStorageDestinationLabel,
+  writeRecordingStorageDestination,
+  type RecordingStorageDestination,
+} from '@/lib/recording-storage-preference';
+import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function SettingsScreen() {
   const { session, configured, signOut, loading } = useAuth();
-  const [remindersEnabled, setRemindersEnabled] = useState(true);
-  const [remindersSaving, setRemindersSaving] = useState(false);
-  const [deviceEnabled, setDeviceEnabled] = useState(false);
-  const [deviceSaving, setDeviceSaving] = useState(false);
-  const [devicePermission, setDevicePermission] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [pushActive, setPushActive] = useState(false);
-  const [reminderTime, setReminderTime] = useState<ReminderTime>('09:00');
-  const [typePreferences, setTypePreferences] = useState<NotificationPreferences | null>(null);
-  const [typePreferencesSaving, setTypePreferencesSaving] = useState<NotificationType | null>(null);
+  const [recordingDestination, setRecordingDestination] = useState<RecordingStorageDestination>('local_only');
+  const [recordingSheetOpen, setRecordingSheetOpen] = useState(false);
+  const [integrationStatus, setIntegrationStatus] = useState<ConnectedAccountStatus | null>(null);
 
   useEffect(() => {
-    if (!session) return;
-    const supabase = getSupabase();
-    void supabase?.rpc('get_my_reminder_preference').then(({ data }) => {
-      if (typeof data === 'boolean') setRemindersEnabled(data);
-    });
-  }, [session]);
-
-  useEffect(() => {
-    if (!session?.access_token) {
-      void Promise.resolve().then(() => setTypePreferences(null));
-      return;
-    }
-    void fetchNotificationPreferences(session.access_token).then(setTypePreferences).catch(() => undefined);
-  }, [session]);
-
-  async function toggleNotificationType(type: NotificationType, value: boolean) {
-    if (!session?.access_token || !typePreferences) return;
-    const next = { ...typePreferences, [type]: value };
-    setTypePreferences(next);
-    setTypePreferencesSaving(type);
-    try {
-      await updateNotificationPreferences(session.access_token, next);
-    } catch {
-      setTypePreferences(typePreferences);
-    } finally {
-      setTypePreferencesSaving(null);
-    }
-  }
-
-  useEffect(() => {
-    void Promise.all([
-      deviceNotificationsEnabled(),
-      notificationPermissionGranted(),
-      followUpReminderTime(),
-    ]).then(([enabled, granted, storedReminderTime]) => {
-      setDeviceEnabled(enabled && granted);
-      setDevicePermission(granted);
-      setReminderTime(storedReminderTime);
-    });
+    void readRecordingStorageDestination().then(setRecordingDestination);
   }, []);
 
-  async function chooseReminderTime(value: ReminderTime) {
-    setReminderTime(value);
-    await setFollowUpReminderTime(value);
-    if (deviceEnabled && session?.access_token) {
-      const followUps = await fetchFollowUps(session.access_token);
-      await syncFollowUpNotifications(followUps);
-    }
-    setNotificationMessage(`Device reminders will arrive at ${value} on their due date.`);
+  useEffect(() => {
+    if (!session?.access_token) return;
+    void fetchConnectedAccounts(session.access_token).then(setIntegrationStatus).catch(() => undefined);
+  }, [session?.access_token]);
+
+  async function selectRecordingDestination(destination: RecordingStorageDestination) {
+    setRecordingDestination(destination);
+    await writeRecordingStorageDestination(destination);
   }
 
-  async function toggleReminders(value: boolean) {
-    setRemindersEnabled(value);
-    setRemindersSaving(true);
-    try {
-      const supabase = getSupabase();
-      await supabase?.rpc('set_reminder_email_preference', { p_enabled: value });
-    } catch {
-      setRemindersEnabled(!value);
-    } finally {
-      setRemindersSaving(false);
-    }
-  }
-
-  async function toggleDeviceNotifications(value: boolean) {
-    setDeviceSaving(true);
-    setNotificationMessage('');
-    try {
-      if (!value) {
-        await setDeviceNotificationsEnabled(false);
-        setDeviceEnabled(false);
-        setPushActive(false);
-        if (session?.access_token) void deactivatePushToken(session.access_token);
-        return;
-      }
-
-      const granted = await requestNotificationPermission();
-      setDevicePermission(granted);
-      if (!granted) {
-        setDeviceEnabled(false);
-        setNotificationMessage('Notifications are blocked. Enable them for AfterMeet in your device settings.');
-        return;
-      }
-
-      await setDeviceNotificationsEnabled(true);
-      setDeviceEnabled(true);
-      if (session?.access_token) {
-        const followUps = await fetchFollowUps(session.access_token);
-        await syncFollowUpNotifications(followUps);
-        setPushActive(await registerPushToken(session.access_token));
-      }
-      setNotificationMessage('Device reminders are on. AfterMeet will remind you when a follow-up is due.');
-    } catch {
-      setDeviceEnabled(false);
-      setNotificationMessage('Could not enable device reminders. Please try again.');
-    } finally {
-      setDeviceSaving(false);
-    }
+  function openConnectedAccounts() {
+    setRecordingSheetOpen(false);
+    router.push('/settings/connected-accounts');
   }
 
   if (loading) {
@@ -193,120 +82,98 @@ export default function SettingsScreen() {
         <CaretRight size={18} color={colors.muted} weight="bold" />
       </Pressable>
 
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/settings/recent-scans')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <Scan size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Recent scans</Text>
+          </View>
+          <Text style={styles.linkHint}>People who scanned your card but aren&apos;t saved yet</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
       {session ? (
-        <Panel style={styles.notificationPanel}>
-          <View style={styles.notificationHeading}>
-            <Text style={styles.sectionTitle}>Notification preferences</Text>
-            <Text style={styles.linkHint}>Choose how AfterMeet reminds you about follow-ups.</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/settings/notifications')}
+          style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+          <View style={styles.linkCopy}>
+            <View style={styles.linkTitleRow}>
+              <Bell size={18} color={colors.ink} weight="bold" />
+              <Text style={styles.label}>Notification preferences</Text>
+            </View>
+            <Text style={styles.linkHint}>How AfterMeet reminds you about follow-ups</Text>
           </View>
-          <View style={styles.reminderRow}>
-            <View style={styles.linkCopy}>
-              <View style={styles.linkTitleRow}>
-                <EnvelopeSimple size={18} color={colors.ink} weight="bold" />
-                <Text style={styles.preferenceTitle}>Email reminders</Text>
-              </View>
-              <Text style={styles.linkHint}>Email me when a follow-up becomes overdue</Text>
-            </View>
-            <Switch
-              accessibilityLabel="Email me about overdue follow-ups"
-              value={remindersEnabled}
-              disabled={remindersSaving}
-              onValueChange={(value) => void toggleReminders(value)}
-              trackColor={{ false: colors.line, true: colors.accent }}
-              thumbColor={colors.white}
-            />
-          </View>
-          <View style={styles.preferenceDivider} />
-          <View style={styles.reminderRow}>
-            <View style={styles.linkCopy}>
-              <View style={styles.linkTitleRow}>
-                <Bell size={18} color={colors.ink} weight="bold" />
-                <Text style={styles.preferenceTitle}>Device notifications</Text>
-              </View>
-              <Text style={styles.linkHint}>Remind me on this phone when my follow-ups are due</Text>
-            </View>
-            <Switch
-              accessibilityLabel="Device follow-up notifications"
-              value={deviceEnabled}
-              disabled={deviceSaving}
-              onValueChange={(value) => void toggleDeviceNotifications(value)}
-              trackColor={{ false: colors.line, true: colors.accent }}
-              thumbColor={colors.white}
-            />
-          </View>
-          {deviceEnabled ? (
-            <View style={styles.reminderTimeBlock}>
-              <Text style={styles.preferenceTitle}>Reminder time</Text>
-              <View style={styles.reminderTimeOptions}>
-                {REMINDER_TIME_OPTIONS.map((option) => (
-                  <Pressable
-                    key={option}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: reminderTime === option }}
-                    onPress={() => void chooseReminderTime(option)}
-                    style={({ pressed }) => [
-                      styles.reminderTimeOption,
-                      reminderTime === option && styles.reminderTimeOptionSelected,
-                      pressed && styles.linkPanelPressed,
-                    ]}>
-                    <Text style={[
-                      styles.reminderTimeText,
-                      reminderTime === option && styles.reminderTimeTextSelected,
-                    ]}>{option}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.linkHint}>Uses this phone’s local time.</Text>
-              <Text style={styles.linkHint}>
-                {pushActive
-                  ? 'Background alerts are active on this device.'
-                  : pushDeliveryConfigured()
-                    ? 'Background alerts could not be enabled on this device. Reminders still work while AfterMeet is open or recently used.'
-                    : 'Background alerts (for a locked or closed phone) need a one-time app update and aren’t available in this build yet. Reminders still work while AfterMeet is open or recently used.'}
-              </Text>
-            </View>
-          ) : null}
-          {typePreferences ? (
-            <>
-              <View style={styles.preferenceDivider} />
-              <View style={styles.notificationHeading}>
-                <Text style={styles.preferenceTitle}>Notify me about</Text>
-              </View>
-              {NOTIFICATION_TYPE_ROWS.map((row) => (
-                <View key={row.type} style={styles.reminderRow}>
-                  <View style={styles.linkCopy}>
-                    <View style={styles.linkTitleRow}>
-                      <row.icon size={18} color={colors.ink} weight="bold" />
-                      <Text style={styles.preferenceTitle}>{row.label}</Text>
-                    </View>
-                    <Text style={styles.linkHint}>{row.hint}</Text>
-                  </View>
-                  <Switch
-                    accessibilityLabel={row.label}
-                    value={typePreferences[row.type]}
-                    disabled={typePreferencesSaving === row.type}
-                    onValueChange={(value) => void toggleNotificationType(row.type, value)}
-                    trackColor={{ false: colors.line, true: colors.accent }}
-                    thumbColor={colors.white}
-                  />
-                </View>
-              ))}
-            </>
-          ) : null}
-          {notificationMessage ? (
-            <View style={styles.statusRow}>
-              <Text style={[styles.statusMessage, !devicePermission && styles.statusError]}>
-                {notificationMessage}
-              </Text>
-              {!devicePermission ? (
-                <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()}>
-                  <Text style={styles.settingsLink}>Open device settings</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-        </Panel>
+          <CaretRight size={18} color={colors.muted} weight="bold" />
+        </Pressable>
       ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setRecordingSheetOpen(true)}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <Text style={styles.label}>Recording storage</Text>
+          <Text style={styles.linkHint}>{recordingStorageDestinationLabel(recordingDestination)}</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
+      <BottomSheet
+        visible={recordingSheetOpen}
+        title="Recording storage"
+        onClose={() => setRecordingSheetOpen(false)}>
+        <Text style={styles.linkHint}>Where new recordings are stored. Doesn&apos;t affect guest sharing.</Text>
+        <View style={styles.recordingOptions}>
+          {([
+            { id: 'local_only' as const, label: 'Only on this device', detail: 'Private local copy', icon: DeviceMobile, ready: true },
+            {
+              id: 'google_drive' as const,
+              label: 'Google Drive',
+              detail: integrationStatus?.google.connected && integrationStatus.google.capabilities.drive
+                ? 'Uses your connected Google account'
+                : 'Tap to connect Google',
+              icon: CloudArrowUp,
+              ready: Boolean(integrationStatus?.google.connected && integrationStatus.google.capabilities.drive),
+            },
+            {
+              id: 'onedrive' as const,
+              label: 'OneDrive',
+              detail: integrationStatus?.microsoft.connected && integrationStatus.microsoft.capabilities.onedrive
+                ? 'Uses your connected Microsoft account'
+                : 'Tap to connect Microsoft',
+              icon: CloudArrowUp,
+              ready: Boolean(integrationStatus?.microsoft.connected && integrationStatus.microsoft.capabilities.onedrive),
+            },
+          ]).map((option) => {
+            const selected = recordingDestination === option.id;
+            const Icon = option.icon;
+            return (
+              <Pressable
+                key={option.id}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                onPress={() => (option.ready ? void selectRecordingDestination(option.id) : openConnectedAccounts())}
+                style={[styles.recordingOption, selected && styles.recordingOptionActive]}>
+                <Icon size={18} color={colors.ink} weight="bold" />
+                <View style={styles.recordingOptionCopy}>
+                  <Text style={styles.recordingOptionLabel}>{option.label}</Text>
+                  <Text style={styles.recordingOptionDetail}>{option.detail}</Text>
+                </View>
+                {option.ready ? (
+                  <View style={[styles.recordingOptionRadio, selected && styles.recordingOptionRadioActive]} />
+                ) : (
+                  <CaretRight size={16} color={colors.muted} weight="bold" />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
 
       <Panel>
         <Text style={styles.label}>Account</Text>
@@ -347,33 +214,33 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
   },
   linkPanelPressed: { opacity: 0.82 },
-  reminderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.x3 },
-  notificationPanel: { gap: spacing.x4 },
-  notificationHeading: { gap: spacing.x1 },
-  sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
-  preferenceTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  preferenceDivider: { height: 1, backgroundColor: colors.line },
-  reminderTimeBlock: { gap: spacing.x2 },
-  reminderTimeOptions: { flexDirection: 'row', gap: spacing.x2 },
-  reminderTimeOption: {
-    minWidth: 68,
-    minHeight: 44,
-    paddingHorizontal: spacing.x3,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  reminderTimeOptionSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  reminderTimeText: { color: colors.ink, fontSize: 14, fontWeight: '700' },
-  reminderTimeTextSelected: { fontWeight: '900' },
-  statusMessage: { color: colors.ink, fontSize: 12, lineHeight: 18 },
-  statusError: { color: colors.danger },
-  statusRow: { gap: spacing.x2 },
-  settingsLink: { color: colors.ink, fontSize: 13, fontWeight: '800', textDecorationLine: 'underline' },
   linkCopy: { flex: 1, gap: 6 },
   linkTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   linkHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  recordingOptions: { gap: spacing.x2, marginTop: spacing.x3 },
+  recordingOption: {
+    minHeight: 64,
+    paddingHorizontal: spacing.x4,
+    paddingVertical: spacing.x3,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x3,
+  },
+  recordingOptionActive: { borderColor: colors.ink, backgroundColor: colors.surfaceMuted },
+  recordingOptionCopy: { flex: 1, minWidth: 0 },
+  recordingOptionLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  recordingOptionDetail: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 2 },
+  recordingOptionRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  recordingOptionRadioActive: { borderColor: colors.ink, backgroundColor: colors.accent },
 });

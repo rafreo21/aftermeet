@@ -175,13 +175,17 @@ export default function ConnectedAccountsScreen() {
     return null;
   }
 
-  return (
-    <Screen>
+  const header = (
+    <>
       <PageHeader eyebrow="Settings" title="Connected accounts" />
       <Body>
         Connect the accounts AfterMeet can use for approved outbound drafts, calendar scheduling, and future integrations.
       </Body>
+    </>
+  );
 
+  return (
+    <Screen header={header}>
       {session && initialLoading ? <SettingsSkeleton /> : null}
 
       {!session ? (

@@ -110,7 +110,7 @@ export default function ActivatePage() {
     <BusinessShell
       active="activate"
       title="Activate data"
-      subtitle="Business product — CRM sync, campaigns, and team activation. Not part of the consumer pilot."
+      subtitle="Business product: CRM sync, campaigns, and team activation. Not part of the consumer pilot."
     >
       <div className="flow-page activate-page">
         <div className="flow-heading">
@@ -187,7 +187,7 @@ export default function ActivatePage() {
           <header>
             <span className="step-pill">Outbound</span>
             <h2><PaperPlaneTiltIcon size={22} weight="bold" /> Review-first drafts</h2>
-            <p>Draft email and LinkedIn follow-ups from meeting context. Approve each message before opening Gmail or LinkedIn — nothing auto-sends.</p>
+            <p>Draft email and LinkedIn follow-ups from meeting context. Approve each message before opening Gmail or LinkedIn. Nothing auto-sends.</p>
           </header>
           <div className="activate-actions">
             <LinkButton href="/business/outbound"><PaperPlaneTiltIcon size={18} weight="bold" />Open outbound queue</LinkButton>

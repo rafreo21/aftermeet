@@ -110,13 +110,13 @@ export default function OutboundPage() {
     <BusinessShell
       active="outbound"
       title="Outbound queue"
-      subtitle="Business product — review-first draft queue. Not part of the consumer pilot."
+      subtitle="Business product: review-first draft queue. Not part of the consumer pilot."
     >
       <div className="flow-page">
         <div className="flow-heading">
           <div>
             <h1>Draft before you send.</h1>
-            <p>Autonomous outbound unlocks only after you prove the review habit — complete follow-ups or send approved drafts first.</p>
+            <p>Autonomous outbound unlocks only after you prove the review habit. Complete follow-ups or send approved drafts first.</p>
           </div>
           <LinkButton href="/app/followups"><PaperPlaneTiltIcon size={17} weight="bold" />Open Inbox</LinkButton>
         </div>

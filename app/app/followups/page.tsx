@@ -166,7 +166,7 @@ export default function FollowupsPage() {
   }
 
   return (
-    <AppShell active="followups" title="Follow-ups" subtitle="Everything left to do across your meetings — yours and theirs.">
+    <AppShell active="followups" title="Follow-ups" subtitle="Everything left to do across your meetings, yours and theirs.">
       <div className="flow-page">
         <div className="flow-heading"><div><h1>Keep the promise.</h1><p>Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton variant="secondary" href="/app/followups/new"><PlusIcon size={17} weight="bold" />Add follow-up</LinkButton><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture</LinkButton></div></div>
         {message && <StatusMessage tone="success" action={<Button size="small" variant="ghost" onClick={() => setMessage("")}>Dismiss</Button>}>{message}</StatusMessage>}
@@ -293,7 +293,7 @@ export default function FollowupsPage() {
             <div>
               <span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span>
               <h2>Couldn’t load your follow-ups</h2>
-              <p>We couldn’t confirm whether anything is due — this isn’t the same as being caught up. Check your connection and try again.</p>
+              <p>We couldn’t confirm whether anything is due. This isn’t the same as being caught up. Check your connection and try again.</p>
               <div className="empty-state-actions">
                 <Button disabled={retrying} onClick={() => void loadEncounters(true)}>{retrying ? "Retrying…" : "Retry"}</Button>
               </div>

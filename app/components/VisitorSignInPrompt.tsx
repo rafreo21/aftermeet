@@ -25,7 +25,7 @@ export function VisitorSignInPrompt({
       <div>
         <span className="step-pill"><UsersThreeIcon size={12} weight="bold" /> People you&apos;ve met</span>
         <strong>{compact ? "Remember this connection" : `Keep ${ownerName} in your directory`}</strong>
-        <p>Sign in with Google to save cards and shared meeting records — no full CRM setup.</p>
+        <p>Sign in with Google to save cards and shared meeting records. No full CRM setup.</p>
       </div>
       <LinkButton href={authHref} variant="secondary">
         <GoogleLogoIcon size={18} weight="bold" />

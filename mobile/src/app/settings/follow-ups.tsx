@@ -113,7 +113,7 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
     void markComplete(item, loadFollowUps).then(() => {
       setCompletedMessage(item.owner === 'guest'
         ? `Marked as done for ${item.personName.trim() || 'them'}.`
-        : 'Nice — marked as done.');
+        : 'Nice, marked as done.');
     });
   }
 
@@ -149,7 +149,7 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
           />
           <View style={styles.headerCopy}>
             <Body>
-              {historyOnly ? 'Everything you have checked off.' : 'Everything left to do — yours and theirs.'}
+              {historyOnly ? 'Everything you have checked off.' : 'Everything left to do, yours and theirs.'}
             </Body>
           </View>
 
@@ -244,6 +244,10 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
             completingId={completingId}
             onPressItem={(actionId) => {
               const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              // Close this sheet before running the action — it may open another
+              // sheet (missing contact info, audience choice), and two RN
+              // <Modal> instances visible at once hangs on iOS.
+              setActiveGroup(null);
               if (item) runFollowUp(item);
             }}
             onCompleteItem={(actionId) => {

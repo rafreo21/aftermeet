@@ -111,7 +111,7 @@ export function OutboundDraftPanel({
       ...action,
       outboundDraft: { ...draft, status: "approved", approvedAt: nowIso() },
     });
-    setMessage("Draft approved. Open your mail app when you are ready — nothing sends automatically.");
+    setMessage("Draft approved. Open your mail app when you are ready. Nothing sends automatically.");
   }
 
   function dismissDraft() {
@@ -140,7 +140,7 @@ export function OutboundDraftPanel({
       await navigator.clipboard.writeText(draft.body);
       setMessage("LinkedIn message copied.");
     } catch {
-      setMessage("Copy failed — select the text manually.");
+      setMessage("Copy failed. Select the text manually.");
     }
   }
 

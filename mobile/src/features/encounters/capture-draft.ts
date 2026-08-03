@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { EncounterPayload } from '@/features/encounters/encounter-api';
 import type { AudioRetention } from '@/features/encounters/local-recordings';
 import {
   migrateGatherPeople,
@@ -8,12 +7,21 @@ import {
   type GatherPerson,
 } from '@/features/encounters/gather-people';
 import type { FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
-import { normalizeFollowUpChannels } from '@/features/follow-ups/follow-up-channels';
+import { isFollowUpChannel } from '@/features/follow-ups/follow-up-channels';
 import type { CaptureSessionStatus } from '@/features/encounters/capture-session-state';
 import type { RemoteCaptureSession } from '@/features/encounters/encounter-api';
 
 export type { GatherPerson };
 export { MAX_GATHER_PEOPLE } from '@/features/encounters/gather-people';
+
+export type ManualFollowUpDraft = {
+  id: string;
+  title: string;
+  channel: FollowUpChannel;
+  owner: 'me' | 'guest';
+  targetPersonId: string;
+  dueAt: string;
+};
 
 export type CaptureWizardDraft = {
   step: number;
@@ -23,7 +31,6 @@ export type CaptureWizardDraft = {
   failureReason: string;
   recordingStartedAt: string;
   recordingStoppedAt: string;
-  recordingDestination: 'local_only' | 'shared_3_days' | 'google_drive' | 'onedrive';
   consent: boolean;
   consentMethod: 'verbal' | 'written';
   durationSeconds: number;
@@ -42,10 +49,7 @@ export type CaptureWizardDraft = {
   title: string;
   privateNotes: string;
   sharedSummary: string;
-  followUp: string;
-  followUpType: EncounterPayload['actions'][number]['channel'];
-  followUpChannels: FollowUpChannel[];
-  dueAt: string;
+  manualFollowUps: ManualFollowUpDraft[];
   gatherSessionStartedAt: string;
   importFileName: string;
   importMimeType: string;
@@ -108,17 +112,29 @@ function normalizeSessionStatus(parsed: Partial<CaptureWizardDraft>): CaptureSes
   return parsed.recordingUri?.trim() ? 'review_ready' : 'draft';
 }
 
+function normalizeManualFollowUps(value: unknown): ManualFollowUpDraft[] {
+  if (!Array.isArray(value)) return [];
+  const next: ManualFollowUpDraft[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const item = entry as Partial<ManualFollowUpDraft>;
+    if (typeof item.id !== 'string' || !item.id) continue;
+    next.push({
+      id: item.id,
+      title: typeof item.title === 'string' ? item.title : '',
+      channel: typeof item.channel === 'string' && isFollowUpChannel(item.channel) ? item.channel : 'email',
+      owner: item.owner === 'guest' ? 'guest' : 'me',
+      targetPersonId: typeof item.targetPersonId === 'string' ? item.targetPersonId : '',
+      dueAt: typeof item.dueAt === 'string' ? item.dueAt : '',
+    });
+  }
+  return next;
+}
+
 function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft {
   const people = migrateGatherPeople(parsed);
   const synced = syncLegacyPersonFields(people);
   const rawStep = typeof parsed.step === 'number' ? parsed.step : 0;
-  const followUpChannels = normalizeFollowUpChannels(
-    parsed.followUpChannels?.length
-      ? parsed.followUpChannels
-      : parsed.followUpType
-        ? [parsed.followUpType as FollowUpChannel]
-        : [],
-  );
   return {
     ...EMPTY_CAPTURE_DRAFT,
     ...parsed,
@@ -133,14 +149,8 @@ function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft
     failureReason: typeof parsed.failureReason === 'string' ? parsed.failureReason : '',
     recordingStartedAt: typeof parsed.recordingStartedAt === 'string' ? parsed.recordingStartedAt : '',
     recordingStoppedAt: typeof parsed.recordingStoppedAt === 'string' ? parsed.recordingStoppedAt : '',
-    recordingDestination: parsed.recordingDestination === 'shared_3_days'
-      || parsed.recordingDestination === 'google_drive'
-      || parsed.recordingDestination === 'onedrive'
-      ? parsed.recordingDestination
-      : 'local_only',
     privateNotes: typeof parsed.privateNotes === 'string' ? parsed.privateNotes : '',
-    followUpChannels,
-    followUpType: followUpChannels[0] || 'email',
+    manualFollowUps: normalizeManualFollowUps(parsed.manualFollowUps),
   };
 }
 
@@ -165,7 +175,6 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   failureReason: '',
   recordingStartedAt: '',
   recordingStoppedAt: '',
-  recordingDestination: 'local_only',
   consent: false,
   consentMethod: 'verbal',
   durationSeconds: 0,
@@ -184,10 +193,7 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   title: '',
   privateNotes: '',
   sharedSummary: '',
-  followUp: '',
-  followUpType: 'email',
-  followUpChannels: [],
-  dueAt: '',
+  manualFollowUps: [],
   gatherSessionStartedAt: '',
   importFileName: '',
   importMimeType: '',
@@ -365,7 +371,7 @@ export function hasCaptureDraftProgress(draft: CaptureWizardDraft) {
     || draft.people.length > 0
     || draft.title.trim().length > 0
     || draft.sharedSummary.trim().length > 0
-    || draft.followUp.trim().length > 0;
+    || draft.manualFollowUps.length > 0;
 }
 
 export async function setAuthReturnPath(path: string) {

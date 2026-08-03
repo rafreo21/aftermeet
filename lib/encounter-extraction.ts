@@ -182,8 +182,8 @@ export function applyExtractionDraft(
 }
 
 export const EXTRACTION_DRAFT_NOTE = {
-  ai: "AI draft from your transcript — check names and facts before saving.",
-  heuristic: "Suggested draft from your transcript — check names and facts before saving.",
-  aiNotConfigured: "Draft generated from your transcript — check names and facts before saving. For richer AI summaries, run vercel link and vercel env pull.",
-  aiFallback: "AI summary unavailable — using a structured draft from your transcript. Check names and facts before saving.",
+  ai: "AI draft from your transcript. Check names and facts before saving.",
+  heuristic: "Suggested draft from your transcript. Check names and facts before saving.",
+  aiNotConfigured: "Draft generated from your transcript. Check names and facts before saving. For richer AI summaries, run vercel link and vercel env pull.",
+  aiFallback: "AI summary unavailable. Using a structured draft from your transcript. Check names and facts before saving.",
 } as const;

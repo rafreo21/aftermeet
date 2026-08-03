@@ -101,6 +101,19 @@ export function syncLegacyPersonFields(people: GatherPerson[]) {
   };
 }
 
+export function personFromConnection(connection: {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}): GatherPerson {
+  return createGatherPerson({
+    name: connection.name || 'Unknown contact',
+    email: connection.email ?? '',
+    phone: connection.phone ?? '',
+  });
+}
+
 export function personFromExchange(exchange: {
   id: string;
   visitor_name: string;

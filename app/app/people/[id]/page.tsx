@@ -233,7 +233,7 @@ export default function ConnectionDetailPage() {
               ) : (
                 <LinkButton variant="secondary" href={captureHref}>
                   <MicrophoneIcon size={16} weight="bold" />
-                  No meetings yet — capture a conversation
+                  No meetings yet, capture a conversation
                 </LinkButton>
               )}
             </section>

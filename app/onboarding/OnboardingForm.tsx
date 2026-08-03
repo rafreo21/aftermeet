@@ -62,7 +62,7 @@ export function OnboardingForm({
         autoFocus
       />
       <p className="onboarding-footnote">
-        Time zone and language are detected automatically from your device — no need to configure locale codes here.
+        Time zone and language are detected automatically from your device. No need to configure locale codes here.
       </p>
       <Button fullWidth type="submit" loading={loading}>
         {loading ? "Saving…" : mode === "team" ? "Continue to workspace" : "Continue to card setup"}

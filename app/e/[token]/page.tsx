@@ -252,7 +252,7 @@ export default function GuestEncounterPage() {
                 maxLength={280}
                 required
               />
-              <small className="guest-follow-up-help">Be specific enough to remember later—for example, include what you will send, who you will contact, or when you will respond.</small>
+              <small className="guest-follow-up-help">Be specific enough to remember later. For example, include what you will send, who you will contact, or when you will respond.</small>
               <div className="guest-follow-up-fields">
                 <label>How?
                   <select value={followUpChannel} onChange={(event) => setFollowUpChannel(event.target.value as Encounter["actions"][number]["channel"])}>

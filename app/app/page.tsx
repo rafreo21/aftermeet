@@ -130,7 +130,7 @@ export default function HomeDashboard() {
             <span>01 · Share</span>
             <IdentificationCardIcon size={30} weight="bold" />
             <h2>Ready to share</h2>
-            <p>Your card, QR, wallet, and NFC tools live here — the same share surface as mobile.</p>
+            <p>Your card, QR, wallet, and NFC tools live here, the same share surface as mobile.</p>
             <LinkButton href="/app/cards#share">Show my QR <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
           <article className="dashboard-card">
@@ -144,7 +144,7 @@ export default function HomeDashboard() {
             <span>03 · Connections</span>
             <UsersThreeIcon size={30} weight="bold" />
             <h2>People you’ve met</h2>
-            <p>Exchanges and saved cards — not the business CRM directory.</p>
+            <p>Exchanges and saved cards, not the business CRM directory.</p>
             <LinkButton variant="secondary" href="/app/people">Open connections <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
         </div>

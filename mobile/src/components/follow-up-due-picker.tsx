@@ -19,6 +19,7 @@ import { colors, radius, spacing } from '@/theme/tokens';
 type FollowUpDuePickerProps = {
   dueAt: string;
   onChange: (dueAt: string) => void;
+  label?: string;
 };
 
 function dueDateValue(isoDate: string) {
@@ -26,7 +27,7 @@ function dueDateValue(isoDate: string) {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
+export function FollowUpDuePicker({ dueAt, onChange, label = 'When should you do this?' }: FollowUpDuePickerProps) {
   const activePreset = inferDuePreset(dueAt);
   const [iosPickerOpen, setIosPickerOpen] = useState(false);
   const [iosPickerDate, setIosPickerDate] = useState(() => dueDateValue(dueAt));
@@ -37,6 +38,7 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
       DateTimePickerAndroid.open({
         value,
         mode: 'date',
+        display: 'calendar',
         onChange: (event, date) => {
           if (event.type === 'set' && date) {
             onChange(toIsoDate(date));
@@ -70,7 +72,7 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>When should you do this?</Text>
+      <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
         {DUE_PRESETS.map((preset) => (
           <Pressable
@@ -109,14 +111,6 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
           </Pressable>
         </View>
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => selectPreset('none')}
-        style={[styles.skip, activePreset === 'none' && styles.skipActive]}>
-        <Text style={[styles.skipText, activePreset === 'none' && styles.skipTextActive]}>
-          No rush. Skip
-        </Text>
-      </Pressable>
 
       {Platform.OS === 'ios' ? (
         <BottomSheet
@@ -127,7 +121,7 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
           <DateTimePicker
             value={iosPickerDate}
             mode="date"
-            display="inline"
+            display="spinner"
             onChange={(_, date) => {
               if (date) setIosPickerDate(date);
             }}
@@ -140,7 +134,7 @@ export function FollowUpDuePicker({ dueAt, onChange }: FollowUpDuePickerProps) {
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.x3 },
-  label: { color: colors.ink, fontSize: 13, fontWeight: '700' },
+  label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
   chip: {
     paddingHorizontal: spacing.x3,
@@ -176,11 +170,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.x2,
   },
   customDate: { color: colors.ink, fontSize: 14, fontWeight: '800' },
-  skip: {
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.x1,
-  },
-  skipActive: {},
-  skipText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
-  skipTextActive: { color: colors.ink },
 });

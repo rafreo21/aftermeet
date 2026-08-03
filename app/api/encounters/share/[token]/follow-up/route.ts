@@ -28,7 +28,7 @@ async function notifyHostOfGuestFollowUp(
     if (!notificationTypeEnabled(owner?.notification_preferences, "shared_meeting_update")) return;
 
     const title = "A guest committed to a follow-up";
-    const body = "They said they'll follow up too — see the details on the meeting.";
+    const body = "They said they'll follow up too. See the details on the meeting.";
     const created = await createNotification(service, {
       userId: ownerId,
       workspaceId: encounter.workspace_id,

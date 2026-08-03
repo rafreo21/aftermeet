@@ -43,37 +43,10 @@ import {
   getActiveCaptureController,
   subscribeToActiveCapture,
 } from '@/features/encounters/active-capture-controller';
+import { formatAbsoluteTime, formatRelativeTime } from '@/lib/relative-time';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 type CaptureSort = 'recent' | 'oldest' | 'az';
-
-function formatWhen(iso: string) {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return '';
-  }
-}
-
-function formatRelative(iso: string) {
-  if (!iso) return '';
-  try {
-    const diffMs = Date.now() - new Date(iso).getTime();
-    const minutes = Math.floor(diffMs / 60000);
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return formatWhen(iso);
-  } catch {
-    return '';
-  }
-}
 
 function snippet(text: string, max = 140) {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -116,6 +89,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
   const [encounters, setEncounters] = useState<EncounterSummary[]>([]);
   const [drafts, setDrafts] = useState<CaptureDraftSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -220,6 +194,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
       setErrorSheetOpen(true);
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
       setRefreshing(false);
     }
   }, [session]);
@@ -329,8 +304,8 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
           </View> : null}
 
           <View style={styles.listBlock}>
-            {loading ? <CaptureListSkeleton count={4} /> : null}
-
+          {loading && !hasLoadedOnce ? <CaptureListSkeleton count={4} /> : (
+          <>
           {!historyOnly ? (
             <>
               {activeCapture ? (
@@ -385,7 +360,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
                       <ClockCounterClockwise size={18} color={colors.ink} weight="bold" />
                       <Text style={styles.personName}>{draftTitle(draft)}</Text>
                     </View>
-                    <Text style={styles.when}>{formatRelative(draft.updatedAt)}</Text>
+                    <Text style={styles.when}>{formatRelativeTime(draft.updatedAt)}</Text>
                   </View>
                   <Text style={[styles.draftMeta, draft.sessionStatus === 'failed' && styles.draftMetaInterrupted]}>
                     {draftStateLabel(draft)}
@@ -427,7 +402,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
                       <UserCircle size={18} color={colors.ink} weight="fill" />
                       <Text style={styles.personName}>{encounter.personName || 'Someone new'}</Text>
                     </View>
-                    <Text style={styles.when}>{formatRelative(encounter.endedAt || encounter.startedAt)}</Text>
+                    <Text style={styles.when}>{formatRelativeTime(encounter.endedAt || encounter.startedAt)}</Text>
                   </View>
                   <Text style={styles.captureTitle}>{encounter.title || `Meeting with ${encounter.personName || 'someone'}`}</Text>
                   <View style={styles.cardFooter}>
@@ -486,7 +461,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
                       <UserCircle size={18} color={colors.ink} weight="fill" />
                       <Text style={styles.personName}>{encounter.personName || 'Someone new'}</Text>
                     </View>
-                    <Text style={styles.when}>{formatWhen(encounter.startedAt || encounter.endedAt)}</Text>
+                    <Text style={styles.when}>{formatAbsoluteTime(encounter.startedAt || encounter.endedAt)}</Text>
                   </View>
 
                   <Text style={styles.captureTitle}>{encounter.title || `Meeting with ${encounter.personName || 'someone'}`}</Text>
@@ -518,7 +493,8 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
               ) : null}
             </>
           )}
-
+          </>
+          )}
           </View>
         </ScrollView>
         {!historyOnly && (syncNotice || (!session && drafts.length > 0)) ? (

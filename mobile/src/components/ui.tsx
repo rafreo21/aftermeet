@@ -22,6 +22,10 @@ type ScreenProps = PropsWithChildren<{
   contentContainerStyle?: ViewStyle;
   edges?: Array<'top' | 'bottom' | 'left' | 'right'>;
   reserveTabBar?: boolean;
+  /** Fixed content pinned below the scroll area, e.g. a primary action bar that shouldn't scroll away. */
+  footer?: ReactNode;
+  /** Fixed content pinned above the scroll area, e.g. a page header that shouldn't scroll away. */
+  header?: ReactNode;
 }>;
 
 export function Screen({
@@ -31,18 +35,20 @@ export function Screen({
   contentContainerStyle,
   edges = ['top'],
   reserveTabBar = true,
+  footer,
+  header,
 }: ScreenProps) {
   const insets = useAppInsets();
   const tabBarHeight = useTabBarHeight();
-  const paddingTop = edges.includes('top') ? insets.top + spacing.x2 : 0;
-  const paddingBottom = (edges.includes('bottom') ? insets.bottom : 0)
+  const paddingTop = edges.includes('top') && !header ? insets.top + spacing.x2 : 0;
+  const paddingBottom = (edges.includes('bottom') && !footer ? insets.bottom : 0)
     + (reserveTabBar ? tabBarHeight : spacing.x3);
 
   const content = (
     <View
       style={[
         styles.screenContent,
-        { paddingTop, paddingBottom },
+        { paddingTop, paddingBottom: footer ? spacing.x4 : paddingBottom },
         style,
       ]}>
       {children}
@@ -51,6 +57,11 @@ export function Screen({
 
   return (
     <View style={styles.safe}>
+      {header ? (
+        <View style={[styles.headerBar, { paddingTop: edges.includes('top') ? insets.top + spacing.x2 : 0 }]}>
+          {header}
+        </View>
+      ) : null}
       {scroll ? (
         <ScrollView
           contentContainerStyle={[styles.scroll, contentContainerStyle]}
@@ -59,6 +70,11 @@ export function Screen({
           {content}
         </ScrollView>
       ) : content}
+      {footer ? (
+        <View style={[styles.footerBar, { paddingBottom: Math.max(insets.bottom, spacing.x3) }]}>
+          {footer}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -235,6 +251,20 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   scroll: { paddingBottom: spacing.x2 },
   screenContent: { paddingHorizontal: spacing.x5, gap: spacing.x4 },
+  headerBar: {
+    gap: spacing.x4,
+    paddingHorizontal: spacing.x5,
+    paddingBottom: spacing.x4,
+    backgroundColor: colors.canvas,
+  },
+  footerBar: {
+    gap: spacing.x2,
+    paddingHorizontal: spacing.x5,
+    paddingTop: spacing.x3,
+    backgroundColor: colors.canvas,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
   eyebrow: { color: colors.muted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
   title: { color: colors.ink, fontSize: 40, lineHeight: 42, fontWeight: '700', letterSpacing: -1.5 },
   body: { color: colors.muted, fontSize: 15, lineHeight: 22 },

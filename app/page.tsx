@@ -28,7 +28,7 @@ const buildStatus = [
   {
     number: "03",
     title: "Remember context",
-    detail: "Record meeting, private notes, shared summary, and follow-up actions—the flow you liked—is live.",
+    detail: "Record meeting, private notes, shared summary, and follow-up actions. The flow you liked is live.",
     status: "In progress",
   },
   {
@@ -64,7 +64,7 @@ export default function Home() {
         <div className="eyebrow"><span /> Relationship workspace · July 2026</div>
         <h1>Remember every person.<br /><em>Make the next move.</em></h1>
         <div className="hero-bottom">
-          <p>AfterMeet connects four loops—<strong>share identity, capture people, remember context, activate data</strong>—without turning every meeting into CRM admin.</p>
+          <p>AfterMeet connects four loops: <strong>share identity, capture people, remember context, activate data</strong>, without turning every meeting into CRM admin.</p>
           <IconLinkButton className="circle-link" size="normal" variant="secondary" href="#product" aria-label="See the four loops"><ArrowDownIcon size={21} weight="bold" /></IconLinkButton>
         </div>
       </section>
@@ -103,7 +103,7 @@ export default function Home() {
         <div className="section-label light">02 / What we&apos;re shipping</div>
         <div className="direction-head">
           <h2>Build the missing<br />pieces first.</h2>
-          <p>These are the same four loops—not a competitor story. The app is catching up to the product: identity and capture now, context polish next, activation later.</p>
+          <p>These are the same four loops, not a competitor story. The app is catching up to the product: identity and capture now, context polish next, activation later.</p>
         </div>
         <div className="opportunity-grid opportunity-grid--four">
           {buildStatus.map((item) => (
@@ -127,7 +127,7 @@ export default function Home() {
             <span className="concept-name">AfterMeet</span>
             <h2>Share. Capture.<br /><em>Remember. Act.</em></h2>
           </div>
-          <p>For consultants and small teams who win work through conversations—but need something lighter than a CRM and sharper than a static business card.</p>
+          <p>For consultants and small teams who win work through conversations, but need something lighter than a CRM and sharper than a static business card.</p>
         </div>
 
         <div className="loop" aria-label="Product loop">
@@ -163,7 +163,7 @@ export default function Home() {
           <div className="feature-copy">
             <div className="feature"><span>01</span><div><h3>Share identity</h3><p>Card, QR, vCard, and email signature copy are in the app today. Wallet and NFC are still on the roadmap.</p></div></div>
             <div className="feature"><span>02</span><div><h3>Capture people</h3><p>Public cards now include a share-back form so visitors can send their details without creating an account.</p></div></div>
-            <div className="feature"><span>03</span><div><h3>Remember context</h3><p>The record-meeting flow—consent, notes, shared summary, follow-up actions—is the path we are polishing before CRM sync.</p></div></div>
+            <div className="feature"><span>03</span><div><h3>Remember context</h3><p>The record-meeting flow (consent, notes, shared summary, follow-up actions) is the path we are polishing before CRM sync.</p></div></div>
           </div>
         </div>
       </section>
@@ -190,7 +190,7 @@ export default function Home() {
           </div>
           <div className="metric-copy">
             <span>The metric that matters</span>
-            <h3>Follow-up completed—not merely drafted.</h3>
+            <h3>Follow-up completed, not merely drafted.</h3>
             <p>Measure the share of captured contacts who receive a reviewed, completed follow-up within three days of the meeting.</p>
           </div>
         </div>

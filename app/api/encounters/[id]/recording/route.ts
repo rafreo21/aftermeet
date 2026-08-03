@@ -13,11 +13,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const formData = await request.formData().catch(() => null);
   if (!formData) {
-    return NextResponse.json({ error: "The recording upload could not be read. Your local copy is safe—retry from the meeting.", code: "recording_upload_failed", retryable: true }, { status: 400 });
+    return NextResponse.json({ error: "The recording upload could not be read. Your local copy is safe, retry from the meeting.", code: "recording_upload_failed", retryable: true }, { status: 400 });
   }
   const audio = formData.get("audio");
   if (!(audio instanceof File) || audio.size <= 0) {
-    return NextResponse.json({ error: "No recording was received. Your local copy is safe—choose it again and retry.", code: "audio_missing", retryable: false }, { status: 400 });
+    return NextResponse.json({ error: "No recording was received. Your local copy is safe, choose it again and retry.", code: "audio_missing", retryable: false }, { status: 400 });
   }
 
   const supabase = await createApiSupabaseClient(request);
@@ -78,7 +78,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     // Do not strand an untracked object when the database write fails. A
     // subsequent retry can then upload and finalize the recording cleanly.
     await service.storage.from(ENCOUNTER_RECORDINGS_BUCKET).remove([storagePath]);
-    return NextResponse.json({ error: "The recording uploaded, but sharing could not be finalized. Your local copy is safe—retry from the meeting.", code: "recording_metadata_failed", retryable: true }, { status: 500 });
+    return NextResponse.json({ error: "The recording uploaded, but sharing could not be finalized. Your local copy is safe, retry from the meeting.", code: "recording_metadata_failed", retryable: true }, { status: 500 });
   }
 
   return NextResponse.json({

@@ -290,11 +290,14 @@ export function buildEncounterPayload(input: {
   campaignId?: string;
   sharedSummary: string;
   privateNotes: string;
-  followUp?: string;
-  followUpType?: FollowUpChannelId;
-  followUpChannels?: FollowUpChannel[];
+  manualFollowUps?: Array<{
+    title: string;
+    channel: FollowUpChannel;
+    owner: 'me' | 'guest';
+    targetPersonId: string;
+    dueAt: string;
+  }>;
   commitments?: EncounterExtractionCommitment[];
-  dueAt?: string;
   consentMethod?: 'verbal' | 'written';
   consentConfirmed?: boolean;
   status?: EncounterPayload['status'];
@@ -306,15 +309,6 @@ export function buildEncounterPayload(input: {
   const now = new Date().toISOString();
   const durationSeconds = Math.max(0, Math.round(input.durationSeconds ?? 0));
   const startedAt = input.startedAt || new Date(Date.now() - durationSeconds * 1000).toISOString();
-  const followUpTitle = input.followUp?.trim() ?? '';
-  const sanitizedFollowUpTitle = followUpTitle && !/^[\d+\s()-]+$/.test(followUpTitle)
-    ? followUpTitle
-    : '';
-  const channels = (input.followUpChannels?.length
-    ? input.followUpChannels
-    : sanitizedFollowUpTitle || input.followUpType
-      ? [input.followUpType ?? 'email'] as FollowUpChannel[]
-      : []) as FollowUpChannel[];
   const meetingPeople: EncounterParticipant[] = (input.people ?? [])
     .map((person) => ({
       id: person.id || createId(),
@@ -356,31 +350,29 @@ export function buildEncounterPayload(input: {
       participantId: assignee.id,
     });
   }
-  if (channels.length) {
-    for (const assignee of assignees) {
-      if (!assignee.name.trim()) continue;
-      const groupId = createId();
-      for (const channel of channels) {
-        const displayTitle = displayFollowUpTitle(sanitizedFollowUpTitle, channel);
-        const duplicatesSuggestion = selectedCommitments.some((commitment) => (
-          commitment.title.trim().toLocaleLowerCase() === displayTitle.toLocaleLowerCase()
-          && commitment.channel === channel
-        ));
-        if (duplicatesSuggestion) continue;
-        actions.push({
-          id: createId(),
-          title: displayTitle,
-          channel,
-          owner: 'me',
-          dueAt: input.dueAt?.trim() || '',
-          status: 'open',
-          assigneeName: assignee.name,
-          assigneeEmail: assignee.email,
-          participantId: assignee.id,
-          groupId: channels.length > 1 ? groupId : undefined,
-        });
-      }
-    }
+  for (const item of input.manualFollowUps ?? []) {
+    const title = item.title?.trim() ?? '';
+    const sanitizedTitle = title && !/^[\d+\s()-]+$/.test(title) ? title : '';
+    const owner: 'me' | 'guest' = item.owner === 'guest' ? 'guest' : 'me';
+    const assignee = assignees.find((person) => person.id === item.targetPersonId) ?? assignees[0];
+    if (!assignee?.name.trim()) continue;
+    const displayTitle = displayFollowUpTitle(sanitizedTitle, item.channel);
+    const duplicatesSuggestion = selectedCommitments.some((commitment) => (
+      commitment.title.trim().toLocaleLowerCase() === displayTitle.toLocaleLowerCase()
+      && commitment.channel === item.channel
+    ));
+    if (duplicatesSuggestion) continue;
+    actions.push({
+      id: createId(),
+      title: displayTitle,
+      channel: item.channel,
+      owner,
+      dueAt: item.dueAt?.trim() || '',
+      status: 'open',
+      assigneeName: assignee.name,
+      assigneeEmail: assignee.email,
+      participantId: assignee.id,
+    });
   }
 
   return {
@@ -408,44 +400,6 @@ export function buildEncounterPayload(input: {
     participants: assignees.filter((assignee) => assignee.name.trim().length >= 2),
     status: input.status || 'draft',
     shareToken: input.shareToken || createId().replace(/-/g, ''),
-  };
-}
-
-export function applyEncounterFollowUpSettings(
-  encounter: EncounterPayload,
-  input: {
-    followUpChannels: FollowUpChannel[];
-    dueAt: string;
-    privateNotes: string;
-  },
-): EncounterPayload {
-  const rebuilt = buildEncounterPayload({
-    id: encounter.id,
-    transcript: encounter.transcript,
-    title: encounter.title,
-    personName: encounter.personName,
-    personEmail: encounter.personEmail,
-    people: encounter.participants,
-    contactId: encounter.contactId,
-    exchangeId: encounter.exchangeId,
-    campaignId: encounter.campaignId,
-    sharedSummary: encounter.sharedSummary,
-    privateNotes: input.privateNotes,
-    followUpChannels: input.followUpChannels,
-    dueAt: input.dueAt,
-    consentMethod: encounter.consent.method,
-    status: encounter.status,
-    durationSeconds: encounter.durationSeconds,
-    startedAt: encounter.startedAt,
-    recording: encounter.recording,
-    shareToken: encounter.shareToken,
-  });
-
-  return {
-    ...encounter,
-    privateNotes: rebuilt.privateNotes,
-    actions: rebuilt.actions,
-    participants: rebuilt.participants,
   };
 }
 
@@ -605,8 +559,8 @@ export async function uploadEncounterRecording(
       : response.status === 413
         ? 'This recording is too large to upload for sharing. Your local copy is safe.'
         : raw.trim().startsWith('<')
-          ? 'The upload service returned an invalid response. Your local recording is safe—retry later.'
-          : 'The recording could not be uploaded for sharing. Your local copy is safe—check your connection and retry.';
+          ? 'The upload service returned an invalid response. Your local recording is safe. Retry later.'
+          : 'The recording could not be uploaded for sharing. Your local copy is safe. Check your connection and retry.';
     const error = new Error(payload.error || fallback);
     Object.assign(error, { code: payload.code, retryable: payload.retryable ?? response.status >= 500 });
     throw error;

@@ -3,6 +3,7 @@ import {
   CaretRight,
   CheckCircle,
   IdentificationCard,
+  MagnifyingGlass,
   Microphone,
   Pause,
   PencilSimple,
@@ -12,6 +13,7 @@ import {
   Scan,
   Stop,
   Trash,
+  X,
 } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
 import {
@@ -39,6 +41,7 @@ import {
   updateGatherPerson,
   type GatherPerson,
 } from '@/features/encounters/gather-people';
+import { filterConnections, type ConnectionItem } from '@/features/connections/connections-api';
 import type { CaptureRecorder } from '@/features/encounters/use-capture-recorder';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -54,6 +57,8 @@ type CaptureInteractionStepProps = {
   exchanges: InboundExchange[];
   loadingExchanges: boolean;
   onLinkExchange: (exchange: InboundExchange) => void;
+  connections?: ConnectionItem[];
+  onLinkConnection?: (connection: ConnectionItem) => void;
   onEnsureAuth: () => Promise<string | null>;
   getPriorMeetingCount?: (email: string) => number;
   knownConnectionEmails?: string[];
@@ -184,6 +189,8 @@ export function CaptureInteractionStep({
   exchanges,
   loadingExchanges,
   onLinkExchange,
+  connections = [],
+  onLinkConnection,
   onEnsureAuth,
   getPriorMeetingCount,
   knownConnectionEmails = [],
@@ -195,6 +202,7 @@ export function CaptureInteractionStep({
     openConsentOnMount && recorder.recordingState === 'idle' ? 'record' : null
   ));
   const [addPersonSheetOpen, setAddPersonSheetOpen] = useState(false);
+  const [personSearchQuery, setPersonSearchQuery] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [scansOpen, setScansOpen] = useState(false);
@@ -524,52 +532,114 @@ export function CaptureInteractionStep({
       <BottomSheet
         visible={addPersonSheetOpen}
         title="Add someone"
-        onClose={() => setAddPersonSheetOpen(false)}>
+        onClose={() => {
+          setAddPersonSheetOpen(false);
+          setPersonSearchQuery('');
+        }}>
         <Body>Choose the quickest way to connect this person to the meeting.</Body>
-        <View style={styles.personChoiceList}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={atCapacity}
-            onPress={() => openFromPersonChooser('manual')}
-            style={[styles.personChoice, atCapacity && styles.personChoiceDisabled]}>
-            <View style={styles.personChoiceIcon}>
-              <PencilSimple size={20} color={colors.ink} weight="bold" />
-            </View>
-            <View style={styles.personChoiceCopy}>
-              <Text style={styles.personChoiceTitle}>Add manually</Text>
-              <Text style={styles.personChoiceHint}>{atCapacity ? 'Meeting is at its participant limit' : 'Enter their name and contact details'}</Text>
-            </View>
-            <CaretRight size={16} color={colors.muted} weight="bold" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => openFromPersonChooser('qr')}
-            style={styles.personChoice}>
-            <View style={styles.personChoiceIcon}>
-              <QrCode size={20} color={colors.ink} weight="bold" />
-            </View>
-            <View style={styles.personChoiceCopy}>
-              <Text style={styles.personChoiceTitle}>Share QR code</Text>
-              <Text style={styles.personChoiceHint}>Let them scan your card and return their details</Text>
-            </View>
-            <CaretRight size={16} color={colors.muted} weight="bold" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => openFromPersonChooser('scans')}
-            style={styles.personChoice}>
-            <View style={styles.personChoiceIcon}>
-              <Scan size={20} color={colors.ink} weight="bold" />
-            </View>
-            <View style={styles.personChoiceCopy}>
-              <Text style={styles.personChoiceTitle}>Recent scans</Text>
-              <Text style={styles.personChoiceHint}>{exchanges.length ? `${exchanges.length} available to add` : 'Choose someone who recently scanned your card'}</Text>
-            </View>
-            {exchanges.length > 0 ? <View style={styles.choiceCount}>
-              <Text style={styles.choiceCountText}>{exchanges.length}</Text>
-            </View> : <CaretRight size={16} color={colors.muted} weight="bold" />}
-          </Pressable>
+        <View style={styles.personSearchRow}>
+          <MagnifyingGlass size={18} color={colors.muted} weight="bold" />
+          <TextInput
+            value={personSearchQuery}
+            onChangeText={setPersonSearchQuery}
+            placeholder="Search your contacts"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            style={styles.personSearchInput}
+          />
+          {personSearchQuery.trim() ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              onPress={() => setPersonSearchQuery('')}
+              hitSlop={8}>
+              <X size={18} color={colors.muted} weight="bold" />
+            </Pressable>
+          ) : null}
         </View>
+        {(() => {
+          const query = personSearchQuery.trim();
+          const searchResults = query ? filterConnections(connections, query) : [];
+          if (query && searchResults.length) {
+            return (
+              <View style={[styles.exchangeList, styles.personSearchResults]}>
+                {searchResults.map((connection) => {
+                  const email = connection.email?.trim().toLowerCase();
+                  const already = Boolean(email) && people.some((person) => person.email.trim().toLowerCase() === email);
+                  const disabled = already || atCapacity;
+                  return (
+                    <Pressable
+                      key={connection.id}
+                      accessibilityRole="button"
+                      disabled={disabled}
+                      onPress={() => {
+                        onLinkConnection?.(connection);
+                        setAddPersonSheetOpen(false);
+                        setPersonSearchQuery('');
+                      }}
+                      style={[
+                        styles.exchangeCard,
+                        already && styles.exchangeCardSelected,
+                        disabled && !already && styles.exchangeCardDisabled,
+                      ]}>
+                      <Text style={styles.exchangeName}>{connection.name}</Text>
+                      <Text style={styles.exchangeMeta}>
+                        {[connection.email, connection.phone].filter(Boolean).join(' · ') || connection.subtitle}
+                      </Text>
+                      {already ? <Text style={styles.exchangeSelected}>Added</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            );
+          }
+          return (
+            <View style={styles.personChoiceList}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={atCapacity}
+                onPress={() => openFromPersonChooser('manual')}
+                style={[styles.personChoice, atCapacity && styles.personChoiceDisabled]}>
+                <View style={styles.personChoiceIcon}>
+                  <PencilSimple size={20} color={colors.ink} weight="bold" />
+                </View>
+                <View style={styles.personChoiceCopy}>
+                  <Text style={styles.personChoiceTitle}>Add manually</Text>
+                  <Text style={styles.personChoiceHint}>{atCapacity ? 'Meeting is at its participant limit' : 'Enter their name and contact details'}</Text>
+                </View>
+                <CaretRight size={16} color={colors.muted} weight="bold" />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openFromPersonChooser('qr')}
+                style={styles.personChoice}>
+                <View style={styles.personChoiceIcon}>
+                  <QrCode size={20} color={colors.ink} weight="bold" />
+                </View>
+                <View style={styles.personChoiceCopy}>
+                  <Text style={styles.personChoiceTitle}>Share QR code</Text>
+                  <Text style={styles.personChoiceHint}>Let them scan your card and return their details</Text>
+                </View>
+                <CaretRight size={16} color={colors.muted} weight="bold" />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openFromPersonChooser('scans')}
+                style={styles.personChoice}>
+                <View style={styles.personChoiceIcon}>
+                  <Scan size={20} color={colors.ink} weight="bold" />
+                </View>
+                <View style={styles.personChoiceCopy}>
+                  <Text style={styles.personChoiceTitle}>Recent scans</Text>
+                  <Text style={styles.personChoiceHint}>{exchanges.length ? `${exchanges.length} available to add` : 'Choose someone who recently scanned your card'}</Text>
+                </View>
+                {exchanges.length > 0 ? <View style={styles.choiceCount}>
+                  <Text style={styles.choiceCountText}>{exchanges.length}</Text>
+                </View> : <CaretRight size={16} color={colors.muted} weight="bold" />}
+              </Pressable>
+            </View>
+          );
+        })()}
       </BottomSheet>
 
       <BottomSheet
@@ -885,6 +955,20 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   emptyPeopleText: { color: colors.muted, fontSize: 13, textAlign: 'center' },
+  personSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.x2,
+    minHeight: 48,
+    paddingHorizontal: spacing.x4,
+    marginTop: spacing.x3,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
+  },
+  personSearchInput: { flex: 1, color: colors.ink, fontSize: 15 },
+  personSearchResults: { marginTop: spacing.x3 },
   personChoiceList: { gap: spacing.x2, marginTop: spacing.x3 },
   personChoice: {
     minHeight: 72,

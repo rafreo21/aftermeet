@@ -220,7 +220,7 @@ export default function ContactsPage() {
   </>;
 
   return (
-    <BusinessShell active="contacts" title="Contacts CRM" subtitle="Business directory — imports, manual CRM records, and HubSpot-ready contact detail." actions={<LinkButton size="small" variant="ghost" href="/business/activate">Activate data</LinkButton>}>
+    <BusinessShell active="contacts" title="Contacts CRM" subtitle="Business directory: imports, manual CRM records, and HubSpot-ready contact detail." actions={<LinkButton size="small" variant="ghost" href="/business/activate">Activate data</LinkButton>}>
       <div className="flow-page">
         <input ref={importInput} className="sr-only" type="file" accept=".csv,.vcf,text/csv,text/vcard" onChange={importContacts} />
         <div className="flow-heading"><div><h1>Business contact directory.</h1><p>CRM-style records and imports. For everyday exchanges, use Consumer → Connections.</p></div></div>
@@ -281,7 +281,7 @@ export default function ContactsPage() {
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-center xl:gap-4 xl:flex-1 xl:max-w-3xl">
                       <div className="min-w-0">
                         <p className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[#98a39a]">Company</p>
-                        <p className="m-0 mt-1 truncate text-sm font-semibold text-[#163300]">{contact.company || "—"}</p>
+                        <p className="m-0 mt-1 truncate text-sm font-semibold text-[#163300]">{contact.company || "N/A"}</p>
                         {contact.source ? (
                           <p className="m-0 mt-0.5 truncate text-xs text-[#60675d]">{contactSourceLabel(contact.source)}</p>
                         ) : null}

@@ -369,7 +369,7 @@ export function LinkedInImportClient({ initial }: { initial: LinkedInImportIniti
         <header>
           <span className="step-pill">Capture people</span>
           <h1><LinkedinLogoIcon size={28} weight="bold" />LinkedIn profile</h1>
-          <p>Review each field below. Personal email and phone come from LinkedIn Contact info. Use Find work email to run our verified database waterfall — we never fill guessed addresses.</p>
+          <p>Review each field below. Personal email and phone come from LinkedIn Contact info. Use Find work email to run our verified database waterfall. We never fill guessed addresses.</p>
         </header>
 
         <ProfileCaptureTable

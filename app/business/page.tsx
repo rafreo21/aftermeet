@@ -15,7 +15,7 @@ export default function BusinessHomePage() {
     <BusinessShell
       active="home"
       title="Business"
-      subtitle="Business / not consumer pilot — CRM, activation, and outbound."
+      subtitle="Business / not consumer pilot: CRM, activation, and outbound."
     >
       <div className="flow-page">
         <section className="dashboard-hero">
@@ -31,7 +31,7 @@ export default function BusinessHomePage() {
             <span>Identity</span>
             <IdentificationCardIcon size={30} weight="bold" />
             <h2>Create your card</h2>
-            <p>Same card creation flow as mobile — publish the identity your team shares.</p>
+            <p>Same card creation flow as mobile. Publish the identity your team shares.</p>
             <LinkButton href="/business/cards">Open my card <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
           <article className="dashboard-card">
@@ -52,7 +52,7 @@ export default function BusinessHomePage() {
             <span>Outbound</span>
             <PaperPlaneTiltIcon size={30} weight="bold" />
             <h2>Outbound queue</h2>
-            <p>Review-first drafts before send — not part of the consumer pilot.</p>
+            <p>Review-first drafts before send. Not part of the consumer pilot.</p>
             <LinkButton variant="secondary" href="/business/outbound">Open outbound <ArrowRightIcon size={16} weight="bold" /></LinkButton>
           </article>
         </div>

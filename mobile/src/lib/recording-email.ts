@@ -30,7 +30,7 @@ export function buildRecordingShareEmail(input: RecordingShareEmailInput) {
     '',
     'Please attach the meeting recording file before sending if your email app did not attach it automatically.',
     '',
-    '— Sent via AfterMeet',
+    'Sent via AfterMeet',
   ].filter((line) => line !== '');
 
   return {

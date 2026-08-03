@@ -57,6 +57,10 @@ export function FollowUpsSheet({
 
   function runGroup(group: FollowUpGroup) {
     if (group.items.length === 1) {
+      // Close this sheet before running the action — it may open another
+      // sheet (missing contact info, audience choice), and two RN <Modal>
+      // instances visible at once hangs on iOS.
+      onClose();
       onPressItem(group.items[0]);
       return;
     }
@@ -124,6 +128,11 @@ export function FollowUpsSheet({
             completingId={completingId}
             onPressItem={(actionId) => {
               const item = activeGroup.items.find((entry) => entry.actionId === actionId);
+              // Close both this sheet and the outer list sheet before running the
+              // action — it may open another sheet (missing contact info, audience
+              // choice), and two RN <Modal> instances visible at once hangs on iOS.
+              setActiveGroup(null);
+              onClose();
               if (item) onPressItem(item);
             }}
             onCompleteItem={(actionId) => {

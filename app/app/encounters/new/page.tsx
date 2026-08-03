@@ -149,11 +149,11 @@ const stepHeadings = [
   },
   {
     title: "Who did you meet?",
-    copy: "Start with the person, then capture what mattered. Suggested drafts are starting points — not final truth.",
+    copy: "Start with the person, then capture what mattered. Suggested drafts are starting points, not final truth.",
   },
   {
     title: "Connect their details.",
-    copy: "Link this moment to someone in People, or share your card. Email syncs when they add you — not during capture.",
+    copy: "Link this moment to someone in People, or share your card. Email syncs when they add you, not during capture.",
   },
   {
     title: "What happens next?",
@@ -556,7 +556,7 @@ export default function NewEncounterPage() {
     setTranscriptionRetryable(result.retryable === true);
     setDraftMessage(result.error || (result.unavailable === "ai_not_configured"
       ? "Automatic transcription is not configured. Your recording is safe; paste or type a transcript to continue."
-      : "Transcription is temporarily unavailable. Your recording is safe—retry later or continue with manual notes."));
+      : "Transcription is temporarily unavailable. Your recording is safe. Retry later or continue with manual notes."));
     setDraftSource("");
     return cleanedTranscript;
   }
@@ -1276,7 +1276,7 @@ export default function NewEncounterPage() {
               if (Number.isFinite(duration)) setSeconds(Math.round(duration));
             }}>Your browser does not support audio playback.</audio>}
             {transcriptOpen && <div className="live-transcript">
-              <header><div><strong>Live transcript</strong><small>{transcriptStatus === "receiving" ? "Receiving speech live" : transcriptStatus === "listening" ? "Listening for words…" : transcriptStatus === "transcribing" ? "Transcribing recording…" : transcriptStatus === "unavailable" ? "Live transcription unavailable—audio is still recording" : "Editable meeting record"}</small></div></header>
+              <header><div><strong>Live transcript</strong><small>{transcriptStatus === "receiving" ? "Receiving speech live" : transcriptStatus === "listening" ? "Listening for words…" : transcriptStatus === "transcribing" ? "Transcribing recording…" : transcriptStatus === "unavailable" ? "Live transcription unavailable. Audio is still recording" : "Editable meeting record"}</small></div></header>
               <textarea
                 ref={transcriptAreaRef}
                 aria-label="Live transcript"
@@ -1304,7 +1304,7 @@ export default function NewEncounterPage() {
                   Retry transcription
                 </Button>
               ) : null}
-              {draftMessage && <p className="encounter-draft-note"><span className="encounter-draft-label">{draftSource === "ai" ? "AI draft" : "Suggested draft"}</span>{draftMessage.replace(/^(AI draft|Suggested draft)[^—]*—\s*/, "")}{draftLoading ? " Generating…" : ""}</p>}
+              {draftMessage && <p className="encounter-draft-note"><span className="encounter-draft-label">{draftSource === "ai" ? "AI draft" : "Suggested draft"}</span>{draftMessage.replace(/^(AI draft|Suggested draft)[^.]*\.\s*/, "")}{draftLoading ? " Generating…" : ""}</p>}
               {uncertainFields.length > 0 && <p className="encounter-draft-uncertain">Double-check: {uncertainFields.join(", ")}</p>}
             </div>}
             <small className="recording-note">{audioUrl ? `This ${recordingSource === "imported" ? "imported recording" : "recording"} will be stored locally when you save the encounter.` : "Record here or import audio from Voice Memos, Files, or your device recorder."}</small>
@@ -1360,7 +1360,7 @@ export default function NewEncounterPage() {
               <span className="encounter-card-icon"><MagicWandIcon size={22} weight="bold" /></span>
               <div className="encounter-card-copy"><h2>Meeting context</h2><p>Who was it with and what mattered? Contact details sync on the next step.</p></div>
             </header>
-            {draftMessage && <p className="encounter-draft-note"><span className="encounter-draft-label">{draftSource === "ai" ? "AI draft" : "Suggested draft"}</span>{draftMessage.replace(/^(AI draft|Suggested draft)[^—]*—\s*/, "")}{draftLoading ? " Generating…" : ""}</p>}
+            {draftMessage && <p className="encounter-draft-note"><span className="encounter-draft-label">{draftSource === "ai" ? "AI draft" : "Suggested draft"}</span>{draftMessage.replace(/^(AI draft|Suggested draft)[^.]*\.\s*/, "")}{draftLoading ? " Generating…" : ""}</p>}
             {uncertainFields.length > 0 && <p className="encounter-draft-uncertain">Double-check: {uncertainFields.join(", ")}</p>}
             {contacts.length > 0 && (
               <SelectField
@@ -1439,8 +1439,8 @@ export default function NewEncounterPage() {
             </div>
             <ActiveCampaignField value={campaignId} onChange={setCampaignId} />
             <TextField label="Meeting title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Coffee after ProductCon" hint="Optional if the full name is enough" />
-            <TextAreaField label="Private notes" hint="Only you — what they said that matters" rows={4} value={form.privateNotes} onChange={(event) => update("privateNotes", event.target.value)} placeholder="Key points from the other person: their priorities, constraints, commitments, and anything you'd want to remember later." />
-            <TextAreaField label="Shared meeting summary" hint="Review before sharing" rows={4} value={form.sharedSummary} onChange={(event) => update("sharedSummary", event.target.value)} placeholder="What you both discussed and agreed — neutral enough to share with them." />
+            <TextAreaField label="Private notes" hint="Only you: what they said that matters" rows={4} value={form.privateNotes} onChange={(event) => update("privateNotes", event.target.value)} placeholder="Key points from the other person: their priorities, constraints, commitments, and anything you'd want to remember later." />
+            <TextAreaField label="Shared meeting summary" hint="Review before sharing" rows={4} value={form.sharedSummary} onChange={(event) => update("sharedSummary", event.target.value)} placeholder="What you both discussed and agreed, neutral enough to share with them." />
             {(form.transcript.trim() || form.privateNotes.trim() || form.sharedSummary.trim()) && <Button type="button" variant="secondary" loading={draftLoading} onClick={() => void generateMeetingContext(form.transcript.trim() || form.privateNotes.trim() || form.sharedSummary.trim())}><MagicWandIcon size={15} weight="bold" />{draftLoading ? "Generating draft…" : "Draft commitments and follow-up"}</Button>}
           </section>
           {error && <p className="encounter-error" role="alert">{error}</p>}
@@ -1456,7 +1456,7 @@ export default function NewEncounterPage() {
           <section className="encounter-form-section encounter-connect-section">
             <header className="encounter-card-header">
               <span className="encounter-card-icon"><IdentificationCardIcon size={22} weight="bold" /></span>
-              <div className="encounter-card-copy"><h2>Connect</h2><p>Link this moment to a person. Email and contact methods sync here—not during capture.</p></div>
+              <div className="encounter-card-copy"><h2>Connect</h2><p>Link this moment to a person. Email and contact methods sync here, not during capture.</p></div>
             </header>
             {linkedContact ? (
               <div className="encounter-linked-person">
@@ -1484,7 +1484,7 @@ export default function NewEncounterPage() {
                   <LinkButton variant="secondary" href="/app/cards#share"><QrCodeIcon size={16} weight="bold" />Share your card</LinkButton>
                   <LinkButton variant="ghost" href="/app/people"><UsersThreeIcon size={16} weight="bold" />Open Connections</LinkButton>
                 </div>
-                <p className="follow-up-note">You can continue without linking—add their details later from People.</p>
+                <p className="follow-up-note">You can continue without linking. Add their details later from People.</p>
               </>
             )}
           </section>

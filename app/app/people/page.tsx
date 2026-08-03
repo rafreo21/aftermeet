@@ -106,7 +106,7 @@ export default function ConnectionsPage() {
     <AppShell
       active="people"
       title="Connections"
-      subtitle="People you’ve met — cards you saved and people who shared their details with you."
+      subtitle="People you’ve met: cards you saved and people who shared their details with you."
       actions={
         <Button onClick={() => setAddOpen(true)} aria-label="Add connection">
           <PlusIcon size={18} weight="bold" /> Add connection
@@ -181,7 +181,7 @@ export default function ConnectionsPage() {
                         </Link>
                       </td>
                       <td data-label="Source"><span className="table-chip">{connectionSourceLabel(connection.source)}</span></td>
-                      <td data-label="Added">{connection.connectedAt ? formatConnectionDate(connection.connectedAt) : "—"}</td>
+                      <td data-label="Added">{connection.connectedAt ? formatConnectionDate(connection.connectedAt) : "N/A"}</td>
                       <td className="table-open-cell">
                         <Link className="table-open-link" href={`/app/people/${encodeURIComponent(connection.id)}`} prefetch={false} aria-label={`Open ${connection.name}`}>
                           <span>View</span><CaretRightIcon size={16} weight="bold" />

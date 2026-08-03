@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { CaretDown, CaretUp, CheckCircle, CloudArrowUp, EnvelopeSimple, LockKey, PencilSimple, Plus, ShareNetwork, Trash } from 'phosphor-react-native';
+import { CaretDown, CaretUp, CheckCircle, CloudArrowUp, EnvelopeSimple, PencilSimple, Plus, ShareNetwork, Trash } from 'phosphor-react-native';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { BottomSheet } from '@/components/bottom-sheet';
 import { CollapsibleTranscriptSection } from '@/components/collapsible-transcript-section';
 import { SpeakerIdentityEditor } from '@/components/speaker-identity-editor';
 import { renameSpeakerAssignees } from '@/features/encounters/speaker-labels';
@@ -26,10 +27,11 @@ import {
   type EncounterPayload,
 } from '@/features/encounters/encounter-api';
 import {
+  defaultFollowUpTitle,
   FOLLOW_UP_CHANNELS,
+  SELECTABLE_FOLLOW_UP_CHANNELS,
   type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
-import { FOLLOW_UP_TEMPLATES } from '@/features/follow-ups/follow-up-templates';
 import { formatDueLabel } from '@/lib/due-date';
 import { openEmailCompose } from '@/lib/email-compose';
 import { readEnv } from '@/lib/env';
@@ -61,13 +63,16 @@ export default function CaptureDetailScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(true);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'recap' | 'transcript' | 'details'>('recap');
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const [actionComposerOpen, setActionComposerOpen] = useState(false);
   const [editingActionId, setEditingActionId] = useState('');
+  const [newActionDetailOpen, setNewActionDetailOpen] = useState(false);
+  const [actionDetailOpen, setActionDetailOpen] = useState<Record<string, boolean>>({});
   const [newActionTitle, setNewActionTitle] = useState('');
   const [newActionChannel, setNewActionChannel] = useState<FollowUpChannel>('email');
+  const [newActionOwner, setNewActionOwner] = useState<'me' | 'guest'>('me');
   const [newActionDueAt, setNewActionDueAt] = useState('');
-  const [newActionOwner, setNewActionOwner] = useState('me');
   const [newActionParticipantId, setNewActionParticipantId] = useState('');
 
   const guestUrl = encounter && readEnv()
@@ -192,8 +197,6 @@ export default function CaptureDetailScreen() {
     && !cloudReady
     && uploadStatus !== 'uploaded',
   );
-  const canApprove = uploadStatus !== 'uploading';
-
   /**
    * Saves with optimistic-concurrency protection: if this encounter changed
    * on another device since it was loaded here, the server rejects the
@@ -216,7 +219,7 @@ export default function CaptureDetailScreen() {
         } catch {
           // If the reload itself fails, at least the stale local edit was not written over the server's copy.
         }
-        setErrorMessage('This meeting changed on another device. We loaded the latest version below — please redo your change if it’s still needed.');
+        setErrorMessage('This meeting changed on another device. We loaded the latest version below. Please redo your change if it’s still needed.');
         setErrorSheetOpen(true);
         return null;
       }
@@ -265,18 +268,16 @@ export default function CaptureDetailScreen() {
   }
 
   function addAction() {
-    if (!encounter || !newActionTitle.trim()) return;
-    const ownerParticipant = encounter.participants.find((person) => person.id === newActionOwner);
-    const participant = ownerParticipant
-      ?? encounter.participants.find((person) => person.id === newActionParticipantId)
+    if (!encounter) return;
+    const participant = encounter.participants.find((person) => person.id === newActionParticipantId)
       ?? encounter.participants[0];
     setEncounter({
       ...encounter,
       actions: [...encounter.actions, {
         id: `action-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        title: newActionTitle.trim(),
+        title: newActionTitle.trim() || defaultFollowUpTitle(newActionChannel),
         channel: newActionChannel,
-        owner: ownerParticipant ? 'guest' : 'me',
+        owner: newActionOwner,
         dueAt: newActionDueAt,
         status: 'open',
         participantId: participant?.id,
@@ -285,8 +286,11 @@ export default function CaptureDetailScreen() {
       }],
     });
     setNewActionTitle('');
+    setNewActionChannel('email');
+    setNewActionOwner('me');
     setNewActionDueAt('');
     setNewActionParticipantId('');
+    setNewActionDetailOpen(false);
     setActionComposerOpen(false);
   }
 
@@ -453,52 +457,153 @@ export default function CaptureDetailScreen() {
   const openActions = encounter.actions.filter((action) => action.status !== 'completed');
   const peopleCount = encounter.participants.length || (encounter.personName ? 1 : 0);
 
-  return (
-    <Screen edges={['top', 'bottom']} reserveTabBar={false}>
+  const footer = !isReviewed ? (
+    <>
+      <Button loading={confirmingReview} onPress={() => void confirmReview()}>
+        Confirm review
+      </Button>
+      <Button variant="secondary" loading={saving} onPress={() => void persist(encounter)}>
+        Save without confirming
+      </Button>
+    </>
+  ) : (
+    <>
+      <Button onPress={() => router.replace('/(tabs)')}>Done</Button>
+      <Button variant="secondary" loading={saving} onPress={() => void persist(encounter)}>
+        Save changes
+      </Button>
+    </>
+  );
+
+  const header = (
+    <>
       <PageHeader
-        eyebrow="Ready to review"
+        eyebrow={isShared ? 'Guest view shared' : isReviewed ? 'Reviewed · private' : 'Pending review'}
         title={encounter.personName || encounter.title}
         titleStyle={styles.title}
       />
-      <Body>Confirm the recap and follow-ups, then choose whether to share.</Body>
 
-      <View style={styles.reviewStatusLine} accessibilityLabel={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}, ${openActions.length} follow-ups, ${isShared ? 'guest view shared' : isReviewed ? 'reviewed' : 'pending review'}`}>
+      <View style={styles.reviewStatusLine} accessibilityLabel={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}, ${openActions.length} follow-ups`}>
         <Text style={styles.reviewStatusText}>{peopleCount} {peopleCount === 1 ? 'person' : 'people'}</Text>
         <View style={styles.reviewStatusDot} />
         <Text style={styles.reviewStatusText}>
           {openActions.length} follow-up{openActions.length === 1 ? '' : 's'}{isReviewed ? '' : ' (pending)'}
         </Text>
-        <View style={styles.reviewStatusDot} />
-        <Text style={styles.reviewStatusText}>{isShared ? 'Guest view shared' : isReviewed ? 'Reviewed · private' : 'Pending review'}</Text>
       </View>
+    </>
+  );
 
-      {!isReviewed ? (
-        <View style={styles.pendingReviewBanner}>
-          <Text style={styles.pendingReviewTitle}>Follow-ups are pending</Text>
-          <Text style={styles.helperCopy}>
-            Nothing above is active yet. Confirm your review to turn these follow-ups on — sharing a guest link is separate and optional.
-          </Text>
-          <Button loading={confirmingReview} onPress={() => void confirmReview()}>
-            Confirm review
-          </Button>
-        </View>
-      ) : null}
-
+  return (
+    <Screen edges={['top', 'bottom']} reserveTabBar={false} footer={footer} header={header}>
       <Panel style={styles.section}>
-        <Text style={styles.sectionTitle}>Meeting recap</Text>
-        <Text style={styles.helperCopy}>This is what participants will see after you approve the guest view.</Text>
-        <TextInput
-          value={encounter.sharedSummary}
-          onChangeText={(value) => {
-            setApproveHint('');
-            setEncounter({ ...encounter, sharedSummary: value });
-          }}
-          multiline
-          scrollEnabled
-          placeholder="What you discussed, decided, and who owns what next…"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.notesField]}
-        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: notesExpanded }}
+          onPress={() => setNotesExpanded((value) => !value)}
+          style={styles.notesToggle}>
+          <View style={styles.notesToggleCopy}>
+            <Text style={styles.sectionTitle}>Meeting notes</Text>
+            <Text style={styles.helperCopy}>Recap, transcript, and details</Text>
+          </View>
+          {notesExpanded ? (
+            <CaretUp size={18} color={colors.ink} weight="bold" />
+          ) : (
+            <CaretDown size={18} color={colors.ink} weight="bold" />
+          )}
+        </Pressable>
+
+        {notesExpanded ? (
+          <>
+        <View style={styles.tabRow}>
+          {([
+            { id: 'recap', label: 'Recap' },
+            { id: 'transcript', label: 'Transcript' },
+            { id: 'details', label: 'Details' },
+          ] as const).map((tab) => (
+            <Pressable
+              key={tab.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab.id }}
+              onPress={() => setActiveTab(tab.id)}
+              style={[styles.tabButton, activeTab === tab.id && styles.tabButtonActive]}>
+              <Text style={[styles.tabButtonText, activeTab === tab.id && styles.tabButtonTextActive]}>{tab.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {activeTab === 'recap' ? (
+          <View style={styles.tabPane}>
+            {expectsAudio ? (
+              recordingLoading ? (
+                <View style={styles.recordingLoading}>
+                  <ActivityIndicator color={colors.ink} />
+                  <Text style={styles.recordingMissing}>Loading recording…</Text>
+                </View>
+              ) : recordingUri ? (
+                <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
+              ) : (
+                <Text style={styles.recordingMissing}>Audio is not available on this device.</Text>
+              )
+            ) : null}
+            <Text style={styles.helperCopy}>What participants will see if you share this meeting.</Text>
+            <TextInput
+              value={encounter.sharedSummary}
+              onChangeText={(value) => {
+                setApproveHint('');
+                setEncounter({ ...encounter, sharedSummary: value });
+              }}
+              multiline
+              scrollEnabled
+              placeholder="What you discussed, decided, and who owns what next…"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.notesField]}
+            />
+          </View>
+        ) : null}
+
+        {activeTab === 'transcript' ? (
+          <View style={styles.tabPane}>
+            {hasTranscript ? (
+              <>
+                <SpeakerIdentityEditor
+                  key={encounter.transcript}
+                  transcript={encounter.transcript}
+                  attendeeNames={[encounter.personName, ...encounter.participants.map((person) => person.name)]}
+                  onApply={(value, names) => setEncounter({
+                    ...encounter,
+                    transcript: value,
+                    actions: renameSpeakerAssignees(encounter.actions, names, encounter.participants),
+                  })}
+                />
+                <CollapsibleTranscriptSection
+                  title="Full transcript"
+                  hint="Expand to edit the full transcript"
+                  value={encounter.transcript}
+                  onChangeText={(value) => setEncounter({ ...encounter, transcript: value })}
+                  defaultOpen={false}
+                />
+              </>
+            ) : <Text style={styles.helperCopy}>No transcript saved for this meeting.</Text>}
+          </View>
+        ) : null}
+
+        {activeTab === 'details' ? (
+          <View style={styles.tabPane}>
+            <Text style={styles.label}>Private notes</Text>
+            <Text style={styles.helperCopy}>Drafted from the transcript for you only. Participants never see this.</Text>
+            <TextInput
+              value={encounter.privateNotes}
+              onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
+              multiline
+              scrollEnabled
+              placeholder="Anything only you need to remember…"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.privateNotesField]}
+            />
+          </View>
+        ) : null}
+          </>
+        ) : null}
       </Panel>
 
       <Panel style={styles.section}>
@@ -525,7 +630,7 @@ export default function CaptureDetailScreen() {
                   </View>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Edit owner and due date for ${action.title}`}
+                    accessibilityLabel={`Edit ${action.title}`}
                     accessibilityState={{ expanded: editingActionId === action.id }}
                     onPress={() => setEditingActionId((current) => current === action.id ? '' : action.id)}
                     hitSlop={8}>
@@ -535,72 +640,130 @@ export default function CaptureDetailScreen() {
                     <Trash size={19} color={colors.muted} />
                   </Pressable>
                   </View>
-                  {editingActionId === action.id ? (
-                    <View style={styles.actionEditor}>
-                      <Text style={styles.label}>Owner</Text>
-                      <View style={styles.choiceRow}>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: action.owner === 'me' }}
-                          onPress={() => updateAction(action.id, { owner: 'me' })}
-                          style={[styles.choiceChip, action.owner === 'me' && styles.choiceChipActive]}>
-                          <Text style={[styles.choiceChipText, action.owner === 'me' && styles.choiceChipTextActive]}>Me</Text>
-                        </Pressable>
-                        {encounter.participants.length ? encounter.participants.map((person) => {
-                          const selected = action.owner === 'guest' && action.participantId === person.id;
-                          return (
-                            <Pressable
-                              key={person.id}
-                              accessibilityRole="button"
-                              accessibilityState={{ selected }}
-                              onPress={() => updateAction(action.id, {
-                                owner: 'guest',
-                                participantId: person.id,
-                                assigneeName: person.name,
-                                assigneeEmail: person.email,
-                              })}
-                              style={[styles.choiceChip, selected && styles.choiceChipActive]}>
-                              <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
-                            </Pressable>
-                          );
-                        }) : (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: action.owner === 'guest' }}
-                            onPress={() => updateAction(action.id, { owner: 'guest', assigneeName: encounter.personName || 'Guest' })}
-                            style={[styles.choiceChip, action.owner === 'guest' && styles.choiceChipActive]}>
-                            <Text style={[styles.choiceChipText, action.owner === 'guest' && styles.choiceChipTextActive]}>{encounter.personName || 'Guest'}</Text>
-                          </Pressable>
-                        )}
-                      </View>
-                      {action.owner === 'me' && encounter.participants.length ? (
+                  <BottomSheet
+                    visible={editingActionId === action.id}
+                    title="Edit follow-up"
+                    onClose={() => setEditingActionId('')}
+                    footer={<Button onPress={() => setEditingActionId('')}>Done</Button>}>
+                    {(() => {
+                      const pronoun = action.owner === 'me' ? 'you' : 'they';
+                      return (
                         <>
-                          <Text style={styles.label}>For person</Text>
-                          <View style={styles.choiceRow}>
-                            {encounter.participants.map((person) => {
-                              const selected = (action.participantId || encounter.participants[0]?.id) === person.id;
-                              return (
+                          <View style={styles.fieldGroup}>
+                            <Text style={styles.label}>Owner</Text>
+                            <View style={styles.choiceRow}>
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: action.owner === 'me' }}
+                                onPress={() => updateAction(action.id, { owner: 'me' })}
+                                style={[styles.choiceChip, action.owner === 'me' && styles.choiceChipActive]}>
+                                <Text style={[styles.choiceChipText, action.owner === 'me' && styles.choiceChipTextActive]}>Me</Text>
+                              </Pressable>
+                              {encounter.participants.length ? encounter.participants.map((person) => {
+                                const selected = action.owner === 'guest' && action.participantId === person.id;
+                                return (
+                                  <Pressable
+                                    key={person.id}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected }}
+                                    onPress={() => updateAction(action.id, {
+                                      owner: 'guest',
+                                      participantId: person.id,
+                                      assigneeName: person.name,
+                                      assigneeEmail: person.email,
+                                    })}
+                                    style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                                  </Pressable>
+                                );
+                              }) : (
                                 <Pressable
-                                  key={person.id}
                                   accessibilityRole="button"
-                                  accessibilityState={{ selected }}
-                                  onPress={() => updateAction(action.id, {
-                                    participantId: person.id,
-                                    assigneeName: person.name,
-                                    assigneeEmail: person.email,
-                                  })}
-                                  style={[styles.choiceChip, selected && styles.choiceChipActive]}>
-                                  <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                                  accessibilityState={{ selected: action.owner === 'guest' }}
+                                  onPress={() => updateAction(action.id, { owner: 'guest', assigneeName: encounter.personName || 'Guest' })}
+                                  style={[styles.choiceChip, action.owner === 'guest' && styles.choiceChipActive]}>
+                                  <Text style={[styles.choiceChipText, action.owner === 'guest' && styles.choiceChipTextActive]}>{encounter.personName || 'Guest'}</Text>
                                 </Pressable>
-                              );
-                            })}
+                              )}
+                            </View>
+                          </View>
+                          {action.owner === 'me' && encounter.participants.length > 1 ? (
+                            <View style={styles.fieldGroup}>
+                              <Text style={styles.label}>For person</Text>
+                              <View style={styles.choiceRow}>
+                                {encounter.participants.map((person) => {
+                                  const selected = (action.participantId || encounter.participants[0]?.id) === person.id;
+                                  return (
+                                    <Pressable
+                                      key={person.id}
+                                      accessibilityRole="button"
+                                      accessibilityState={{ selected }}
+                                      onPress={() => updateAction(action.id, {
+                                        participantId: person.id,
+                                        assigneeName: person.name,
+                                        assigneeEmail: person.email,
+                                      })}
+                                      style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          ) : null}
+                          <View style={styles.fieldGroup}>
+                            <Text style={styles.label}>How do {pronoun} want to follow up?</Text>
+                            <View style={styles.choiceRow}>
+                              {SELECTABLE_FOLLOW_UP_CHANNELS.map((channel) => {
+                                const selected = action.channel === channel.id;
+                                return (
+                                  <Pressable
+                                    key={channel.id}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected }}
+                                    onPress={() => updateAction(action.id, { channel: channel.id })}
+                                    style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{channel.label}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                          <FollowUpDuePicker
+                            dueAt={action.dueAt || ''}
+                            onChange={(dueAt) => updateAction(action.id, { dueAt })}
+                            label={`When should ${pronoun} do this?`}
+                          />
+                          <View style={styles.fieldGroup}>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityState={{ expanded: Boolean(actionDetailOpen[action.id]) }}
+                              onPress={() => setActionDetailOpen((current) => ({ ...current, [action.id]: !current[action.id] }))}
+                              style={styles.detailToggle}>
+                              <Text style={styles.label}>What do {pronoun} need to do? (optional)</Text>
+                              {actionDetailOpen[action.id] ? (
+                                <CaretUp size={16} color={colors.ink} weight="bold" />
+                              ) : (
+                                <CaretDown size={16} color={colors.ink} weight="bold" />
+                              )}
+                            </Pressable>
+                            {actionDetailOpen[action.id] ? (
+                              <>
+                                <Text style={styles.fieldHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
+                                <TextInput
+                                  value={action.title}
+                                  onChangeText={(value) => updateAction(action.id, { title: value })}
+                                  placeholder="e.g. Send the product draft"
+                                  placeholderTextColor={colors.muted}
+                                  style={styles.input}
+                                />
+                              </>
+                            ) : null}
                           </View>
                         </>
-                      ) : null}
-                      <FollowUpDuePicker dueAt={action.dueAt || ''} onChange={(dueAt) => updateAction(action.id, { dueAt })} />
-                      <Button variant="secondary" onPress={() => setEditingActionId('')}>Done</Button>
-                    </View>
-                  ) : null}
+                      );
+                    })()}
+                  </BottomSheet>
                 </View>
               );
             })}
@@ -608,91 +771,133 @@ export default function CaptureDetailScreen() {
         ) : <Text style={styles.helperCopy}>No next actions yet.</Text>}
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ expanded: actionComposerOpen }}
-          onPress={() => setActionComposerOpen((value) => !value)}
+          onPress={() => setActionComposerOpen(true)}
           style={styles.actionComposerToggle}>
           <View style={styles.actionComposerToggleCopy}>
             <Plus size={17} color={colors.ink} weight="bold" />
             <Text style={styles.actionComposerToggleText}>Add another follow-up</Text>
           </View>
-          {actionComposerOpen ? <CaretUp size={17} color={colors.ink} weight="bold" /> : <CaretDown size={17} color={colors.ink} weight="bold" />}
         </Pressable>
-        {actionComposerOpen ? <View style={styles.actionComposer}>
-          <Text style={styles.label}>Start with a template</Text>
-          <Text style={styles.helperCopy}>Choose a common next step, then adjust the owner or date.</Text>
-          <View style={styles.choiceRow}>
-            {FOLLOW_UP_TEMPLATES.map((template) => {
-              const personName = encounter.participants.map((person) => person.name).filter(Boolean).join(', ') || encounter.personName;
-              const title = template.buildTitle(personName);
-              const selected = newActionTitle === title && newActionChannel === template.channel;
-              return (
-                <Pressable
-                  key={template.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => {
-                    setNewActionTitle(title);
-                    setNewActionChannel(template.channel);
-                    setNewActionDueAt(template.dueAt());
-                  }}
-                  style={[styles.choiceChip, selected && styles.choiceChipActive]}>
-                  <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{template.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <TextInput
-            value={newActionTitle}
-            onChangeText={setNewActionTitle}
-            placeholder="e.g. Send the product draft"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-          />
-          <Text style={styles.label}>Owner</Text>
-          <View style={styles.choiceRow}>
-            <Pressable accessibilityRole="button" accessibilityState={{ selected: newActionOwner === 'me' }} onPress={() => setNewActionOwner('me')} style={[styles.choiceChip, newActionOwner === 'me' && styles.choiceChipActive]}>
-              <Text style={[styles.choiceChipText, newActionOwner === 'me' && styles.choiceChipTextActive]}>Me</Text>
-            </Pressable>
-            {encounter.participants.map((person) => (
-              <Pressable key={person.id} accessibilityRole="button" accessibilityState={{ selected: newActionOwner === person.id }} onPress={() => setNewActionOwner(person.id)} style={[styles.choiceChip, newActionOwner === person.id && styles.choiceChipActive]}>
-                <Text style={[styles.choiceChipText, newActionOwner === person.id && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {newActionOwner === 'me' && encounter.participants.length ? (
-            <>
-              <Text style={styles.label}>For person</Text>
-              <View style={styles.choiceRow}>
-                {encounter.participants.map((person) => {
-                  const selected = (newActionParticipantId || encounter.participants[0]?.id) === person.id;
-                  return (
+        <BottomSheet
+          visible={actionComposerOpen}
+          title="Add a follow-up"
+          onClose={() => setActionComposerOpen(false)}
+          footer={
+            <Button onPress={addAction}>
+              <Plus size={18} color={colors.ink} weight="bold" />
+              Add follow-up
+            </Button>
+          }>
+          {(() => {
+            const pronoun = newActionOwner === 'me' ? 'you' : 'they';
+            return (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Owner</Text>
+                  <View style={styles.choiceRow}>
                     <Pressable
-                      key={person.id}
                       accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      onPress={() => setNewActionParticipantId(person.id)}
-                      style={[styles.choiceChip, selected && styles.choiceChipActive]}>
-                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                      accessibilityState={{ selected: newActionOwner === 'me' }}
+                      onPress={() => setNewActionOwner('me')}
+                      style={[styles.choiceChip, newActionOwner === 'me' && styles.choiceChipActive]}>
+                      <Text style={[styles.choiceChipText, newActionOwner === 'me' && styles.choiceChipTextActive]}>Me</Text>
                     </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          ) : null}
-          <Text style={styles.label}>Channel</Text>
-          <View style={styles.choiceRow}>
-            {FOLLOW_UP_CHANNELS.map((channel) => (
-              <Pressable key={channel.id} accessibilityRole="button" accessibilityState={{ selected: newActionChannel === channel.id }} onPress={() => setNewActionChannel(channel.id)} style={[styles.choiceChip, newActionChannel === channel.id && styles.choiceChipActive]}>
-                <Text style={[styles.choiceChipText, newActionChannel === channel.id && styles.choiceChipTextActive]}>{channel.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <FollowUpDuePicker dueAt={newActionDueAt} onChange={setNewActionDueAt} />
-          <Button variant="secondary" disabled={!newActionTitle.trim()} onPress={addAction}>
-            <Plus size={18} color={colors.ink} weight="bold" />
-            Add action
-          </Button>
-        </View> : null}
+                    {encounter.participants.length ? encounter.participants.map((person) => {
+                      const selected = newActionOwner === 'guest' && newActionParticipantId === person.id;
+                      return (
+                        <Pressable
+                          key={person.id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          onPress={() => {
+                            setNewActionOwner('guest');
+                            setNewActionParticipantId(person.id);
+                          }}
+                          style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                          <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                        </Pressable>
+                      );
+                    }) : (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: newActionOwner === 'guest' }}
+                        onPress={() => setNewActionOwner('guest')}
+                        style={[styles.choiceChip, newActionOwner === 'guest' && styles.choiceChipActive]}>
+                        <Text style={[styles.choiceChipText, newActionOwner === 'guest' && styles.choiceChipTextActive]}>{encounter.personName || 'Guest'}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+                {newActionOwner === 'me' && encounter.participants.length > 1 ? (
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.label}>For person</Text>
+                    <View style={styles.choiceRow}>
+                      {encounter.participants.map((person) => {
+                        const selected = (newActionParticipantId || encounter.participants[0]?.id) === person.id;
+                        return (
+                          <Pressable
+                            key={person.id}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            onPress={() => setNewActionParticipantId(person.id)}
+                            style={[styles.choiceChip, selected && styles.choiceChipActive]}>
+                            <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>{person.name || 'Guest'}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>How do {pronoun} want to follow up?</Text>
+                  <View style={styles.choiceRow}>
+                    {SELECTABLE_FOLLOW_UP_CHANNELS.map((channel) => (
+                      <Pressable
+                        key={channel.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: newActionChannel === channel.id }}
+                        onPress={() => setNewActionChannel(channel.id)}
+                        style={[styles.choiceChip, newActionChannel === channel.id && styles.choiceChipActive]}>
+                        <Text style={[styles.choiceChipText, newActionChannel === channel.id && styles.choiceChipTextActive]}>{channel.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <FollowUpDuePicker
+                  dueAt={newActionDueAt}
+                  onChange={setNewActionDueAt}
+                  label={`When should ${pronoun} do this?`}
+                />
+                <View style={styles.fieldGroup}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: newActionDetailOpen }}
+                    onPress={() => setNewActionDetailOpen((value) => !value)}
+                    style={styles.detailToggle}>
+                    <Text style={styles.label}>What do {pronoun} need to do? (optional)</Text>
+                    {newActionDetailOpen ? (
+                      <CaretUp size={16} color={colors.ink} weight="bold" />
+                    ) : (
+                      <CaretDown size={16} color={colors.ink} weight="bold" />
+                    )}
+                  </Pressable>
+                  {newActionDetailOpen ? (
+                    <>
+                      <Text style={styles.fieldHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
+                      <TextInput
+                        value={newActionTitle}
+                        onChangeText={setNewActionTitle}
+                        placeholder="e.g. Send the product draft"
+                        placeholderTextColor={colors.muted}
+                        style={styles.input}
+                      />
+                    </>
+                  ) : null}
+                </View>
+              </>
+            );
+          })()}
+        </BottomSheet>
         {encounter.guestFollowUp?.committedAt ? (
           <View style={styles.statusRow}>
             <CheckCircle size={18} color={colors.accent} weight="fill" />
@@ -703,94 +908,25 @@ export default function CaptureDetailScreen() {
         ) : null}
       </Panel>
 
-      <View style={styles.detailsCard}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: detailsOpen }}
-          onPress={() => setDetailsOpen((value) => !value)}
-          style={styles.detailsToggle}>
-          <View style={styles.detailsIcon}><LockKey size={20} color={colors.ink} weight="bold" /></View>
-          <View style={styles.detailsCopy}>
-            <Text style={styles.detailsTitle}>Meeting details</Text>
-            <Text style={styles.helperCopy}>Recording, transcript, speaker names, and private notes</Text>
-          </View>
-          {detailsOpen ? <CaretUp size={18} color={colors.ink} weight="bold" /> : <CaretDown size={18} color={colors.ink} weight="bold" />}
-        </Pressable>
-        {detailsOpen ? (
-          <View style={styles.detailsContent}>
-            {expectsAudio ? (
-              recordingLoading ? (
-                <View style={styles.recordingLoading}>
-                  <ActivityIndicator color={colors.ink} />
-                  <Text style={styles.recordingMissing}>Loading recording…</Text>
-                </View>
-              ) : recordingUri ? (
-                <RecordingPlayback uri={recordingUri} durationSeconds={recordingDuration} variant="compact" />
-              ) : (
-                <Text style={styles.recordingMissing}>Audio is not available on this device.</Text>
-              )
-            ) : null}
-            {hasTranscript ? (
-              <>
-                <SpeakerIdentityEditor
-                  key={encounter.transcript}
-                  transcript={encounter.transcript}
-                  attendeeNames={[encounter.personName, ...encounter.participants.map((person) => person.name)]}
-                  onApply={(value, names) => setEncounter({
-                    ...encounter,
-                    transcript: value,
-                    actions: renameSpeakerAssignees(encounter.actions, names, encounter.participants),
-                  })}
-                />
-                <CollapsibleTranscriptSection
-                  title="Full transcript"
-                  hint="Expand to edit the full transcript"
-                  value={encounter.transcript}
-                  onChangeText={(value) => setEncounter({ ...encounter, transcript: value })}
-                  defaultOpen={false}
-                />
-              </>
-            ) : <Text style={styles.helperCopy}>No transcript saved for this meeting.</Text>}
-            <Text style={styles.label}>Private notes</Text>
-            <TextInput
-              value={encounter.privateNotes}
-              onChangeText={(value) => setEncounter({ ...encounter, privateNotes: value })}
-              multiline
-              scrollEnabled
-              placeholder="Anything only you need to remember…"
-              placeholderTextColor={colors.muted}
-              style={[styles.input, styles.privateNotesField]}
-            />
-          </View>
-        ) : null}
-      </View>
-
       <Panel style={styles.section}>
-        <Text style={styles.label}>{isShared ? 'Ready to share' : 'Optional'}</Text>
-        <Text style={styles.sectionTitle}>{isShared ? 'The guest view is ready' : 'Share with participants'}</Text>
-        <Text style={styles.summaryCopy}>
-          {isShared
-            ? 'Send the secure link yourself. Nothing is sent automatically.'
-            : 'Creating a guest link also confirms your review, if you haven’t already. Leave this section alone to keep everything private.'}
-        </Text>
-        <View style={styles.statusRow}>
-          {isShared ? <CheckCircle size={18} color={colors.accent} weight="fill" /> : null}
-          <Text style={styles.summaryCopy}>
-            {isShared
-              ? 'Approved. Guests can open the shared summary and recording.'
-              : 'Nothing shared yet. Create a link when you want participants to see the recap.'}
-          </Text>
+        <View style={styles.shareToggleRow}>
+          <View style={styles.linkCopy}>
+            <Text style={styles.sectionTitle}>Share with participants</Text>
+            <Text style={styles.linkHint}>
+              {isShared
+                ? 'Guests can view the recap and recording.'
+                : 'Creates a guest link. Also confirms your review.'}
+            </Text>
+          </View>
+          <Switch
+            accessibilityLabel="Share with participants"
+            value={isShared}
+            disabled={approving || uploadStatus === 'uploading'}
+            onValueChange={(next) => (next ? void approveAndShare() : toggleGuestSharing(false))}
+            trackColor={{ false: colors.line, true: colors.accent }}
+            thumbColor={colors.white}
+          />
         </View>
-        {cloudReady && cloudAvailableUntil && !cloudExpired ? (
-          <Text style={styles.helperCopy}>
-            Cloud recording available until {cloudAvailableUntil} ({CLOUD_RECORDING_RETENTION_DAYS} days).
-          </Text>
-        ) : null}
-        {cloudExpired ? (
-          <Text style={styles.helperCopy}>
-            The cloud recording expired. Guests still see the shared summary. You can play it locally on this phone.
-          </Text>
-        ) : null}
         {uploadStatus === 'uploading' ? (
           <View style={styles.statusRow}>
             <ActivityIndicator color={colors.ink} size="small" />
@@ -816,25 +952,21 @@ export default function CaptureDetailScreen() {
           </View>
         ) : null}
         {approveHint ? <Text style={styles.approveHint}>{approveHint}</Text> : null}
-        {!isShared ? (
-          <>
-            <Button loading={approving} disabled={!canApprove} onPress={() => void approveAndShare()}>
-              Approve and create link
-            </Button>
-            {!canApprove ? (
-              <Text style={styles.helperCopy}>
-                Approve unlocks once the recording finishes uploading.
-              </Text>
-            ) : null}
-          </>
-        ) : guestUrl ? (
+        {isShared && guestUrl ? (
           <Button variant="secondary" onPress={() => void shareGuestLink()}>
             <ShareNetwork size={18} color={colors.ink} />
             Share guest link
           </Button>
         ) : null}
-        {isShared ? (
-          <Button variant="ghost" onPress={() => toggleGuestSharing(false)}>Make private again</Button>
+        {cloudReady && cloudAvailableUntil && !cloudExpired ? (
+          <Text style={styles.helperCopy}>
+            Cloud recording available until {cloudAvailableUntil} ({CLOUD_RECORDING_RETENTION_DAYS} days).
+          </Text>
+        ) : null}
+        {cloudExpired ? (
+          <Text style={styles.helperCopy}>
+            The cloud recording expired. Guests still see the shared summary. You can play it locally on this phone.
+          </Text>
         ) : null}
         {showEmailRecording ? (
           <>
@@ -852,11 +984,6 @@ export default function CaptureDetailScreen() {
           </>
         ) : null}
       </Panel>
-
-      <View style={styles.actions}>
-        <Button loading={saving} onPress={() => void persist(encounter)}>Save changes</Button>
-        <Button variant="ghost" onPress={() => router.replace('/(tabs)')}>Done</Button>
-      </View>
 
       <OutcomeErrorSheet
         visible={errorSheetOpen}
@@ -884,15 +1011,6 @@ const styles = StyleSheet.create({
   reviewStatusLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.x2 },
   reviewStatusText: { color: colors.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' },
   reviewStatusDot: { width: 3, height: 3, borderRadius: radius.round, backgroundColor: colors.muted },
-  pendingReviewBanner: {
-    gap: spacing.x2,
-    padding: spacing.x4,
-    borderRadius: radius.large,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surfaceMuted,
-  },
-  pendingReviewTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   recorderCard: {
     gap: spacing.x5,
     padding: spacing.x6,
@@ -907,21 +1025,34 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
   },
   recordingMissing: { color: colors.muted, fontSize: 13, lineHeight: 20, flex: 1 },
-  detailsCard: {
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.large,
-    backgroundColor: colors.surface,
+  notesToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  notesToggleCopy: { flex: 1, gap: 2 },
+  tabRow: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
   },
-  detailsToggle: { minHeight: 72, padding: spacing.x4, flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
-  detailsIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.medium, backgroundColor: colors.canvas },
-  detailsCopy: { minWidth: 0, flex: 1, gap: 2 },
-  detailsTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  detailsContent: { gap: spacing.x4, padding: spacing.x4, borderTopWidth: 1, borderTopColor: colors.line },
+  tabButton: {
+    flex: 1,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.medium - 2,
+  },
+  tabButtonActive: { backgroundColor: colors.surface },
+  tabButtonText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  tabButtonTextActive: { color: colors.ink, fontWeight: '800' },
+  tabPane: { gap: spacing.x3 },
   section: { gap: spacing.x3 },
   sectionTitle: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  shareToggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
+  linkCopy: { flex: 1, gap: 3 },
+  linkHint: { color: colors.muted, fontSize: 13, lineHeight: 19 },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  fieldGroup: { gap: spacing.x3 },
+  detailToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fieldHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   guestShareLabel: { marginTop: spacing.x4 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   helperCopy: { color: colors.muted, fontSize: 13, lineHeight: 20 },
@@ -946,7 +1077,6 @@ const styles = StyleSheet.create({
   actionList: { gap: spacing.x2 },
   actionItem: { overflow: 'hidden', borderRadius: radius.medium, backgroundColor: colors.canvas },
   actionRow: { minHeight: 54, padding: spacing.x3, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderRadius: radius.medium, backgroundColor: colors.canvas },
-  actionEditor: { padding: spacing.x3, paddingTop: 0, gap: spacing.x3, borderTopWidth: 1, borderTopColor: colors.line },
   actionCopy: { flex: 1, gap: 2 },
   actionTitle: { color: colors.ink, fontSize: 14, fontWeight: '700' },
   actionTitleDone: { color: colors.muted, textDecorationLine: 'line-through' },
@@ -962,11 +1092,9 @@ const styles = StyleSheet.create({
   },
   actionComposerToggleCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
   actionComposerToggleText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
-  actionComposer: { marginTop: spacing.x2, paddingTop: spacing.x4, gap: spacing.x3, borderTopWidth: 1, borderTopColor: colors.line },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
-  choiceChip: { minHeight: 36, paddingHorizontal: spacing.x3, justifyContent: 'center', borderRadius: radius.medium, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
-  choiceChipActive: { borderColor: colors.ink, backgroundColor: colors.ink },
-  choiceChipText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
+  choiceChip: { paddingHorizontal: spacing.x3, paddingVertical: spacing.x2, borderRadius: radius.round, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  choiceChipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  choiceChipText: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   choiceChipTextActive: { color: colors.white },
-  actions: { gap: spacing.x2 },
 });

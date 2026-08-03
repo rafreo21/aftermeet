@@ -98,7 +98,7 @@ export function ProfileCaptureTable({
                 Waterfall enrichment · {enrichingField === "email" ? "work email" : "phone"}
               </p>
               <p className="mt-1 mb-0 text-xs leading-5 text-[#60675d]">
-                Searching verified databases in order. We stop at the first verified match — no pattern guesses.
+                Searching verified databases in order. We stop at the first verified match, no pattern guesses.
               </p>
             </div>
           </div>

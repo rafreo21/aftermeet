@@ -307,7 +307,7 @@ export default function EncounterReviewPage() {
 
           {!isReviewed ? (
             <section className="review-section review-primary-section">
-              <header><div><h2>Follow-ups are pending</h2><p>Nothing above is active yet. Confirm your review to turn these follow-ups on — sharing a guest link is separate and optional.</p></div></header>
+              <header><div><h2>Follow-ups are pending</h2><p>Nothing above is active yet. Confirm your review to turn these follow-ups on. Sharing a guest link is separate and optional.</p></div></header>
               <Button fullWidth onClick={confirmReview}>Confirm review</Button>
             </section>
           ) : null}
@@ -532,7 +532,7 @@ export default function EncounterReviewPage() {
               {encounter.transcript.trim() ? (
               <>
                 <button type="button" className="review-transcript-toggle" onClick={() => setTranscriptOpen((value) => !value)} aria-expanded={transcriptOpen}>
-                  <div><strong>Full transcript</strong><small>{transcriptOpen ? "Hide the raw transcript while you focus on what to share." : "Expand to edit the full transcript — collapsed by default on review."}</small></div>
+                  <div><strong>Full transcript</strong><small>{transcriptOpen ? "Hide the raw transcript while you focus on what to share." : "Expand to edit the full transcript. Collapsed by default on review."}</small></div>
                   {transcriptOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
                 </button>
                 {transcriptOpen ? (

@@ -19,7 +19,7 @@ export default async function OnboardingPage() {
         </header>
         <div className="onboarding-intro">
           <h1>How will you use AfterMeet?</h1>
-          <p>This helps us tailor the right first step — a personal card for solo networking, or a shared workspace for your team.</p>
+          <p>This helps us tailor the right first step: a personal card for solo networking, or a shared workspace for your team.</p>
         </div>
         <OnboardingUseCase />
       </section>
