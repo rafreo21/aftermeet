@@ -5,8 +5,8 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-const ITEM_SIZE = 44;
-const BADGE_SIZE = 32;
+const ITEM_SIZE = 52;
+const BADGE_SIZE = 40;
 
 type TabIcon = (props: { focused: boolean; color: string; size: number }) => ReactNode;
 
@@ -51,7 +51,7 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
             <Animated.View
               key={route.key}
               layout={LinearTransition.duration(220)}
-              style={[styles.item, isFocused && styles.itemActive]}>
+              style={[styles.item, !isFocused && styles.itemInactive]}>
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isFocused }}
@@ -62,7 +62,7 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
                   {options.tabBarIcon?.({
                     focused: isFocused,
                     color: isFocused ? colors.ink : colors.line,
-                    size: 18,
+                    size: 21,
                   })}
                 </View>
                 {isFocused ? (
@@ -84,14 +84,13 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { backgroundColor: colors.canvas },
+  wrap: { alignItems: 'center', backgroundColor: colors.canvas },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.x8,
     marginTop: spacing.x2,
-    padding: 4,
-    gap: 4,
+    padding: 6,
+    gap: 6,
     borderRadius: radius.round,
     backgroundColor: colors.ink,
     shadowColor: '#000000',
@@ -100,20 +99,23 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
+  // The active item hugs its own content (badge + label) instead of
+  // flex-growing to fill the row — flex:1 here left a dead gap between the
+  // label and the pill's edge. Inactive items stay fixed circles.
   item: {
     height: ITEM_SIZE,
-    width: ITEM_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.round,
     backgroundColor: colors.inkSoft,
     overflow: 'hidden',
   },
-  itemActive: { flex: 1, width: undefined },
+  itemInactive: { width: ITEM_SIZE },
   itemPressable: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 5,
-    gap: spacing.x1,
+    paddingHorizontal: 6,
+    gap: spacing.x2,
   },
   badge: {
     width: BADGE_SIZE,
@@ -124,5 +126,5 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   badgeActive: { backgroundColor: colors.accent },
-  label: { color: colors.white, fontSize: 13, fontWeight: '800', flexShrink: 1 },
+  label: { color: colors.white, fontSize: 14, fontWeight: '800', flexShrink: 1 },
 });
