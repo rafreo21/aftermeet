@@ -114,8 +114,8 @@ const styles = StyleSheet.create({
   itemPressable: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    gap: spacing.x2,
+    paddingHorizontal: spacing.x3,
+    gap: spacing.x3,
   },
   badge: {
     width: BADGE_SIZE,
