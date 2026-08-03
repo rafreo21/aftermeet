@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Bell, CaretRight, CloudArrowUp, DeviceMobile, IdentificationBadge, ListChecks, Microphone, Scan, UsersThree } from 'phosphor-react-native';
+import { Bell, CaretRight, CloudArrowUp, DeviceMobile, IdentificationBadge, ListChecks, Microphone, Plugs, Scan, UsersThree } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/bottom-sheet';
@@ -119,7 +119,10 @@ export default function SettingsScreen() {
         onPress={() => router.push('/settings/connected-accounts')}
         style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
         <View style={styles.linkCopy}>
-          <Text style={styles.label}>Connected accounts</Text>
+          <View style={styles.linkTitleRow}>
+            <Plugs size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Connected accounts</Text>
+          </View>
           <Text style={styles.linkHint}>Google, Microsoft, and future integrations</Text>
         </View>
         <CaretRight size={18} color={colors.muted} weight="bold" />
@@ -160,7 +163,10 @@ export default function SettingsScreen() {
         onPress={() => setRecordingSheetOpen(true)}
         style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
         <View style={styles.linkCopy}>
-          <Text style={styles.label}>Recording storage</Text>
+          <View style={styles.linkTitleRow}>
+            <CloudArrowUp size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Recording storage</Text>
+          </View>
           <Text style={styles.linkHint}>{recordingStorageDestinationLabel(recordingDestination)}</Text>
         </View>
         <CaretRight size={18} color={colors.muted} weight="bold" />
