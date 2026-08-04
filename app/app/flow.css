@@ -182,6 +182,7 @@
 .inline-qr-head h2 { margin: 1px 0 5px; font-size: 24px; }
 .inline-qr-head p { margin: 0; color: var(--p-muted); font-size: 12px; line-height: 1.45; }
 .inline-qr-frame { position: relative; width: min(100%, 354px); margin: 18px auto 14px; padding: 14px; border-radius: 10px; background: white; box-shadow: 0 10px 30px rgba(22,51,0,.08); }
+.product-shell:has(.consumer-sidebar) .inline-qr-frame { margin-left: 0; margin-right: auto; }
 .inline-qr-logo {
   position: absolute;
   top: 50%;
@@ -282,8 +283,7 @@
 .qr-actions { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; }
 .contact-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 .contact-toolbar-actions { align-items: flex-end; justify-content: flex-end; }
-.scan-page { width: 100%; max-width: 720px; margin-inline: auto; }
-.scan-panel, .scan-result-card { padding: 28px; border-radius: 12px; background: white; box-shadow: 0 10px 30px rgba(22,51,0,.06); }
+.scan-panel, .scan-result-card { width: 100%; max-width: 720px; padding: 28px; border-radius: 12px; background: white; box-shadow: 0 10px 30px rgba(22,51,0,.06); }
 .scan-panel header h1, .scan-result-card header h1 { margin: 10px 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.04em; }
 .scan-panel header p, .scan-result-card header p { margin: 0; color: var(--p-muted); line-height: 1.55; }
 .scan-viewport-wrap { position: relative; margin-top: 22px; overflow: hidden; border-radius: 12px; background: #0f1720; aspect-ratio: 3 / 4; max-height: 420px; }

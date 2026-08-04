@@ -51,11 +51,13 @@ export default function RecordingStorageSettingsPage() {
   return (
     <>
       <div className="flow-page settings-page">
+        <div className="flow-heading">
+          <div><h1>Recording storage</h1><p>Where new recordings are stored by default. Doesn&apos;t affect guest sharing.</p></div>
+        </div>
         <section className="activate-panel">
           <header>
             <span className="step-pill">Recordings</span>
             <h2><CloudArrowUpIcon size={22} weight="bold" /> Recording storage</h2>
-            <p>Where new recordings are stored by default. Doesn&apos;t affect guest sharing.</p>
           </header>
           <div className="grid gap-2">
             {STORAGE_OPTIONS.map((option) => {

@@ -245,12 +245,13 @@ export default function ScanPage() {
       <div className="flow-page scan-page">
         {!target ? (
           <>
-            <div className="scan-panel">
-              <header>
-                <span className="step-pill">Capture people</span>
+            <div className="flow-heading">
+              <div>
                 <h1>Scan a badge or card QR</h1>
                 <p>AfterMeet cards, LinkedIn profile codes, and vCards all work here.</p>
-              </header>
+              </div>
+            </div>
+            <div className="scan-panel">
               <ol className="scan-steps">
                 <li><span>1</span>Allow camera access</li>
                 <li><span>2</span>Line up the QR code</li>
