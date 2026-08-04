@@ -20,7 +20,7 @@ import { UploadSimpleIcon } from "@phosphor-icons/react/dist/csr/UploadSimple";
 import { UserPlusIcon } from "@phosphor-icons/react/dist/csr/UserPlus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
-import { AppShell } from "../../../components/AppShell";
+import { useAppShellChrome } from "../../../components/AppShellChromeContext";
 import { ActiveCampaignField, defaultCampaignId } from "../../../components/ActiveCampaignField";
 import { Button, LinkButton } from "../../../components/Button";
 import { TextAreaField, SelectField, TextField } from "../../../components/FormField";
@@ -1156,13 +1156,9 @@ export default function NewEncounterPage() {
 
   const recordingComplete = recordingState === "stopped" || Boolean(audioUrl);
 
+  useAppShellChrome({ backHref: "/app" });
   return (
-    <AppShell
-      active="home"
-      title="Capture encounter"
-      subtitle="Record with consent, remember what mattered, then review before anything is shared."
-      backHref="/app"
-    >
+    <>
       <form className="encounter-layout" onSubmit={saveEncounter}>
         <section className="encounter-main" ref={mainRef}>
           {captureStep > 0 ? (
@@ -1656,6 +1652,6 @@ export default function NewEncounterPage() {
           ))}
         </aside>
       </form>
-    </AppShell>
+    </>
   );
 }

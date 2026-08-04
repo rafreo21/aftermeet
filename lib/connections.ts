@@ -1,3 +1,5 @@
+import { normalizeEmailForMatching, normalizePhoneForMatching } from "./contact-identity";
+
 export type ConnectionSource = "met" | "inbound" | "contact";
 export type ConnectionSort = "date" | "az";
 
@@ -52,10 +54,12 @@ function subtitle(role?: string, company?: string, fallback = "Connected through
   return parts.length ? parts.join(" · ") : fallback;
 }
 
-function mergeKey(name: string, email?: string) {
-  const normalizedEmail = (email || "").trim().toLowerCase();
-  if (normalizedEmail) return normalizedEmail;
-  return name.trim().toLowerCase();
+function mergeKey(name: string, email?: string, phone?: string) {
+  const normalizedEmail = normalizeEmailForMatching(email);
+  if (normalizedEmail) return `email:${normalizedEmail}`;
+  const normalizedPhone = normalizePhoneForMatching(phone);
+  if (normalizedPhone) return `phone:${normalizedPhone}`;
+  return `name:${name.trim().toLowerCase()}`;
 }
 
 export function connectionAvatarUrl(connection: { name: string; photoUrl?: string }) {
@@ -157,7 +161,7 @@ export async function fetchAllConnectionsMerged(): Promise<ConnectionItem[]> {
       connectedAt: exchange.created_at,
       photoUrl: connectionAvatarUrl({ name }),
     };
-    const key = mergeKey(name, item.email);
+    const key = mergeKey(name, item.email, item.phone);
     const existing = merged.get(key);
     if (!existing || existing.source === "contact") {
       merged.set(key, item);
@@ -178,7 +182,7 @@ export async function fetchAllConnectionsMerged(): Promise<ConnectionItem[]> {
       source: "contact",
       photoUrl: connectionAvatarUrl({ name }),
     };
-    const key = mergeKey(name, item.email);
+    const key = mergeKey(name, item.email, item.phone);
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, item);

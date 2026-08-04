@@ -3,10 +3,12 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { AppShell } from "../../components/AppShell";
+import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { ActionDoButton } from "../../components/ActionDoButton";
 import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
@@ -20,6 +22,55 @@ import { OutboundDraftPanel } from "../../components/OutboundDraftPanel";
 
 type Contact = { firstName: string; lastName: string; company: string; context: string; nextAction: string };
 type FollowUpScope = "current" | "past";
+type FollowUpGroup = { encounter: Encounter; actions: EncounterAction[] };
+type FollowUpsSort = "urgency" | "recent" | "az";
+
+function dueBucket(dueAt?: string) {
+  if (!dueAt?.trim()) return 4;
+  const due = new Date(`${dueAt.slice(0, 10)}T12:00:00`);
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  if (due < today) return 0;
+  if (due.getTime() === today.getTime()) return 1;
+  const endOfWeek = new Date(today);
+  const day = endOfWeek.getDay();
+  endOfWeek.setDate(endOfWeek.getDate() + (day === 0 ? 0 : 7 - day));
+  if (due <= endOfWeek) return 2;
+  return 3;
+}
+
+function filterFollowUpGroups(groups: FollowUpGroup[], query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return groups;
+  return groups.filter(({ encounter, actions }) => (
+    (encounter.personName || "").toLowerCase().includes(needle)
+    || encounter.title.toLowerCase().includes(needle)
+    || actions.some((action) => action.title.toLowerCase().includes(needle) || action.channel.toLowerCase().includes(needle))
+  ));
+}
+
+function sortFollowUpGroups(groups: FollowUpGroup[], sort: FollowUpsSort) {
+  const next = [...groups];
+  if (sort === "az") {
+    next.sort((left, right) => (left.encounter.personName || "").localeCompare(right.encounter.personName || "", undefined, { sensitivity: "base" }));
+    return next;
+  }
+  if (sort === "recent") {
+    next.sort((left, right) => {
+      const leftDate = left.actions[0]?.completedAt || left.encounter.startedAt;
+      const rightDate = right.actions[0]?.completedAt || right.encounter.startedAt;
+      return rightDate.localeCompare(leftDate);
+    });
+    return next;
+  }
+  next.sort((left, right) => {
+    const leftBucket = Math.min(...left.actions.map((action) => dueBucket(action.dueAt)));
+    const rightBucket = Math.min(...right.actions.map((action) => dueBucket(action.dueAt)));
+    if (leftBucket !== rightBucket) return leftBucket - rightBucket;
+    return right.encounter.startedAt.localeCompare(left.encounter.startedAt);
+  });
+  return next;
+}
 
 function participantName(encounter: Encounter, action: EncounterAction) {
   if (action.owner !== "guest") return "You";
@@ -45,6 +96,9 @@ export default function FollowupsPage() {
   const [error, setError] = useState("");
   const [retrying, setRetrying] = useState(false);
   const [scope, setScope] = useState<FollowUpScope>("current");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<FollowUpsSort>("urgency");
+  const [sortOpen, setSortOpen] = useState(false);
 
   async function loadEncounters(isRetry = false) {
     if (isRetry) setRetrying(true);
@@ -97,8 +151,8 @@ export default function FollowupsPage() {
     },
     [allActions, scope],
   );
-  const followUpGroups = useMemo(() => {
-    const groups = new Map<string, { encounter: Encounter; actions: EncounterAction[] }>();
+  const rawFollowUpGroups = useMemo(() => {
+    const groups = new Map<string, FollowUpGroup>();
     for (const { encounter, action } of visibleActions) {
       const current = groups.get(encounter.id);
       if (current) current.actions.push(action);
@@ -106,6 +160,10 @@ export default function FollowupsPage() {
     }
     return Array.from(groups.values());
   }, [visibleActions]);
+  const followUpGroups = useMemo(
+    () => sortFollowUpGroups(filterFollowUpGroups(rawFollowUpGroups, query), sort),
+    [rawFollowUpGroups, query, sort],
+  );
   const guestCommitments = useMemo(() => encounters.flatMap((encounter) => {
     const rows = encounter.guestFollowUps?.length
       ? encounter.guestFollowUps
@@ -166,9 +224,9 @@ export default function FollowupsPage() {
   }
 
   return (
-    <AppShell active="followups" title="Follow-ups" subtitle="Everything left to do across your meetings, yours and theirs.">
+    <>
       <div className="flow-page">
-        <div className="flow-heading"><div><h1>Keep the promise.</h1><p>Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton variant="secondary" href="/app/followups/new"><PlusIcon size={17} weight="bold" />Add follow-up</LinkButton><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture</LinkButton></div></div>
+        <div className="flow-heading"><div><h1>Keep the promise.</h1><p className="flow-heading-copy-wide">Nothing is sent automatically. Review the context, take the action, then mark it complete.</p></div><div className="flow-heading-actions"><LinkButton variant="secondary" href="/app/followups/new"><PlusIcon size={17} weight="bold" />Add follow-up</LinkButton><LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture</LinkButton></div></div>
         {message && <StatusMessage tone="success" action={<Button size="small" variant="ghost" onClick={() => setMessage("")}>Dismiss</Button>}>{message}</StatusMessage>}
         {error && (
           <StatusMessage
@@ -203,11 +261,23 @@ export default function FollowupsPage() {
             </div>
           </section>
         ) : null}
-        {!hydrated ? <PageSkeleton rows={3} /> : followUpGroups.length ? (
+        {!hydrated ? <PageSkeleton rows={3} /> : rawFollowUpGroups.length ? (
           <section className="followup-plan" aria-labelledby="your-followups-heading">
+            <div className="connections-toolbar">
+              <label className="connections-search">
+                <MagnifyingGlassIcon size={18} weight="bold" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search follow-ups" />
+              </label>
+              <Button size="small" variant="secondary" onClick={() => setSortOpen(true)} aria-label="Sort follow-ups">
+                <SortAscendingIcon size={16} weight="bold" />
+                {sort === "urgency" ? "Priority" : sort === "recent" ? "Most recent" : "A–Z"}
+              </Button>
+            </div>
             <div className="followup-section-heading">
               <div><span className="step-pill">{scope === "current" ? "To do" : "Completed"}</span><h2 id="your-followups-heading">{scope === "current" ? "Your follow-ups" : "Past follow-ups"}</h2></div>
-              <p>{visibleActions.length} {visibleActions.length === 1 ? "action" : "actions"} across {followUpGroups.length} {followUpGroups.length === 1 ? "meeting" : "meetings"}</p>
+              {followUpGroups.length ? (
+                <p>{followUpGroups.reduce((total, group) => total + group.actions.length, 0)} {followUpGroups.reduce((total, group) => total + group.actions.length, 0) === 1 ? "action" : "actions"} across {followUpGroups.length} {followUpGroups.length === 1 ? "meeting" : "meetings"}</p>
+              ) : <p>No follow-ups match your search.</p>}
             </div>
             <div className="followup-groups">
               {followUpGroups.map(({ encounter, actions }) => (
@@ -301,6 +371,22 @@ export default function FollowupsPage() {
           </div>
         ) : <div className="empty-state"><div><span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span><h2>{scope === "current" ? "Your Inbox is clear" : "No past follow-ups yet"}</h2><p>{scope === "current" ? "Add a next step directly, or capture a conversation and turn its commitments into follow-ups." : "Completed follow-ups will appear here after you check them off."}</p>{scope === "current" ? <div className="empty-state-actions"><LinkButton href="/app/followups/new"><PlusIcon size={16} weight="bold" />Add follow-up</LinkButton><LinkButton variant="secondary" href="/app/encounters/new">Capture conversation</LinkButton></div> : null}</div></div>}
       </div>
-    </AppShell>
+
+      {sortOpen ? (
+        <div className="connections-modal-backdrop" role="presentation" onClick={() => setSortOpen(false)}>
+          <div className="connections-modal connections-modal-compact" role="dialog" aria-label="Sort by" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h2>Sort by</h2>
+              <button type="button" aria-label="Close" onClick={() => setSortOpen(false)}><XIcon size={18} weight="bold" /></button>
+            </header>
+            <div className="connections-add-options">
+              <Button variant={sort === "urgency" ? "primary" : "secondary"} onClick={() => { setSort("urgency"); setSortOpen(false); }}>Priority</Button>
+              <Button variant={sort === "recent" ? "primary" : "secondary"} onClick={() => { setSort("recent"); setSortOpen(false); }}>Most recent</Button>
+              <Button variant={sort === "az" ? "primary" : "secondary"} onClick={() => { setSort("az"); setSortOpen(false); }}>A–Z</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

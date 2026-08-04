@@ -64,8 +64,9 @@ export async function GET(request: Request, context: { params: Promise<{ slug: s
       return NextResponse.json({ error: "Publish this card before downloading share assets." }, { status: 404 });
     }
     const size = Math.min(Math.max(Number(url.searchParams.get("size") || 512), 256), 1600);
+    const mode = url.searchParams.get("mode") === "offline" ? "offline" : "online";
     try {
-      const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile), size);
+      const dataUri = await buildBrandedQrDataUri(resolveShareQrPayload(profile, mode), size);
       return NextResponse.json({ dataUri });
     } catch (error) {
       console.error("branded QR generation failed", error);

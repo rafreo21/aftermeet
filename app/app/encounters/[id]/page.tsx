@@ -10,7 +10,7 @@ import { LockKeyIcon } from "@phosphor-icons/react/dist/csr/LockKey";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple";
 import { ShareNetworkIcon } from "@phosphor-icons/react/dist/csr/ShareNetwork";
-import { AppShell } from "../../../components/AppShell";
+import { useAppShellChrome } from "../../../components/AppShellChromeContext";
 import { ActionDoButton } from "../../../components/ActionDoButton";
 import { OutboundDraftPanel } from "../../../components/OutboundDraftPanel";
 import { Button, LinkButton } from "../../../components/Button";
@@ -248,8 +248,10 @@ export default function EncounterReviewPage() {
     setMessage("Shared view is ready. Nothing has been sent automatically.");
   }
 
+  useAppShellChrome({ backHref: "/app" });
+
   if (!encounter) {
-    return <AppShell active="home" title="Encounter"><div className="empty-state"><div><h2>Encounter not found</h2><p>This local encounter may have been removed or created in another browser.</p><LinkButton href="/app">Back home</LinkButton></div></div></AppShell>;
+    return <div className="empty-state"><div><h2>Encounter not found</h2><p>This local encounter may have been removed or created in another browser.</p><LinkButton href="/app">Back home</LinkButton></div></div>;
   }
 
   // Encounters created before multi-person capture do not have these arrays.
@@ -286,12 +288,7 @@ export default function EncounterReviewPage() {
   const isReviewed = encounter.status === "reviewed" || isShared;
 
   return (
-    <AppShell
-      active="home"
-      title="Review encounter"
-      subtitle="Decide what stays private, what is shared, and who owns each next step."
-      backHref="/app"
-    >
+    <>
       <div className="review-layout">
         <main className="review-main">
           <header className="review-heading">
@@ -629,6 +626,6 @@ export default function EncounterReviewPage() {
           {message && <p className="share-message" role="status">{message}</p>}
         </aside>
       </div>
-    </AppShell>
+    </>
   );
 }

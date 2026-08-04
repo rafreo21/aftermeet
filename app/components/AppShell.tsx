@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
@@ -10,10 +11,11 @@ import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTil
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
-import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
+import { UserCircleIcon } from "@phosphor-icons/react/dist/csr/UserCircle";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { IconButton, LinkButton } from "./Button";
 import { useAppUser } from "./AppUserContext";
+import { useAppShellChromeValue } from "./AppShellChromeContext";
 import { BrandMark } from "./BrandMark";
 import { hydrateContactsFromServer } from "../../lib/contacts-sync";
 import { hydrateEncountersFromServer } from "../../lib/encounters-sync";
@@ -21,33 +23,45 @@ import { hydrateCardLibraryFromServer } from "../../lib/card-library-sync";
 import { NotificationBell } from "./NotificationBell";
 import { ActiveCaptureBar } from "./ActiveCaptureBar";
 
-export type AppShellActive = "home" | "people" | "cards" | "followups" | "settings";
+export type AppShellActive = "home" | "people" | "cards" | "capture" | "scan" | "followups" | "settings";
 
 type AppShellProps = {
-  active: AppShellActive;
-  title: string;
-  subtitle?: string;
-  backHref?: string;
-  backLabel?: string;
-  actions?: ReactNode;
   children: ReactNode;
 };
+
+function deriveActive(pathname: string): AppShellActive {
+  if (pathname.startsWith("/app/cards") || pathname.startsWith("/app/card/")) return "cards";
+  if (pathname.startsWith("/app/encounters/new")) return "capture";
+  if (pathname.startsWith("/app/scan")) return "scan";
+  if (pathname.startsWith("/app/followups")) return "followups";
+  if (pathname.startsWith("/app/people")) return "people";
+  if (pathname.startsWith("/app/settings")) return "settings";
+  return "home";
+}
 
 const consumerNav = [
   ["home", "/app", HouseIcon, "Home"],
   ["cards", "/app/cards", IdentificationCardIcon, "My card"],
-  ["people", "/app/people", UsersThreeIcon, "Connections"],
+  ["capture", "/app/encounters/new", MicrophoneIcon, "Capture"],
+  ["scan", "/app/scan", QrCodeIcon, "Scan"],
   ["followups", "/app/followups", PaperPlaneTiltIcon, "Follow-ups"],
-  ["settings", "/app/settings", GearIcon, "Settings"],
+  ["people", "/app/people", UsersThreeIcon, "Connections"],
+  ["settings", "/app/settings", UserCircleIcon, "My account"],
 ] as const;
 
 let hydratedConsumerUser = "";
 
-export function AppShell({ active, backHref, backLabel = "Back", actions, children }: AppShellProps) {
+export function AppShell({ children }: AppShellProps) {
   const user = useAppUser();
+  const pathname = usePathname();
+  const active = deriveActive(pathname);
+  const { backHref, backLabel = "Back", actions } = useAppShellChromeValue();
   const [mobileNav, setMobileNav] = useState(false);
   const [actionableCount, setActionableCount] = useState(0);
   const updateActionableCount = useCallback((count: number) => setActionableCount(count), []);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
   useEffect(() => {
     if (hydratedConsumerUser === user.email) return;
     hydratedConsumerUser = user.email;
@@ -58,23 +72,19 @@ export function AppShell({ active, backHref, backLabel = "Back", actions, childr
   const label = user.displayName || user.email.split("@")[0] || "AfterMeet user";
   const initials = label.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 
+  const renderNavItem = ([key, href, Icon, itemLabel]: (typeof consumerNav)[number]) => (
+    <Link className={active === key ? "active" : ""} href={href} key={key} prefetch={false} onClick={() => setMobileNav(false)}>
+      <Icon size={20} weight="bold" /> <span>{itemLabel}</span>
+      {key === "followups" && actionableCount ? <b className="nav-count" aria-label={`${actionableCount} due follow-ups`}>{actionableCount > 99 ? "99+" : actionableCount}</b> : null}
+    </Link>
+  );
+
   return (
     <main className="product-shell">
-      <aside className={`product-sidebar ${mobileNav ? "open" : ""}`}>
+      <aside className={`product-sidebar consumer-sidebar ${mobileNav ? "open" : ""}`}>
         <Link className="product-logo" href="/app" prefetch={false}><BrandMark size={38} /><strong>AfterMeet</strong></Link>
         <nav aria-label="Consumer navigation">
-          {consumerNav.map(([key, href, Icon, itemLabel]) => (
-            <Link className={active === key ? "active" : ""} href={href} key={key} prefetch={false} onClick={() => setMobileNav(false)}>
-              <Icon size={20} weight="bold" /> <span>{itemLabel}</span>
-              {key === "followups" && actionableCount ? <b className="nav-count" aria-label={`${actionableCount} due follow-ups`}>{actionableCount > 99 ? "99+" : actionableCount}</b> : null}
-            </Link>
-          ))}
-          <Link className="capture-nav" href="/app/encounters/new" prefetch={false} onClick={() => setMobileNav(false)}>
-            <MicrophoneIcon size={20} weight="fill" /> Capture
-          </Link>
-          <Link href="/app/scan" prefetch={false} onClick={() => setMobileNav(false)}>
-            <QrCodeIcon size={20} weight="bold" /> Scan
-          </Link>
+          {consumerNav.map(renderNavItem)}
         </nav>
         <div className="sidebar-bottom">
           <div className="workspace-card">

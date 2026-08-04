@@ -56,6 +56,10 @@ export async function buildBrandedQrPngBuffer(payload: string, size = 1024) {
   const logoSize = Math.round(size * 0.24);
   const badgePadding = Math.max(5, Math.round(size * 0.014));
   const badgeSize = logoSize + badgePadding * 2;
+  const badgeRadius = Math.round(badgeSize * 0.22);
+  const roundedMask = Buffer.from(
+    `<svg width="${badgeSize}" height="${badgeSize}"><rect width="${badgeSize}" height="${badgeSize}" rx="${badgeRadius}" fill="#fff"/></svg>`,
+  );
   const logoBadge = await sharp(logoBuffer)
     .resize(logoSize, logoSize, {
       fit: "contain",
@@ -68,6 +72,7 @@ export async function buildBrandedQrPngBuffer(payload: string, size = 1024) {
       right: badgePadding,
       background: { r: 255, g: 255, b: 255, alpha: 1 },
     })
+    .composite([{ input: roundedMask, blend: "dest-in" }])
     .png()
     .toBuffer();
 
@@ -99,12 +104,15 @@ export async function buildBrandedQrDataUri(payload: string, size = 1024) {
   const badgeSize = logoSize + badgePadding * 2;
   const left = Math.round((size - badgeSize) / 2);
   const top = left;
+  const badgeRadius = Math.round(badgeSize * 0.22);
+  const logoRadius = Math.round(logoSize * 0.22);
 
   const composed = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+    `<defs><clipPath id="logo-clip"><rect x="${left + badgePadding}" y="${top + badgePadding}" width="${logoSize}" height="${logoSize}" rx="${logoRadius}"/></clipPath></defs>`,
     `<image href="${qrDataUri}" width="${size}" height="${size}"/>`,
-    `<rect x="${left}" y="${top}" width="${badgeSize}" height="${badgeSize}" fill="#FFFFFF"/>`,
-    `<image href="data:image/png;base64,${logoBuffer.toString("base64")}" x="${left + badgePadding}" y="${top + badgePadding}" width="${logoSize}" height="${logoSize}"/>`,
+    `<rect x="${left}" y="${top}" width="${badgeSize}" height="${badgeSize}" rx="${badgeRadius}" fill="#FFFFFF"/>`,
+    `<image href="data:image/png;base64,${logoBuffer.toString("base64")}" x="${left + badgePadding}" y="${top + badgePadding}" width="${logoSize}" height="${logoSize}" clip-path="url(#logo-clip)"/>`,
     `</svg>`,
   ].join("");
 

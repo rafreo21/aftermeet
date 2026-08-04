@@ -7,8 +7,8 @@ import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/Identific
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ScanIcon } from "@phosphor-icons/react/dist/csr/Scan";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
-import { AppShell } from "../components/AppShell";
 import { LinkButton } from "../components/Button";
 import { PageSkeleton } from "../components/AsyncState";
 import { useAppUser } from "../components/AppUserContext";
@@ -175,11 +175,7 @@ export default function HomeDashboard() {
     : "";
 
   return (
-    <AppShell
-      active="home"
-      title="Home"
-      subtitle="What needs your attention."
-    >
+    <>
       <div className="flow-page home-page">
         <div className="flow-heading">
           <div>
@@ -219,6 +215,8 @@ export default function HomeDashboard() {
             <div className="home-quick-actions">
               <LinkButton href="/app/encounters/new"><MicrophoneIcon size={17} weight="fill" />Capture context</LinkButton>
               <LinkButton variant="secondary" href="/app/cards#share"><QrCodeIcon size={17} weight="bold" />Share my card</LinkButton>
+              <LinkButton variant="secondary" href="/app/followups/new"><ListChecksIcon size={17} weight="bold" />Quick follow-up</LinkButton>
+              <LinkButton variant="secondary" href="/app/scan"><ScanIcon size={17} weight="bold" />Quick scan</LinkButton>
             </div>
 
             <section className="home-section">
@@ -295,6 +293,6 @@ export default function HomeDashboard() {
           </>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

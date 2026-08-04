@@ -1,15 +1,34 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
-import { AppShell } from "../../../components/AppShell";
+import { PencilSimpleLineIcon } from "@phosphor-icons/react/dist/csr/PencilSimpleLine";
+import { PencilSimpleIcon } from "@phosphor-icons/react/dist/csr/PencilSimple";
+import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ScanIcon } from "@phosphor-icons/react/dist/csr/Scan";
+import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import QRCode from "qrcode";
+import { useAppShellChrome } from "../../../components/AppShellChromeContext";
 import { StatusMessage } from "../../../components/AsyncState";
 import { Button } from "../../../components/Button";
 import { SelectField, TextField } from "../../../components/FormField";
+import { getActiveCardId, readCardLibrary } from "../../../../lib/card-library";
+import { fetchAllConnectionsMerged, filterConnections, type ConnectionItem } from "../../../../lib/connections";
 import { encounterToApiBody, writeEncounter, type Encounter } from "../../../../lib/encounters";
 import { FOLLOW_UP_TEMPLATES, followUpDueDate } from "../../../../lib/follow-up-templates";
+
+type InboundExchange = {
+  id: string;
+  visitor_name: string;
+  visitor_email: string;
+  visitor_phone?: string;
+  status?: string;
+};
 
 type FollowUpChannel = Encounter["actions"][number]["channel"];
 
@@ -37,11 +56,103 @@ export default function NewFollowUpPage() {
   const initialEmail = params.get("personEmail")?.trim() ?? "";
   const [personName, setPersonName] = useState(initialName);
   const [personEmail, setPersonEmail] = useState(initialEmail);
+  const [sourceId, setSourceId] = useState(params.get("sourceId")?.trim() ?? "");
+  const [contactId, setContactId] = useState(params.get("contactId")?.trim() ?? params.get("contact")?.trim() ?? "");
+  const [exchangeId, setExchangeId] = useState(params.get("exchangeId")?.trim() ?? "");
+  const [owner, setOwner] = useState<Encounter["actions"][number]["owner"]>("me");
   const [title, setTitle] = useState("");
   const [channel, setChannel] = useState<FollowUpChannel>("email");
   const [dueAt, setDueAt] = useState(followUpDueDate(1));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [addPersonOpen, setAddPersonOpen] = useState(false);
+  const [personQuery, setPersonQuery] = useState("");
+  const [connections, setConnections] = useState<ConnectionItem[]>([]);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualEmail, setManualEmail] = useState("");
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrSvg, setQrSvg] = useState("");
+  const [qrCardName, setQrCardName] = useState("");
+  const [scansOpen, setScansOpen] = useState(false);
+  const [exchanges, setExchanges] = useState<InboundExchange[]>([]);
+  const [loadingExchanges, setLoadingExchanges] = useState(false);
+
+  useEffect(() => {
+    if (!addPersonOpen) return;
+    void fetchAllConnectionsMerged().then(setConnections).catch(() => setConnections([]));
+  }, [addPersonOpen]);
+
+  useEffect(() => {
+    if (!qrOpen) return;
+    void Promise.resolve().then(() => {
+      const cards = readCardLibrary(window.localStorage);
+      const activeId = getActiveCardId(window.localStorage, cards);
+      const card = cards.find((item) => item.id === activeId) || cards[0];
+      if (!card?.slug) return;
+      setQrCardName(card.label || card.name || "My card");
+      const shareUrl = `${window.location.origin}/c/${card.slug}`;
+      void QRCode.toString(shareUrl, { type: "svg", margin: 1, width: 220 })
+        .then(setQrSvg)
+        .catch(() => setQrSvg(""));
+    });
+  }, [qrOpen]);
+
+  const searchResults = personQuery.trim() ? filterConnections(connections, personQuery) : [];
+
+  function pickConnection(connection: ConnectionItem) {
+    setPersonName(connection.name);
+    setPersonEmail(connection.email || "");
+    setSourceId(connection.sourceId || "");
+    setContactId(connection.source === "contact" ? connection.sourceId : "");
+    setExchangeId(connection.source === "inbound" ? connection.sourceId : "");
+    setAddPersonOpen(false);
+    setPersonQuery("");
+  }
+
+  function saveManualPerson() {
+    const cleanName = manualName.trim();
+    if (cleanName.length < 2) {
+      setError("Enter a name.");
+      return;
+    }
+    setPersonName(cleanName);
+    setPersonEmail(manualEmail.trim());
+    setSourceId("");
+    setContactId("");
+    setExchangeId("");
+    setError("");
+    setManualOpen(false);
+    setAddPersonOpen(false);
+  }
+
+  async function openScans() {
+    setScansOpen(true);
+    if (exchanges.length) return;
+    setLoadingExchanges(true);
+    try {
+      const response = await fetch("/api/cards/exchanges", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({})) as { exchanges?: InboundExchange[] };
+      setExchanges((payload.exchanges || []).filter((exchange) => exchange.status !== "dismissed"));
+    } catch {
+      setExchanges([]);
+    } finally {
+      setLoadingExchanges(false);
+    }
+  }
+
+  function pickExchange(exchange: InboundExchange) {
+    setPersonName(exchange.visitor_name || "Unknown visitor");
+    setPersonEmail(exchange.visitor_email || "");
+    setSourceId("");
+    setContactId("");
+    setExchangeId(exchange.id);
+    setScansOpen(false);
+    setAddPersonOpen(false);
+  }
+
+  const pronoun = owner === "me" ? "you" : "they";
 
   const selectedTemplate = useMemo(
     () => FOLLOW_UP_TEMPLATES.find((template) => template.channel === channel && template.buildTitle(personName) === title),
@@ -70,15 +181,13 @@ export default function NewFollowUpPage() {
     setSaving(true);
     setError("");
     const now = new Date().toISOString();
-    const sourceId = params.get("sourceId")?.trim() || "";
-    const exchangeId = params.get("exchangeId")?.trim() || "";
     const participantId = sourceId || createId();
     const encounter: Encounter = {
       id: createId(),
       title: `Follow-up with ${cleanName}`,
       personName: cleanName,
       personEmail: personEmail.trim(),
-      contactId: params.get("contactId") || params.get("contact") || undefined,
+      contactId: contactId || undefined,
       exchangeId: exchangeId || undefined,
       startedAt: now,
       endedAt: now,
@@ -96,7 +205,7 @@ export default function NewFollowUpPage() {
         id: createId(),
         title: cleanTitle,
         channel,
-        owner: "me",
+        owner,
         dueAt,
         status: "open",
         assigneeName: cleanName,
@@ -133,13 +242,9 @@ export default function NewFollowUpPage() {
     }
   }
 
+  useAppShellChrome({ backHref: "/app/followups" });
   return (
-    <AppShell
-      active="followups"
-      title="Add follow-up"
-      subtitle="Create a next step without recording a meeting."
-      backHref="/app/followups"
-    >
+    <>
       <div className="flow-page quick-follow-up-page">
         <div className="flow-heading">
           <div>
@@ -152,24 +257,31 @@ export default function NewFollowUpPage() {
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
 
         <form className="contact-form-card quick-follow-up-form" onSubmit={save}>
-          <div className="quick-follow-up-person">
-            <TextField
-              label="Person"
-              value={personName}
-              onChange={(event) => setPersonName(event.target.value)}
-              placeholder="e.g. Sarah Chen"
-              autoComplete="name"
-              required
-            />
-            <TextField
-              label="Email"
-              hint="Optional"
-              type="email"
-              value={personEmail}
-              onChange={(event) => setPersonEmail(event.target.value)}
-              placeholder="sarah@example.com"
-              autoComplete="email"
-            />
+          <button
+            type="button"
+            onClick={() => setAddPersonOpen(true)}
+            className="flex min-h-[72px] w-full items-center gap-3 rounded-[12px] border border-[#e5e9e2] bg-[#fbfdf9] px-5 py-4 text-left"
+          >
+            <span className="min-w-0 flex-1">
+              <small className="block text-[11px] font-extrabold uppercase tracking-wide text-[#8391a5]">Person</small>
+              {personName.trim() ? (
+                <>
+                  <strong className="block text-base text-[#163300]">{personName}</strong>
+                  {personEmail.trim() ? <span className="block text-xs text-[#6b7168]">{personEmail}</span> : null}
+                </>
+              ) : (
+                <span className="block text-sm text-[#6b7168]">Who is this follow-up for?</span>
+              )}
+            </span>
+            {personName.trim() ? <PencilSimpleIcon size={18} weight="bold" /> : <PlusIcon size={18} weight="bold" />}
+          </button>
+
+          <div className="quick-follow-up-owner">
+            <small className="block text-[11px] font-extrabold uppercase tracking-wide text-[#8391a5]">Owner</small>
+            <div className="flow-heading-actions" style={{ marginTop: 8 }}>
+              <Button type="button" variant={owner === "me" ? "primary" : "secondary"} size="small" onClick={() => setOwner("me")}>You</Button>
+              <Button type="button" variant={owner === "guest" ? "primary" : "secondary"} size="small" onClick={() => setOwner("guest")}>{personName.trim() || "Them"}</Button>
+            </div>
           </div>
 
           <div className="follow-up-template-picker">
@@ -200,7 +312,7 @@ export default function NewFollowUpPage() {
           />
 
           <div className="quick-follow-up-meta">
-            <SelectField label="How will you follow up?" value={channel} onChange={(event) => setChannel(event.target.value as FollowUpChannel)}>
+            <SelectField label={`How will ${pronoun} follow up?`} value={channel} onChange={(event) => setChannel(event.target.value as FollowUpChannel)}>
               {CHANNELS.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
             </SelectField>
             <TextField label="Due date" type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
@@ -214,6 +326,156 @@ export default function NewFollowUpPage() {
 
         <p className="quick-follow-up-note"><PaperPlaneTiltIcon size={16} weight="bold" />Nothing is sent automatically. AfterMeet reminds you until you complete it.</p>
       </div>
-    </AppShell>
+
+      {addPersonOpen ? (
+        <div className="connections-modal-backdrop" role="presentation" onClick={() => { setAddPersonOpen(false); setPersonQuery(""); }}>
+          <div className="connections-modal" role="dialog" aria-label="Add someone" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h2>Add someone</h2>
+              <button type="button" aria-label="Close" onClick={() => { setAddPersonOpen(false); setPersonQuery(""); }}><XIcon size={18} weight="bold" /></button>
+            </header>
+            <label className="connections-search">
+              <MagnifyingGlassIcon size={18} weight="bold" />
+              <input value={personQuery} onChange={(event) => setPersonQuery(event.target.value)} placeholder="Search your connections" />
+            </label>
+
+            {personQuery.trim() ? (
+              searchResults.length ? (
+                <div className="grid gap-2" style={{ marginTop: 12 }}>
+                  {searchResults.map((connection) => (
+                    <button
+                      key={connection.id}
+                      type="button"
+                      onClick={() => pickConnection(connection)}
+                      className="flex items-center justify-between gap-4 rounded-[10px] border border-[#e5e9e2] bg-[#fbfdf9] px-4 py-3 text-left"
+                    >
+                      <span className="min-w-0">
+                        <strong className="block truncate text-sm text-[#163300]">{connection.name}</strong>
+                        <small className="block truncate text-xs text-[#6b7168]">{connection.email || connection.subtitle}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ marginTop: 12 }}>No connections match &ldquo;{personQuery.trim()}&rdquo;.</p>
+              )
+            ) : (
+              <div className="connections-add-options" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                <button
+                  type="button"
+                  onClick={() => setManualOpen(true)}
+                  className="flex min-h-[64px] items-center gap-3 rounded-[10px] border border-[#e5e9e2] bg-[#fbfdf9] px-4 py-3 text-left"
+                >
+                  <PencilSimpleLineIcon size={20} weight="bold" />
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm text-[#163300]">Add manually</strong>
+                    <small className="block text-xs text-[#6b7168]">Enter their name and contact details</small>
+                  </span>
+                  <CaretRightIcon size={16} weight="bold" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQrOpen(true)}
+                  className="flex min-h-[64px] items-center gap-3 rounded-[10px] border border-[#e5e9e2] bg-[#fbfdf9] px-4 py-3 text-left"
+                >
+                  <QrCodeIcon size={20} weight="bold" />
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm text-[#163300]">Share QR code</strong>
+                    <small className="block text-xs text-[#6b7168]">Let them scan your card and return their details</small>
+                  </span>
+                  <CaretRightIcon size={16} weight="bold" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void openScans()}
+                  className="flex min-h-[64px] items-center gap-3 rounded-[10px] border border-[#e5e9e2] bg-[#fbfdf9] px-4 py-3 text-left"
+                >
+                  <ScanIcon size={20} weight="bold" />
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm text-[#163300]">Recent scans</strong>
+                    <small className="block text-xs text-[#6b7168]">Choose someone who recently scanned your card</small>
+                  </span>
+                  <CaretRightIcon size={16} weight="bold" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {manualOpen ? (
+        <div className="connections-modal-backdrop" role="presentation" onClick={() => setManualOpen(false)}>
+          <div className="connections-modal" role="dialog" aria-label="Add manually" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h2>Add manually</h2>
+              <button type="button" aria-label="Close" onClick={() => setManualOpen(false)}><XIcon size={18} weight="bold" /></button>
+            </header>
+            <form
+              className="connections-manual-form"
+              onSubmit={(event) => { event.preventDefault(); saveManualPerson(); }}
+            >
+              <TextField label="Full name" value={manualName} onChange={(event) => setManualName(event.target.value)} required />
+              <TextField label="Email" type="email" hint="Optional" value={manualEmail} onChange={(event) => setManualEmail(event.target.value)} />
+              <div className="form-actions">
+                <Button type="button" variant="ghost" onClick={() => setManualOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={!manualName.trim()}>Add person</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {qrOpen ? (
+        <div className="connections-modal-backdrop" role="presentation" onClick={() => setQrOpen(false)}>
+          <div className="connections-modal connections-modal-compact" role="dialog" aria-label="Share your card" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h2>Share your card</h2>
+              <button type="button" aria-label="Close" onClick={() => setQrOpen(false)}><XIcon size={18} weight="bold" /></button>
+            </header>
+            <p>They scan this code and their details link here automatically.</p>
+            <div style={{ display: "grid", justifyItems: "center", gap: 12, marginTop: 12 }}>
+              {qrSvg ? (
+                <div style={{ width: 220, height: 220 }} dangerouslySetInnerHTML={{ __html: qrSvg }} />
+              ) : (
+                <p>Create a card first to share it here.</p>
+              )}
+              {qrCardName ? <strong>{qrCardName}</strong> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {scansOpen ? (
+        <div className="connections-modal-backdrop" role="presentation" onClick={() => setScansOpen(false)}>
+          <div className="connections-modal" role="dialog" aria-label="Recent scans" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h2>Recent scans</h2>
+              <button type="button" aria-label="Close" onClick={() => setScansOpen(false)}><XIcon size={18} weight="bold" /></button>
+            </header>
+            {loadingExchanges ? (
+              <p>Checking for new scans…</p>
+            ) : exchanges.length ? (
+              <div className="grid gap-2" style={{ marginTop: 12 }}>
+                {exchanges.map((exchange) => (
+                  <button
+                    key={exchange.id}
+                    type="button"
+                    onClick={() => pickExchange(exchange)}
+                    className="flex items-center justify-between gap-4 rounded-[10px] border border-[#e5e9e2] bg-[#fbfdf9] px-4 py-3 text-left"
+                  >
+                    <span className="min-w-0">
+                      <strong className="block truncate text-sm text-[#163300]">{exchange.visitor_name || "Unknown visitor"}</strong>
+                      <small className="block truncate text-xs text-[#6b7168]">{[exchange.visitor_email, exchange.visitor_phone].filter(Boolean).join(" · ") || "No contact yet"}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={{ marginTop: 12 }}>No recent scans yet. Share your QR and new submissions appear here.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

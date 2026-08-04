@@ -19,7 +19,6 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { ShareCardModal } from "../../components/ShareCardModal";
 import { UploadSimpleIcon } from "@phosphor-icons/react/dist/csr/UploadSimple";
-import { AppShell } from "../../components/AppShell";
 import { useAppUser } from "../../components/AppUserContext";
 import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
@@ -70,6 +69,7 @@ export default function CardsPage() {
   const [photo, setPhoto] = useState("");
   const [qr, setQr] = useState("");
   const [qrSvg, setQrSvg] = useState("");
+  const [qrMode, setQrMode] = useState<"online" | "offline">("online");
   const [copied, setCopied] = useState(false);
   const [svgCopied, setSvgCopied] = useState(false);
   const [signatureCopied, setSignatureCopied] = useState<"" | "plain" | "html">("");
@@ -184,20 +184,20 @@ export default function CardsPage() {
       setQrError("");
     });
     Promise.all([
-      fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=900`)
+      fetch(`/api/cards/share-assets/${encodeURIComponent(profile.slug)}?type=branded-qr&size=900&mode=${qrMode}`)
         .then(async (response) => {
           if (!response.ok) return null;
           const payload = await response.json() as { dataUri?: string };
           return payload.dataUri || null;
         })
         .catch(() => null),
-      QRCode.toString(shareUrl, { ...options, type: "svg" }),
+      qrMode === "online" ? QRCode.toString(shareUrl, { ...options, type: "svg" }) : Promise.resolve(""),
     ]).then(([image, svg]) => {
-      const svgDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      const svgDataUri = svg ? `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` : "";
       setQr(image || svgDataUri);
       setQrSvg(svg);
     }).catch(() => setQrError("We couldn’t generate this QR code. Check the card link and try again."));
-  }, [profile.slug, shareUrl]);
+  }, [profile.slug, shareUrl, qrMode]);
 
   function selectCard(card: LibraryCard) {
     setActiveCardId(localStorage, card.id);
@@ -333,11 +333,7 @@ export default function CardsPage() {
       ].filter((method) => method.value);
 
   return (
-    <AppShell
-      active="cards"
-      title="My cards"
-      subtitle={`${cards.length} of ${MAX_CARDS} cards created`}
-    >
+    <>
       <div className="flow-page">
         {qrError && <StatusMessage tone="error">{qrError}</StatusMessage>}
         {!hydrated ? <PageSkeleton rows={3} /> : !cards.length ? (
@@ -459,11 +455,15 @@ export default function CardsPage() {
             </div>
             <div className="card-tool-content" role="tabpanel">
             {shareTool === "qr" ? <>
-            <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Let someone scan this card</h2><p>They only need their phone camera. No app or account required.</p></div></div>
+            <div className="inline-qr-head"><span><QrCodeIcon size={22} weight="bold" /></span><div><h2>Let someone scan this card</h2><p>{qrMode === "online" ? "They only need their phone camera. No app or account required." : "Works with no internet — this scans straight into their contacts app."}</p></div></div>
+            <div className="flow-heading-actions" style={{ marginBottom: 12 }}>
+              <Button size="small" variant={qrMode === "online" ? "primary" : "secondary"} onClick={() => setQrMode("online")}>Online</Button>
+              <Button size="small" variant={qrMode === "offline" ? "primary" : "secondary"} onClick={() => setQrMode("offline")}>Offline</Button>
+            </div>
             <ol className="scan-steps">
               <li><span>1</span>Open the camera</li>
               <li><span>2</span>Point at the QR</li>
-              <li><span>3</span>Open your card</li>
+              <li><span>3</span>{qrMode === "online" ? "Open your card" : "Save to contacts"}</li>
             </ol>
             {qr ? (
               <div className="inline-qr-frame">
@@ -597,6 +597,6 @@ export default function CardsPage() {
           </>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

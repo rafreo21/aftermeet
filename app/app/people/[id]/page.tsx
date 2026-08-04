@@ -9,11 +9,10 @@ import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/Identific
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
-import { AppShell } from "../../../components/AppShell";
+import { useAppShellChrome } from "../../../components/AppShellChromeContext";
 import { PageSkeleton, StatusMessage } from "../../../components/AsyncState";
 import { Button, LinkButton } from "../../../components/Button";
 import {
-  connectionSourceLabel,
   deleteConnection,
   fetchAllConnectionsMerged,
   type ConnectionItem,
@@ -172,22 +171,21 @@ export default function ConnectionDetailPage() {
     ? `/app/followups/new?personName=${encodeURIComponent(connection.name)}&sourceId=${encodeURIComponent(connection.sourceId)}${connection.email ? `&personEmail=${encodeURIComponent(connection.email)}` : ""}${connection.source === "contact" ? `&contactId=${encodeURIComponent(connection.sourceId)}` : ""}${connection.source === "inbound" ? `&exchangeId=${encodeURIComponent(connection.sourceId)}` : ""}`
     : "/app/followups/new";
 
+  useAppShellChrome({
+    backHref: "/app/people",
+    actions: (
+      <div className="header-actions-row">
+        {connection ? (
+          <Button size="small" variant="ghost" onClick={() => void confirmDelete()} disabled={deleting} aria-label="Remove connection">
+            <TrashIcon size={16} weight="bold" />
+          </Button>
+        ) : null}
+      </div>
+    ),
+  });
+
   return (
-    <AppShell
-      active="people"
-      title={connection?.name || "Connection"}
-      subtitle={connection ? connectionSourceLabel(connection.source) : "People you’ve met"}
-      backHref="/app/people"
-      actions={
-        <div className="header-actions-row">
-          {connection ? (
-            <Button size="small" variant="ghost" onClick={() => void confirmDelete()} disabled={deleting} aria-label="Remove connection">
-              <TrashIcon size={16} weight="bold" />
-            </Button>
-          ) : null}
-        </div>
-      }
-    >
+    <>
       <div className="flow-page connections-page">
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
         {loading ? (
@@ -287,6 +285,6 @@ export default function ConnectionDetailPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

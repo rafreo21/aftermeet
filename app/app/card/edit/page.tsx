@@ -36,7 +36,7 @@ import { WhatsappLogoIcon } from "@phosphor-icons/react/dist/csr/WhatsappLogo";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { XLogoIcon } from "@phosphor-icons/react/dist/csr/XLogo";
 import { YoutubeLogoIcon } from "@phosphor-icons/react/dist/csr/YoutubeLogo";
-import { AppShell } from "../../../components/AppShell";
+import { useAppShellChrome } from "../../../components/AppShellChromeContext";
 import { Button, IconButton, LinkButton } from "../../../components/Button";
 import { TextAreaField, TextField } from "../../../components/FormField";
 import { PhoneField } from "../../../components/PhoneField";
@@ -373,10 +373,13 @@ export default function CardEditor() {
     goToStep(step + 1);
   }
 
+  useAppShellChrome({
+    backHref: "/app/cards",
+    actions: <Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button>,
+  });
+
   return (
-    <AppShell active="cards" title={draft.label || "Create your card"} subtitle="A simple three-step setup"
-      backHref="/app/cards"
-      actions={<Button size="small" loading={publishing} disabled={!hasUnpublishedChanges && saved} onClick={save}>{!hasUnpublishedChanges && saved ? <CheckCircleIcon weight="fill" /> : null}{publishLabel}</Button>}>
+    <>
       <section className="card-creator">
         {hydrated && (
           <div className={`creator-publish-state ${hasUnpublishedChanges ? "is-dirty" : "is-published"}`} role="status">
@@ -591,6 +594,6 @@ export default function CardEditor() {
         </div>
       </section>
 
-    </AppShell>
+    </>
   );
 }

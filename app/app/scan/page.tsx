@@ -6,7 +6,7 @@ import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/Identific
 import { LinkedinLogoIcon } from "@phosphor-icons/react/dist/csr/LinkedinLogo";
 import { MicrophoneIcon } from "@phosphor-icons/react/dist/csr/Microphone";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
-import { AppShell } from "../../components/AppShell";
+import { useAppShellChrome } from "../../components/AppShellChromeContext";
 import { StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { TextField } from "../../components/FormField";
@@ -239,13 +239,9 @@ export default function ScanPage() {
 
   const draftContact = target ? contactFromScanTarget(target, card) : null;
 
+  useAppShellChrome({ backHref: "/app/people" });
   return (
-    <AppShell
-      active="home"
-      title="Scan badge"
-      subtitle="Point your camera at a badge QR, AfterMeet card, or LinkedIn code."
-      backHref="/app/people"
-    >
+    <>
       <div className="flow-page scan-page">
         {!target ? (
           <>
@@ -350,6 +346,6 @@ export default function ScanPage() {
           </section>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

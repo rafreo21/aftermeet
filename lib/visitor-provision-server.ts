@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { normalizeEmailForMatching } from "./contact-identity";
 import { createServiceSupabaseClient } from "./supabase/service";
 
 type VisitorExchangeInput = {
@@ -91,18 +92,20 @@ async function uniqueVisitorSlug(
   return `${base}-${Date.now().toString(36).slice(-4)}`;
 }
 
+// Typo-tolerant on purpose — this only decides which existing account to
+// reuse, it never changes what gets stored or emailed for a new signup.
 async function findAuthUserIdByEmail(
   admin: NonNullable<ReturnType<typeof createServiceSupabaseClient>>,
   email: string,
 ) {
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeEmailForMatching(email);
   let page = 1;
   const perPage = 200;
 
   while (page <= 5) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
     if (error || !data.users.length) break;
-    const match = data.users.find((user) => user.email?.toLowerCase() === normalized);
+    const match = data.users.find((user) => normalizeEmailForMatching(user.email) === normalized);
     if (match) return match.id;
     if (data.users.length < perPage) break;
     page += 1;
@@ -226,33 +229,43 @@ export async function provisionVisitorFromExchange(input: VisitorExchangeInput) 
   const displayName = input.displayName.trim();
   if (!email || !displayName) return { ok: false as const, reason: "invalid_input" };
 
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    user_metadata: {
-      display_name: displayName,
-      signup_intent: "visitor",
-      pending_exchange_id: input.exchangeId,
-    },
-  });
+  const metadata = {
+    display_name: displayName,
+    signup_intent: "visitor",
+    pending_exchange_id: input.exchangeId,
+  };
 
-  let authUserId = created.user?.id || null;
+  // Check for an existing account under a typo-tolerant match first — a
+  // literal typo (icloud.con vs icloud.com) is a different string to
+  // Supabase auth, so createUser would otherwise happily succeed and create
+  // a duplicate account instead of ever hitting the "already exists" path
+  // below. The email stored/emailed for a genuinely new signup is always
+  // exactly what was typed; only the lookup is typo-tolerant.
+  let authUserId = await findAuthUserIdByEmail(admin, email);
+  let wasCreated = false;
 
-  if (createError) {
-    const message = createError.message.toLowerCase();
-    if (message.includes("already") || message.includes("registered") || message.includes("exists")) {
-      authUserId = await findAuthUserIdByEmail(admin, email);
-      if (authUserId) {
-        await admin.auth.admin.updateUserById(authUserId, {
-          user_metadata: {
-            display_name: displayName,
-            signup_intent: "visitor",
-            pending_exchange_id: input.exchangeId,
-          },
-        });
+  if (authUserId) {
+    await admin.auth.admin.updateUserById(authUserId, { user_metadata: metadata });
+  } else {
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+    authUserId = created.user?.id || null;
+    wasCreated = Boolean(created?.user);
+
+    if (createError) {
+      const message = createError.message.toLowerCase();
+      if (message.includes("already") || message.includes("registered") || message.includes("exists")) {
+        // Exact-string race: created between our lookup and this call.
+        authUserId = await findAuthUserIdByEmail(admin, email);
+        if (authUserId) {
+          await admin.auth.admin.updateUserById(authUserId, { user_metadata: metadata });
+        }
+      } else {
+        return { ok: false as const, reason: createError.message };
       }
-    } else {
-      return { ok: false as const, reason: createError.message };
     }
   }
 
@@ -267,7 +280,7 @@ export async function provisionVisitorFromExchange(input: VisitorExchangeInput) 
 
   return {
     ok: true as const,
-    created: Boolean(created?.user),
+    created: wasCreated,
     slug: cardResult.slug,
     cardId: cardResult.cardId,
   };

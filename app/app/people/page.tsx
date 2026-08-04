@@ -10,7 +10,6 @@ import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
 import { UsersThreeIcon } from "@phosphor-icons/react/dist/csr/UsersThree";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { AppShell } from "../../components/AppShell";
 import { PageSkeleton, StatusMessage } from "../../components/AsyncState";
 import { Button, LinkButton } from "../../components/Button";
 import { TextField } from "../../components/FormField";
@@ -103,21 +102,17 @@ export default function ConnectionsPage() {
   const hasConnections = connections.length > 0;
 
   return (
-    <AppShell
-      active="people"
-      title="Connections"
-      subtitle="People you’ve met: cards you saved and people who shared their details with you."
-      actions={
-        <Button onClick={() => setAddOpen(true)} aria-label="Add connection">
-          <PlusIcon size={18} weight="bold" /> Add connection
-        </Button>
-      }
-    >
+    <>
       <div className="flow-page connections-page">
         <div className="flow-heading">
           <div>
             <h1>People you’ve met</h1>
             <p>Cards you saved and people who shared their details with you.</p>
+          </div>
+          <div className="flow-heading-actions">
+            <Button onClick={() => setAddOpen(true)} aria-label="Add connection">
+              <PlusIcon size={18} weight="bold" /> Add connection
+            </Button>
           </div>
         </div>
 
@@ -290,6 +285,6 @@ export default function ConnectionsPage() {
           </div>
         </div>
       ) : null}
-    </AppShell>
+    </>
   );
 }

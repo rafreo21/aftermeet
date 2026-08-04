@@ -12,7 +12,7 @@ import { StatusMessage } from "./AsyncState";
 import type { ConnectedAccountStatus } from "../../lib/integrations/types";
 import { emptyConnectedAccountStatus } from "../../lib/integrations/types";
 
-export function ConnectedAccountsPanel() {
+export function ConnectedAccountsPanel({ stacked, returnTo = "/app/settings" }: { stacked?: boolean; returnTo?: string } = {}) {
   const [status, setStatus] = useState<ConnectedAccountStatus>(emptyConnectedAccountStatus());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -59,31 +59,33 @@ export function ConnectedAccountsPanel() {
         <p>Connect once per provider. You stay in control of which approved messages, meetings, and recordings use each account.</p>
       </header>
 
-      <div className="connected-account-grid">
+      <div className={`connected-account-grid${stacked ? " connected-account-grid--stacked" : ""}`}>
         <article className="connected-account-card">
           <div className="connected-account-content">
-            <div className="connected-provider-heading">
-              <span><GoogleLogoIcon size={23} weight="bold" /></span>
-              <div><strong>Google</strong><small>Google Workspace</small></div>
+            <div className="connected-account-top">
+              <div className="connected-provider-heading">
+                <span><GoogleLogoIcon size={23} weight="bold" /></span>
+                <div><strong>Google</strong><small>Google Workspace</small></div>
+              </div>
+              <div className="connected-capabilities">
+                {([
+                  ["Gmail", status.google.capabilities.gmail],
+                  ["Calendar", status.google.capabilities.calendar],
+                  ["Drive", status.google.capabilities.drive],
+                ] as Array<[string, boolean]>).map(([label, enabled]) => (
+                  <span className={enabled ? "enabled" : ""} key={String(label)}><CheckCircleIcon weight={enabled ? "fill" : "regular"} />{label}</span>
+                ))}
+              </div>
             </div>
             <p>{status.google.connected ? status.google.email : "Enable Gmail, Calendar, and optional Drive storage."}</p>
-            <div className="connected-capabilities">
-              {([
-                ["Gmail", status.google.capabilities.gmail],
-                ["Calendar", status.google.capabilities.calendar],
-                ["Drive", status.google.capabilities.drive],
-              ] as Array<[string, boolean]>).map(([label, enabled]) => (
-                <span className={enabled ? "enabled" : ""} key={String(label)}><CheckCircleIcon weight={enabled ? "fill" : "regular"} />{label}</span>
-              ))}
-            </div>
           </div>
           {status.google.connected ? (
             <div className="connected-account-actions">
-              {!status.google.capabilities.drive ? <LinkButton href="/api/integrations/google/connect?return_to=/app/settings" variant="secondary">Reconnect for Drive</LinkButton> : null}
+              {!status.google.capabilities.drive ? <LinkButton href={`/api/integrations/google/connect?return_to=${returnTo}`} variant="secondary">Reconnect for Drive</LinkButton> : null}
               <button type="button" className="ghost-link" onClick={() => void disconnect("google")}>Disconnect</button>
             </div>
           ) : (
-            <LinkButton href="/api/integrations/google/connect?return_to=/app/settings" fullWidth disabled={!status.configured.google}>
+            <LinkButton href={`/api/integrations/google/connect?return_to=${returnTo}`} fullWidth disabled={!status.configured.google}>
               Connect Google
             </LinkButton>
           )}
@@ -92,28 +94,30 @@ export function ConnectedAccountsPanel() {
 
         <article className="connected-account-card">
           <div className="connected-account-content">
-            <div className="connected-provider-heading">
-              <span><MicrosoftOutlookLogoIcon size={23} weight="bold" /></span>
-              <div><strong>Microsoft</strong><small>Microsoft 365</small></div>
+            <div className="connected-account-top">
+              <div className="connected-provider-heading">
+                <span><MicrosoftOutlookLogoIcon size={23} weight="bold" /></span>
+                <div><strong>Microsoft</strong><small>Microsoft 365</small></div>
+              </div>
+              <div className="connected-capabilities">
+                {([
+                  ["Outlook", status.microsoft.capabilities.outlook],
+                  ["Calendar", status.microsoft.capabilities.calendar],
+                  ["OneDrive", status.microsoft.capabilities.onedrive],
+                ] as Array<[string, boolean]>).map(([label, enabled]) => (
+                  <span className={enabled ? "enabled" : ""} key={label}><CheckCircleIcon weight={enabled ? "fill" : "regular"} />{label}</span>
+                ))}
+              </div>
             </div>
             <p>{status.microsoft.connected ? status.microsoft.email : "Use Outlook, Calendar, and optional OneDrive recording storage."}</p>
-            <div className="connected-capabilities">
-              {([
-                ["Outlook", status.microsoft.capabilities.outlook],
-                ["Calendar", status.microsoft.capabilities.calendar],
-                ["OneDrive", status.microsoft.capabilities.onedrive],
-              ] as Array<[string, boolean]>).map(([label, enabled]) => (
-                <span className={enabled ? "enabled" : ""} key={label}><CheckCircleIcon weight={enabled ? "fill" : "regular"} />{label}</span>
-              ))}
-            </div>
           </div>
           {status.microsoft.connected ? (
             <div className="connected-account-actions">
-              {!status.microsoft.capabilities.onedrive ? <LinkButton href="/api/integrations/microsoft/connect?return_to=/app/settings" variant="secondary">Reconnect for OneDrive</LinkButton> : null}
+              {!status.microsoft.capabilities.onedrive ? <LinkButton href={`/api/integrations/microsoft/connect?return_to=${returnTo}`} variant="secondary">Reconnect for OneDrive</LinkButton> : null}
               <button type="button" className="ghost-link" onClick={() => void disconnect("microsoft")}>Disconnect</button>
             </div>
           ) : (
-            <LinkButton href="/api/integrations/microsoft/connect?return_to=/app/settings" fullWidth disabled={!status.configured.microsoft}>
+            <LinkButton href={`/api/integrations/microsoft/connect?return_to=${returnTo}`} fullWidth disabled={!status.configured.microsoft}>
               Connect Microsoft
             </LinkButton>
           )}
