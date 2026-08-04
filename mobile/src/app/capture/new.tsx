@@ -18,6 +18,7 @@ import { CaptureErrorSheet } from '@/components/capture-error-sheet';
 import { CaptureInteractionStep } from '@/components/capture-interaction-step';
 import { FollowUpDuePicker } from '@/components/follow-up-due-picker';
 import { CaptureStepIndicator } from '@/components/capture-step-indicator';
+import { OfflineBanner } from '@/components/offline-banner';
 import { Body, Button, FooterBackButton, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import {
@@ -83,6 +84,8 @@ import {
   type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
 import { formatDueLabel } from '@/lib/due-date';
+import { stitchRecordingSegments } from '@/lib/audio-segment-stitch';
+import { isOnline } from '@/lib/connectivity';
 import { useSharedCaptureRecorder, type ImportRecordingMeta } from '@/features/encounters/capture-recorder-context';
 import { normalizeTranscriptForExtraction } from '@/lib/transcript-cleanup';
 import { notifyMeetingReviewReady } from '@/features/notifications/notification-service';
@@ -493,6 +496,24 @@ export default function CaptureWizardScreen() {
     }
   }, [draftReady, isTranscribing, recorder.recordingState, recorder.recordingUri, updateDraft]);
 
+  // serverTranscribePhase/serverTranscribeError are hook-local React state
+  // only — without this, a killed-and-reopened app has no memory that a
+  // recording's transcription needs retrying.
+  useEffect(() => {
+    if (!draftReady) return;
+    if (recorder.serverTranscribePhase === 'failed') {
+      // Persisting hook-local transcription state to the draft's external
+      // storage — a legitimate effect, not derivable-during-render state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      updateDraft({
+        transcriptPending: true,
+        transcriptPendingError: recorder.serverTranscribeError || 'Could not transcribe this recording.',
+      });
+    } else if (recorder.serverTranscribePhase === 'done') {
+      updateDraft({ transcriptPending: false, transcriptPendingError: '' });
+    }
+  }, [draftReady, recorder.serverTranscribePhase, recorder.serverTranscribeError, updateDraft]);
+
   const sessionExchanges = useMemo(() => {
     const started = draft.gatherSessionStartedAt;
     if (!started) return [];
@@ -576,8 +597,15 @@ export default function CaptureWizardScreen() {
     hydratedRef.current = true;
     void (async () => {
       try {
+        // A specific draftId means a draft was just written by the caller
+        // (e.g. beginFreshCapture) moments before navigating here — it must
+        // exist. Racing that read against a timeout and silently minting a
+        // fresh encounterId on a loss orphaned the real draft and created a
+        // second, duplicate "in progress" entry. Only the callerless
+        // fallback path (no draftId — recovering "whatever was last open")
+        // is safe to give up on after a timeout.
         const stored = params.draftId
-          ? await readCaptureDraftWithoutBlocking(String(params.draftId))
+          ? await readCaptureDraft(String(params.draftId))
           : await readCaptureDraftWithoutBlocking();
         let remote: CaptureWizardDraft | null = null;
         if (!stored && params.draftId && session?.access_token) {
@@ -742,6 +770,7 @@ export default function CaptureWizardScreen() {
       recordingSource: draft.recordingSource,
       transcript: draft.transcript,
       durationSeconds: draft.durationSeconds,
+      recordingSegments: draft.recordingSegments,
     });
 
     if (draft.recordingUri && draft.transcript.trim().length < 20 && session?.access_token) {
@@ -914,11 +943,27 @@ export default function CaptureWizardScreen() {
     const token = await ensureAuth();
     if (!token) return;
 
+    if (!isOnline()) {
+      // The draft is already saved continuously as it's edited — the only
+      // thing this step needs a network for is the server-side commit.
+      // Skip it and send the user back to the list, where this draft
+      // already shows as ready to review; they can retry once back online.
+      router.replace('/capture');
+      return;
+    }
+
     setSaving(true);
     setMessage('');
     try {
       let recording = await readLocalRecordingMetadata(draft.encounterId);
-      const recordingUri = draft.recordingUri || recorder.recordingUri;
+      let recordingUri = draft.recordingUri || recorder.recordingUri;
+      // An interruption (or a deliberate resume) can leave prior takes
+      // archived as separate files — combine them into one before this
+      // capture is saved, so upload/playback never has to know it happened.
+      const priorSegments = draft.recordingSegments.length ? draft.recordingSegments : recorder.recordingSegments;
+      if (recordingUri && priorSegments.length) {
+        recordingUri = await stitchRecordingSegments(priorSegments, recordingUri);
+      }
       const recordingDestination = recordingUri ? await readRecordingStorageDestination() : 'local_only';
       if (recordingUri) {
         try {
@@ -1059,6 +1104,7 @@ export default function CaptureWizardScreen() {
               </Pressable>
             ) : undefined}
           />
+          <OfflineBanner style={styles.offlineBanner} />
         </View>
 
         {!activeRecording && draft.step > 0 ? <View style={styles.stepperWrap}>
@@ -1593,6 +1639,7 @@ const styles = StyleSheet.create({
   loadingCopy: { color: colors.muted, fontSize: 14 },
   page: { flex: 1 },
   header: { paddingHorizontal: spacing.x5 },
+  offlineBanner: { marginTop: spacing.x2, alignSelf: 'stretch' },
   headerModeAction: {
     minHeight: 44,
     justifyContent: 'center',

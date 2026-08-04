@@ -7,9 +7,16 @@ type BrandMarkProps = {
 };
 
 export function BrandMark({ size = 36 }: BrandMarkProps) {
+  const radius = Math.round(size * 0.22);
   return (
-    <View style={[styles.wrap, { width: size, height: size }]}>
-      <Image source={logo} style={{ width: size, height: size }} contentFit="contain" accessibilityLabel="AfterMeet" alt="AfterMeet" />
+    <View style={[styles.wrap, { width: size, height: size, borderRadius: radius }]}>
+      <Image
+        source={logo}
+        style={{ width: size, height: size, borderRadius: radius }}
+        contentFit="contain"
+        accessibilityLabel="AfterMeet"
+        alt="AfterMeet"
+      />
     </View>
   );
 }

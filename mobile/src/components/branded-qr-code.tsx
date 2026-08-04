@@ -122,7 +122,7 @@ export function BrandedQrCode({
           ]}>
           <Image
             source={QR_LOGO}
-            style={{ width: logoSize, height: logoSize }}
+            style={{ width: logoSize, height: logoSize, borderRadius: Math.round(logoSize * 0.22) }}
             contentFit="contain"
             accessibilityLabel="AfterMeet"
             alt="AfterMeet"
@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     zIndex: 2,
     elevation: 2,
+    overflow: 'hidden',
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',

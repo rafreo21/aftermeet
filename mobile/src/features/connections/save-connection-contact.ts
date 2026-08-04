@@ -9,6 +9,7 @@ import {
 } from 'expo-contacts/legacy';
 
 import type { MobileCard } from '@/features/card/types';
+import { normalizeEmailForMatching } from '@/lib/contact-identity';
 import { mobileFetch } from '@/lib/mobile-api';
 
 import { connectionDirectoryLegacyId } from './connection-directory';
@@ -78,9 +79,9 @@ async function findDeviceContactId(connection: ConnectionItem, card?: MobileCard
     pageSize: 50,
   });
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = normalizeEmailForMatching(email);
   const match = data.find((contact) => (
-    contact.emails?.some((entry) => entry.email?.trim().toLowerCase() === normalizedEmail)
+    contact.emails?.some((entry) => normalizeEmailForMatching(entry.email) === normalizedEmail)
   ));
   if (!match?.id) return null;
 

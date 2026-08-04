@@ -24,6 +24,7 @@ import { BottomSheet } from '@/components/bottom-sheet';
 import { Body, Button, HeaderActionButton, PageHeader, ScreenFrame } from '@/components/ui';
 import { HistoryToolbar } from '@/components/history-toolbar';
 import { CaptureDeleteSheet } from '@/components/capture-delete-sheet';
+import { OfflineBanner } from '@/components/offline-banner';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { CaptureListSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
@@ -32,6 +33,7 @@ import {
   captureDraftFromRemote,
   deleteCaptureDraft,
   listCaptureDrafts,
+  reconcileStaleLiveDraft,
   writeCaptureDraft,
   type CaptureDraftSummary,
 } from '@/features/encounters/capture-draft';
@@ -43,6 +45,7 @@ import {
   getActiveCaptureController,
   subscribeToActiveCapture,
 } from '@/features/encounters/active-capture-controller';
+import { isNetworkError } from '@/lib/mobile-api';
 import { formatAbsoluteTime, formatRelativeTime } from '@/lib/relative-time';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -184,7 +187,15 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
         }
 
         if (encounterResult.status === 'rejected' || sessionResult.status === 'rejected') {
-          setSyncNotice('Cloud sync is temporarily unavailable. You can still capture and save a draft on this device.');
+          const rejection = encounterResult.status === 'rejected'
+            ? encounterResult.reason
+            : sessionResult.status === 'rejected' ? sessionResult.reason : null;
+          // A plain offline blip is already covered by the OfflineBanner up
+          // top — this longer notice is reserved for a real server-side
+          // sync failure while actually connected.
+          if (!isNetworkError(rejection)) {
+            setSyncNotice('Cloud sync is temporarily unavailable. You can still capture and save a draft on this device.');
+          }
         }
       } else {
         setEncounters([]);
@@ -210,6 +221,19 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
     if (activeCapture && isLiveRecordingSession(activeCapture.snapshot.status)) {
       setCaptureBlockedOpen(true);
       return;
+    }
+    // Any other draft still showing recording/paused has no live session
+    // behind it (that would have tripped the guard above) — it's stale from
+    // an app kill or an interruption the watchdog never got to record.
+    // Reconcile those before starting fresh so they don't linger looking
+    // like phantom live recordings; this never blocks the new recording.
+    const staleLiveDrafts = drafts.filter((item) => (
+      (item.sessionStatus === 'recording' || item.sessionStatus === 'paused')
+      && item.encounterId !== activeCaptureId
+    ));
+    if (staleLiveDrafts.length) {
+      await Promise.all(staleLiveDrafts.map((item) => reconcileStaleLiveDraft(item.encounterId)));
+      setDrafts(await listCaptureDrafts());
     }
     const draft = {
       ...createFreshCaptureDraft(),
@@ -261,7 +285,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
   }
 
   return (
-    <ScreenFrame edges={['top']} paddingHorizontal={0}>
+    <ScreenFrame paddingHorizontal={0}>
       <View style={styles.page}>
         <View style={styles.header}>
           <PageHeader
@@ -275,6 +299,7 @@ export function CaptureHomeScreen({ historyOnly = false }: { historyOnly?: boole
               </HeaderActionButton>
             ) : undefined}
           />
+          <OfflineBanner style={styles.offlineBanner} />
           {!historyOnly ? <View style={styles.startActions}>
             <Button onPress={() => void beginFreshCapture('recording')}>
               <Microphone size={18} color={colors.ink} weight="fill" /> Start recording
@@ -570,6 +595,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.x2,
   },
+  offlineBanner: { marginTop: spacing.x2, alignSelf: 'stretch' },
   activeCard: {
     minHeight: 72,
     padding: spacing.x2,

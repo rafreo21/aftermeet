@@ -1,4 +1,5 @@
 import type { MobileCard } from '@/features/card/types';
+import { normalizeEmailForMatching } from '@/lib/contact-identity';
 
 import type { ConnectionItem } from './connections-api';
 
@@ -49,12 +50,12 @@ export function findSavedDirectoryContact(
   cardSlug?: string | null,
 ) {
   const legacyId = connectionDirectoryLegacyId(connection, cardSlug);
-  const email = connection.email?.trim().toLowerCase() || '';
+  const email = normalizeEmailForMatching(connection.email);
 
   return contacts.find((contact) => {
     if (contact.legacyId === legacyId) return true;
     if (connection.source === 'inbound' && contact.exchangeId === connection.sourceId) return true;
-    if (email && normalizeValue(contact.email) === email) return true;
+    if (email && normalizeEmailForMatching(contact.email) === email) return true;
     return false;
   }) ?? null;
 }

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ExpoAudioSegmentStitcherModule"]
+  },
+  "android": {
+    "modules": ["com.aftermeet.app.audiosegmentstitcher.ExpoAudioSegmentStitcherModule"]
+  }
+}

@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
-import { ClockCounterClockwise, ListChecks, Plus } from 'phosphor-react-native';
+import { ClockCounterClockwise, ListChecks, Plus, WifiSlash } from 'phosphor-react-native';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { FollowUpAudienceSheet } from '@/components/follow-up-audience-sheet';
@@ -17,6 +17,12 @@ import { Body, Button, HeaderActionButton, PageHeader } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { fetchFollowUps, type FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import {
+  applyFollowUpQueueToItems,
+  readCachedFollowUps,
+  readFollowUpQueue,
+  writeCachedFollowUps,
+} from '@/features/follow-ups/follow-up-cache';
+import {
   deviceNotificationsEnabled,
   syncFollowUpNotifications,
 } from '@/features/notifications/notification-service';
@@ -29,6 +35,7 @@ import {
 } from '@/features/follow-ups/follow-up-list';
 import type { FollowUpGroup } from '@/features/follow-ups/follow-up-groups';
 import { useFollowUpActions } from '@/features/follow-ups/use-follow-up-actions';
+import { isNetworkError } from '@/lib/mobile-api';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, spacing } from '@/theme/tokens';
 
@@ -40,6 +47,7 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [offline, setOffline] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<FollowUpSort>(historyOnly ? 'recent' : 'urgency');
   const [sortOpen, setSortOpen] = useState(false);
@@ -70,6 +78,7 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
     if (!accessToken) {
       setFollowUps([]);
       setError('');
+      setOffline(false);
       setLoading(false);
       return;
     }
@@ -77,13 +86,23 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
     setError('');
     try {
       const nextFollowUps = await fetchFollowUps(accessToken);
-      setFollowUps(nextFollowUps);
+      const queue = await readFollowUpQueue();
+      const overlaid = applyFollowUpQueueToItems(nextFollowUps, queue);
+      setFollowUps(overlaid);
+      setOffline(false);
+      await writeCachedFollowUps(overlaid);
       if (await deviceNotificationsEnabled()) {
-        await syncFollowUpNotifications(nextFollowUps);
+        await syncFollowUpNotifications(overlaid);
       }
     } catch (caught) {
-      setFollowUps([]);
-      setError(caught instanceof Error ? caught.message : 'Could not load follow-ups.');
+      if (isNetworkError(caught)) {
+        // Keep whatever's already on screen (cached copy) instead of wiping
+        // it — a transient offline blip shouldn't blank out a working list.
+        setOffline(true);
+      } else {
+        setFollowUps([]);
+        setError(caught instanceof Error ? caught.message : 'Could not load follow-ups.');
+      }
     } finally {
       setLoading(false);
     }
@@ -91,10 +110,19 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
 
   useFocusEffect(
     useCallback(() => {
+      if (accessToken) {
+        void (async () => {
+          const [cached, queue] = await Promise.all([readCachedFollowUps(), readFollowUpQueue()]);
+          if (cached.length) {
+            setFollowUps(applyFollowUpQueueToItems(cached, queue));
+            setLoading(false);
+          }
+        })();
+      }
       void loadFollowUps();
       const interval = setInterval(() => void loadFollowUps(true), 30_000);
       return () => clearInterval(interval);
-    }, [loadFollowUps]),
+    }, [accessToken, loadFollowUps]),
   );
 
   const scopedGroups = useMemo(
@@ -114,13 +142,13 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
       setCompletedMessage(item.owner === 'guest'
         ? `Marked as done for ${item.personName.trim() || 'them'}.`
         : 'Nice, marked as done.');
-    });
+    }).catch(() => {});
   }
 
   function reopenAndConfirm(item: FollowUpItem) {
     void markOpen(item, loadFollowUps).then(() => {
       setCompletedMessage('Moved back to Current follow-ups.');
-    });
+    }).catch(() => {});
   }
 
   function runGroupFollowUp(group: FollowUpGroup) {
@@ -153,6 +181,13 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
             </Body>
           </View>
 
+          {offline && followUps.length ? (
+            <View style={styles.offlineTag}>
+              <WifiSlash size={14} color={colors.muted} weight="bold" />
+              <Text style={styles.offlineTagText}>Offline — showing your saved list</Text>
+            </View>
+          ) : null}
+
           {!historyOnly && session ? (
             <Button variant="secondary" style={styles.addButton} onPress={() => router.push('/quick-follow-up')}>
               <Plus size={18} color={colors.ink} weight="bold" />
@@ -183,7 +218,7 @@ export function FollowUpsScreen({ showBack = true, historyOnly = false }: { show
               primaryLabel="Sign in"
               onPrimary={() => router.push('/auth')}
             />
-          ) : loading ? (
+          ) : loading && !followUps.length ? (
             <CaptureListSkeleton count={6} />
           ) : error ? (
             <MiniPromptCard
@@ -312,4 +347,6 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3, paddingTop: spacing.x2 },
   list: { gap: spacing.x2 },
   emptySearch: { textAlign: 'center', color: colors.muted },
+  offlineTag: { flexDirection: 'row', alignItems: 'center', gap: spacing.x1 },
+  offlineTagText: { color: colors.muted, fontSize: 12, fontWeight: '700' },
 });

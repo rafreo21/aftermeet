@@ -37,7 +37,7 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
     <View style={styles.wrap}>
       <Animated.View
         layout={LinearTransition.duration(220)}
-        style={[styles.bar, { marginBottom: Math.max(insets.bottom, spacing.x3) }]}>
+        style={[styles.bar, { marginBottom: Math.max(insets.bottom, spacing.x3) + spacing.x1 }]}>
         {visibleRoutes.map((route) => {
           const { options } = descriptors[route.key];
           const routeIndex = state.routes.findIndex((item) => item.key === route.key);
@@ -86,7 +86,7 @@ export function AppTabBar({ state, descriptors, navigation }: TabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', backgroundColor: colors.canvas },
+  wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -123,6 +123,10 @@ const styles = StyleSheet.create({
     width: BADGE_SIZE,
     height: BADGE_SIZE,
     borderRadius: radius.round,
+    // Android doesn't reliably clip a View's own backgroundColor fill to
+    // its borderRadius without an explicit overflow:hidden (iOS does, via
+    // CALayer) — without this the badge rendered as a square there.
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

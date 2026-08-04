@@ -463,7 +463,7 @@ export default function ConnectionDetailScreen() {
                 accessibilityRole="button"
                 onPress={() => setCardSheetOpen(true)}
                 style={({ pressed }) => [styles.cardButton, pressed && styles.pressed]}>
-                <IdentificationCard size={20} color={colors.ink} weight="bold" />
+                <IdentificationCard size={20} color={colors.white} weight="bold" />
                 <View style={styles.cardButtonCopy}>
                   <Text style={styles.cardButtonTitle}>View card & directory</Text>
                   <Text style={styles.cardButtonMeta}>
@@ -526,7 +526,14 @@ export default function ConnectionDetailScreen() {
           setActiveMeeting(null);
           setMeetingRecordingUri(null);
         }}
-        onPressFollowUp={runConnectionFollowUp}
+        onPressFollowUp={(item) => {
+          // Close this sheet before running the action — it may open another
+          // sheet (missing contact info, audience choice), and two RN <Modal>
+          // instances visible at once hangs on iOS.
+          setActiveMeeting(null);
+          setMeetingRecordingUri(null);
+          runConnectionFollowUp(item);
+        }}
         onCompleteFollowUp={(item) => void markComplete(item, refreshFollowUps)}
         onReopenFollowUp={(item) => void markOpen(item, refreshFollowUps)}
       />

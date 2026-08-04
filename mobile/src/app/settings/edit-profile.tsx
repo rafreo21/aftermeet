@@ -113,29 +113,28 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.field}>
-              <View style={styles.phoneRow}>
-                <View style={styles.phoneInputWrap}>
-                  <PhoneInput label="Phone number" value={phone} onChange={setPhone} />
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={profile?.phoneVerified ? 'Phone number verified' : 'Verify phone number'}
-                  disabled={profile?.phoneVerified}
-                  onPress={() => setVerifyNoticeOpen(true)}
-                  style={({ pressed }) => [
-                    styles.verifyButton,
-                    profile?.phoneVerified && styles.verifyButtonDone,
-                    pressed && !profile?.phoneVerified && styles.verifyButtonPressed,
-                  ]}>
-                  {profile?.phoneVerified ? (
-                    <CheckCircle size={20} color={colors.ink} weight="fill" />
-                  ) : (
-                    <ShieldCheck size={20} color={colors.ink} weight="bold" />
-                  )}
-                </Pressable>
-              </View>
+              <PhoneInput label="Phone number" value={phone} onChange={setPhone} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={profile?.phoneVerified ? 'Phone number verified' : 'Verify phone number'}
+                disabled={profile?.phoneVerified}
+                onPress={() => setVerifyNoticeOpen(true)}
+                style={({ pressed }) => [
+                  styles.verifyButton,
+                  profile?.phoneVerified && styles.verifyButtonDone,
+                  pressed && !profile?.phoneVerified && styles.verifyButtonPressed,
+                ]}>
+                {profile?.phoneVerified ? (
+                  <CheckCircle size={20} color={colors.ink} weight="fill" />
+                ) : (
+                  <ShieldCheck size={20} color={colors.ink} weight="bold" />
+                )}
+                <Text style={styles.verifyButtonText}>
+                  {profile?.phoneVerified ? 'Verified' : 'Verify'}
+                </Text>
+              </Pressable>
               <Text style={styles.fieldHint}>
-                {profile?.phoneVerified ? 'This number is verified.' : 'Save your number, then tap the shield to verify it.'}
+                {profile?.phoneVerified ? 'This number is verified.' : 'Save your number, then tap verify.'}
               </Text>
             </View>
           </Panel>
@@ -198,19 +197,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   verifiedTagText: { color: colors.ink, fontSize: 10, fontWeight: '800' },
-  phoneRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.x2 },
-  phoneInputWrap: { flex: 1 },
   verifyButton: {
-    width: 52,
-    height: 52,
-    flexShrink: 0,
+    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.x2,
     borderRadius: radius.medium,
     backgroundColor: colors.surfaceMuted,
     borderWidth: 1,
     borderColor: colors.line,
   },
+  verifyButtonText: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   verifyButtonPressed: { opacity: 0.8 },
   verifyButtonDone: { backgroundColor: colors.accent, borderColor: colors.accent },
 });

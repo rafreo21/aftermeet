@@ -153,7 +153,7 @@ export default function NotificationCenterScreen() {
   }
 
   return (
-    <ScreenFrame edges={['top']}>
+    <ScreenFrame>
       <PageHeader
         eyebrow="Alerts"
         title="Notifications"

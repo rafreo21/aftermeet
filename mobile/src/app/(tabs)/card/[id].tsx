@@ -135,7 +135,7 @@ export default function CardDetailScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + spacing.x6 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           <View style={styles.badges}>

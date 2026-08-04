@@ -18,6 +18,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/bottom-sheet';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
+import { OfflineBanner } from '@/components/offline-banner';
 import { ProgressRing } from '@/components/progress-ring';
 import { Skeleton, SkeletonCircle, SkeletonLine } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
@@ -28,7 +29,7 @@ import {
 } from '@/features/encounters/active-capture-controller';
 import { fetchEncounters, type EncounterSummary } from '@/features/encounters/encounter-api';
 import { formatDuration } from '@/features/encounters/local-recordings';
-import { listCaptureDrafts, type CaptureDraftSummary } from '@/features/encounters/capture-draft';
+import { createFreshCaptureDraft, listCaptureDrafts, writeCaptureDraft, type CaptureDraftSummary } from '@/features/encounters/capture-draft';
 import {
   connectionAvatarUrl,
 } from '@/features/connections/connection-public-card';
@@ -42,7 +43,7 @@ import { summarizeFollowUpNudges } from '@/features/follow-ups/follow-up-nudges'
 import { resolveFollowUpUserName } from '@/features/follow-ups/follow-up-participants';
 import { fetchNotifications } from '@/features/notifications/notification-center-api';
 import { formatRelativeTime } from '@/lib/relative-time';
-import { useAppInsets } from '@/lib/safe-area';
+import { useAppInsets, useTabBarHeight } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 function timeGreeting() {
@@ -62,6 +63,7 @@ type ActiveWorkItem = {
 
 export default function HomeScreen() {
   const insets = useAppInsets();
+  const tabBarHeight = useTabBarHeight();
   const { session } = useAuth();
   const { card, cards, loading: cardLoading } = useCard();
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
@@ -152,6 +154,24 @@ export default function HomeScreen() {
   );
 
   const activeCaptureId = activeCapture?.snapshot.encounterId;
+
+  async function startCaptureNow() {
+    setFabOpen(false);
+    if (activeCapture) {
+      router.navigate({
+        pathname: '/capture/new',
+        params: { draftId: activeCapture.snapshot.encounterId },
+      });
+      return;
+    }
+    const draft = { ...createFreshCaptureDraft(), captureMode: 'recording' as const };
+    await writeCaptureDraft(draft);
+    router.navigate({
+      pathname: '/capture/new',
+      params: { draftId: draft.encounterId, openConsent: '1' },
+    });
+  }
+
   const draftCount = useMemo(
     () => drafts.filter((item) => item.encounterId !== activeCaptureId).length,
     [drafts, activeCaptureId],
@@ -199,20 +219,20 @@ export default function HomeScreen() {
   const recentPeople = useMemo(() => sortedConnections.slice(0, 3), [sortedConnections]);
 
   const hasCard = cards.length > 0;
-  // This screen's own root View is already sized above the tab bar by the
-  // tab navigator (tabBarStyle isn't position:absolute), so bottom:0 here
-  // means "just above the tab bar" already — no extra tab-bar-height offset.
-  const fabBottomOffset = spacing.x5;
+  // AppTabBar floats as an absolute overlay now, so this screen's root View
+  // spans the full window height — the FAB must clear the pill itself.
+  const fabBottomOffset = tabBarHeight + spacing.x3;
   const fabClearance = fabBottomOffset + 56 + spacing.x4;
 
   return (
     <View style={styles.safe}>
       <View style={[styles.fixedBar, { paddingTop: insets.top + spacing.x2 }]}>
         <View style={styles.greetingBlock}>
-          <Text style={styles.greetingTitle} numberOfLines={1}>
+          <Text style={styles.greetingTitle}>
             {greetingName ? `${timeGreeting()}, ${greetingName}` : timeGreeting()}
           </Text>
-          <Text style={styles.greetingSubtitle} numberOfLines={1}>Here’s what needs your attention.</Text>
+          <Text style={styles.greetingSubtitle} numberOfLines={1}>Here’s a quick look at what’s ahead.</Text>
+          <OfflineBanner style={styles.offlineBanner} />
         </View>
         <Pressable
           accessibilityRole="button"
@@ -304,7 +324,7 @@ export default function HomeScreen() {
 
             <View style={styles.section}>
               <View style={styles.sectionHead}>
-                <Text style={styles.sectionTitle}>Recent people</Text>
+                <Text style={styles.sectionTitle}>Recent connections</Text>
                 {session && sortedConnections.length > 3 ? (
                   <Pressable accessibilityRole="button" onPress={() => router.push('/connections')}>
                     <Text style={styles.viewAll}>View all</Text>
@@ -320,14 +340,14 @@ export default function HomeScreen() {
               ) : session ? (
                 <MiniPromptCard
                   icon={<UsersThree size={18} color={colors.ink} weight="fill" />}
-                  title="No recent people yet."
+                  title="No recent connections yet."
                   copy="Scan a card or add someone after your next conversation."
                   onPress={() => router.push('/scanner')}
                 />
               ) : (
                 <MiniPromptCard
                   icon={<UsersThree size={18} color={colors.ink} weight="fill" />}
-                  title="Sign in to see recent people"
+                  title="Sign in to see recent connections"
                   copy="People you scan or add will show up here."
                   onPress={() => router.push('/auth')}
                 />
@@ -335,7 +355,7 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>My card</Text>
+              <Text style={styles.sectionTitle}>My primary card</Text>
               {!cardLoading && hasCard ? (
                 <Pressable
                   accessibilityRole="button"
@@ -386,10 +406,7 @@ export default function HomeScreen() {
         <View style={styles.fabOptions}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              setFabOpen(false);
-              router.push('/capture');
-            }}
+            onPress={() => void startCaptureNow()}
             style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
             <View style={styles.fabOptionIcon}>
               <Microphone size={20} color={colors.ink} weight="bold" />
@@ -509,7 +526,8 @@ const styles = StyleSheet.create({
     gap: spacing.x3,
   },
   greetingBlock: { flex: 1, minWidth: 0, gap: 2 },
-  greetingTitle: { color: colors.ink, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  offlineBanner: { marginTop: spacing.x2, alignSelf: 'stretch' },
+  greetingTitle: { color: colors.ink, fontSize: 30, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4 },
   greetingSubtitle: { color: colors.muted, fontSize: 13 },
   bellButton: {
     width: 42,

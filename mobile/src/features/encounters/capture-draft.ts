@@ -35,6 +35,13 @@ export type CaptureWizardDraft = {
   consentMethod: 'verbal' | 'written';
   durationSeconds: number;
   recordingUri: string;
+  /**
+   * Prior takes from before an interruption forced a new file — `recordingUri`
+   * is always the latest/current segment. Stitched into one file at save
+   * time (see audio-segment-stitch.ts) so upload/playback code downstream
+   * never needs to know a recording was ever split.
+   */
+  recordingSegments: string[];
   recordingSource: 'recorded' | 'imported' | '';
   retention: AudioRetention;
   people: GatherPerson[];
@@ -57,6 +64,9 @@ export type CaptureWizardDraft = {
   originDeviceId: string;
   originDeviceLabel: string;
   hasLocalAudio: boolean;
+  /** Audio exists locally but there's no usable server transcript yet. */
+  transcriptPending: boolean;
+  transcriptPendingError: string;
 };
 
 export type CaptureDraftSummary = {
@@ -68,6 +78,8 @@ export type CaptureDraftSummary = {
   transcriptPreview: string;
   sessionStatus: CaptureSessionStatus;
   failureReason: string;
+  hasLocalAudio: boolean;
+  transcriptPending: boolean;
 };
 
 export const CAPTURE_DRAFT_KEY = 'aftermeet-capture-wizard-v1';
@@ -149,8 +161,13 @@ function normalizeDraft(parsed: Partial<CaptureWizardDraft>): CaptureWizardDraft
     failureReason: typeof parsed.failureReason === 'string' ? parsed.failureReason : '',
     recordingStartedAt: typeof parsed.recordingStartedAt === 'string' ? parsed.recordingStartedAt : '',
     recordingStoppedAt: typeof parsed.recordingStoppedAt === 'string' ? parsed.recordingStoppedAt : '',
+    recordingSegments: Array.isArray(parsed.recordingSegments)
+      ? parsed.recordingSegments.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : [],
     privateNotes: typeof parsed.privateNotes === 'string' ? parsed.privateNotes : '',
     manualFollowUps: normalizeManualFollowUps(parsed.manualFollowUps),
+    transcriptPending: Boolean(parsed.transcriptPending),
+    transcriptPendingError: typeof parsed.transcriptPendingError === 'string' ? parsed.transcriptPendingError : '',
   };
 }
 
@@ -164,6 +181,8 @@ function toSummary(draft: CaptureWizardDraft): CaptureDraftSummary {
     transcriptPreview: draft.transcript.trim().slice(0, 120),
     sessionStatus: draft.sessionStatus,
     failureReason: draft.failureReason,
+    hasLocalAudio: draft.hasLocalAudio || Boolean(draft.recordingUri.trim()),
+    transcriptPending: draft.transcriptPending,
   };
 }
 
@@ -179,6 +198,7 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   consentMethod: 'verbal',
   durationSeconds: 0,
   recordingUri: '',
+  recordingSegments: [],
   recordingSource: '',
   retention: '7_days',
   people: [],
@@ -201,6 +221,8 @@ export const EMPTY_CAPTURE_DRAFT: CaptureWizardDraft = {
   originDeviceId: '',
   originDeviceLabel: '',
   hasLocalAudio: false,
+  transcriptPending: false,
+  transcriptPendingError: '',
 };
 
 export function createFreshCaptureDraft(): CaptureWizardDraft {
@@ -323,6 +345,7 @@ export function captureDraftFromRemote(session: RemoteCaptureSession): CaptureWi
     ...(session as Partial<CaptureWizardDraft>),
     encounterId: session.encounterId,
     recordingUri: '',
+    recordingSegments: [],
     recordingSource: '',
     originDeviceId: typeof session.deviceId === 'string' ? session.deviceId : '',
     originDeviceLabel: typeof session.deviceLabel === 'string' ? session.deviceLabel : '',
@@ -334,8 +357,11 @@ export function captureDraftToRemote(
   draft: CaptureWizardDraft,
   device: { id: string; label: string },
 ): RemoteCaptureSession {
-  const { recordingUri, ...safeDraft } = draft;
+  const { recordingUri, recordingSegments, transcriptPending, transcriptPendingError, ...safeDraft } = draft;
   void recordingUri;
+  void recordingSegments;
+  void transcriptPending;
+  void transcriptPendingError;
   return {
     ...safeDraft,
     encounterId: draft.encounterId,
@@ -346,6 +372,30 @@ export function captureDraftToRemote(
     hasLocalAudio: Boolean(draft.recordingUri),
     updatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * A draft can end up stuck showing `sessionStatus: 'recording'|'paused'`
+ * with no in-memory session actually backing it (app was killed, or the
+ * interruption watchdog never got a chance to run) — the persisted status
+ * never got a chance to reconcile. Left as-is, it looks like a phantom still
+ * -live recording indefinitely. Call this for any draft NOT covered by the
+ * live in-memory `activeCaptureController` before treating it as stale.
+ */
+export async function reconcileStaleLiveDraft(encounterId: string) {
+  const draft = await readCaptureDraft(encounterId);
+  if (!draft) return null;
+  if ((draft.sessionStatus === 'recording' || draft.sessionStatus === 'paused') && !draft.recordingUri.trim()) {
+    const reconciled: CaptureWizardDraft = {
+      ...draft,
+      sessionStatus: 'failed',
+      failureReason: 'recording_interrupted',
+      recordingStoppedAt: new Date().toISOString(),
+    };
+    await writeCaptureDraft(reconciled);
+    return reconciled;
+  }
+  return draft;
 }
 
 export async function deleteCaptureDraft(encounterId: string) {

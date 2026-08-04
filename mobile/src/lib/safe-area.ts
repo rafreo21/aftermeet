@@ -15,7 +15,10 @@ export function useAppInsets() {
 
 export function useTabBarHeight() {
   const insets = useAppInsets();
-  // Matches AppTabBar's real rendered height: item height (52) + the bar's
-  // own vertical padding (6+6) + its marginTop (8) + marginBottom.
-  return 72 + Math.max(insets.bottom, 12);
+  // AppTabBar now floats as an absolute overlay, so this only needs to
+  // clear its opaque footprint (item height 52 + vertical padding 6+6) —
+  // the transparent marginTop above it is safe for content to reach.
+  // The +4 mirrors AppTabBar's own marginBottom bump (extra clearance from
+  // Android's gesture bar).
+  return 64 + Math.max(insets.bottom, 12) + 4;
 }

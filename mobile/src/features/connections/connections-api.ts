@@ -1,3 +1,4 @@
+import { normalizeEmailForMatching } from '@/lib/contact-identity';
 import { mobileFetch } from '@/lib/mobile-api';
 
 import { lookupPublishedCardSlug } from './connection-card-loader';
@@ -71,7 +72,7 @@ function subtitle(role?: string, company?: string, fallback = 'Connected through
 }
 
 function mergeKey(name: string, email?: string) {
-  const normalizedEmail = (email || '').trim().toLowerCase();
+  const normalizedEmail = normalizeEmailForMatching(email);
   if (normalizedEmail) return normalizedEmail;
   return name.trim().toLowerCase();
 }

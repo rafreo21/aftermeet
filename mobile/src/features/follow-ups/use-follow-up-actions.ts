@@ -4,6 +4,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import type { FollowUpItem } from '@/features/follow-ups/follow-up-api';
 import { completeFollowUp, reopenFollowUp } from '@/features/follow-ups/follow-up-api';
+import { dequeueFollowUpAction, enqueueFollowUpAction, setCachedFollowUpStatus } from '@/features/follow-ups/follow-up-cache';
 import {
   applyAudienceToContext,
   contactContextFromCard,
@@ -23,6 +24,7 @@ import {
 import { fetchConnectedAccounts, type ConnectedAccountStatus } from '@/features/integrations/integrations-api';
 import type { MobileCard } from '@/features/card/types';
 import type { ConnectionItem } from '@/features/connections/connections-api';
+import { isOnline } from '@/lib/connectivity';
 
 function resolveCalendarProvider(status: ConnectedAccountStatus | null): 'google' | 'microsoft' | null {
   if (!status) return null;
@@ -143,7 +145,17 @@ export function useFollowUpActions(
     const key = `${item.encounterId}-${item.actionId}`;
     setCompletingId(key);
     try {
-      await completeFollowUp(accessToken, item.encounterId, item.actionId);
+      const completedAt = new Date().toISOString();
+      await setCachedFollowUpStatus(item.encounterId, item.actionId, 'completed', completedAt);
+      await enqueueFollowUpAction({ encounterId: item.encounterId, actionId: item.actionId, action: 'complete', queuedAt: completedAt });
+      if (isOnline()) {
+        try {
+          await completeFollowUp(accessToken, item.encounterId, item.actionId);
+          await dequeueFollowUpAction(item.encounterId, item.actionId);
+        } catch {
+          // Keep queued; retry on the next foreground/reconnect sync — same as card sync failures.
+        }
+      }
       onUpdated?.();
     } finally {
       setCompletingId(null);
@@ -158,7 +170,17 @@ export function useFollowUpActions(
     const key = `${item.encounterId}-${item.actionId}`;
     setCompletingId(key);
     try {
-      await reopenFollowUp(accessToken, item.encounterId, item.actionId);
+      const queuedAt = new Date().toISOString();
+      await setCachedFollowUpStatus(item.encounterId, item.actionId, 'open', undefined);
+      await enqueueFollowUpAction({ encounterId: item.encounterId, actionId: item.actionId, action: 'reopen', queuedAt });
+      if (isOnline()) {
+        try {
+          await reopenFollowUp(accessToken, item.encounterId, item.actionId);
+          await dequeueFollowUpAction(item.encounterId, item.actionId);
+        } catch {
+          // Keep queued; retry on the next foreground/reconnect sync — same as card sync failures.
+        }
+      }
       onUpdated?.();
     } finally {
       setCompletingId(null);

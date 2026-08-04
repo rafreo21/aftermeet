@@ -10,9 +10,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/features/auth/auth-context';
 import { CardProvider } from '@/features/card/card-context';
+import { FollowUpSyncManager } from '@/features/follow-ups/follow-up-sync-manager';
 import { NotificationManager } from '@/features/notifications/notification-manager';
 import { ActiveCaptureBanner } from '@/components/active-capture-banner';
 import { CaptureRecorderProvider } from '@/features/encounters/capture-recorder-context';
+import { CaptureTranscriptionSyncManager } from '@/features/encounters/capture-transcription-sync-manager';
+import { WidgetQrRenderer } from '@/lib/widget-qr-renderer';
 import { colors } from '@/theme/tokens';
 
 function applyAndroidNavigationBar() {
@@ -81,6 +84,8 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <NotificationManager />
+          <FollowUpSyncManager />
+          <CaptureTranscriptionSyncManager />
           <CardProvider>
             <CaptureRecorderProvider>
               <StatusBar style="dark" />
@@ -88,6 +93,7 @@ export default function RootLayout() {
               <View style={{ flex: 1 }}>
                 <RootNavigator />
                 <ActiveCaptureBanner />
+                <WidgetQrRenderer />
               </View>
             </CaptureRecorderProvider>
           </CardProvider>

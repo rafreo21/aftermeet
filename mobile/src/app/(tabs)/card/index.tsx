@@ -12,13 +12,14 @@ import { Body, Button, Eyebrow, HeaderActionButton, Title } from '@/components/u
 import { useAuth } from '@/features/auth/auth-context';
 import { MAX_CARDS } from '@/features/card/card-library';
 import { useCard } from '@/features/card/card-context';
-import { useAppInsets } from '@/lib/safe-area';
+import { useAppInsets, useTabBarHeight } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 export default function CardLibraryScreen() {
   const { session } = useAuth();
   const { cards, activeCardId, syncing, canCreateCard, createCard } = useCard();
   const insets = useAppInsets();
+  const tabBarHeight = useTabBarHeight();
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -66,7 +67,7 @@ export default function CardLibraryScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing.x6 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + spacing.x6 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {!session && !hasCards ? (

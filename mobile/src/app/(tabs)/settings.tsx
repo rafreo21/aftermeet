@@ -54,7 +54,7 @@ export default function SettingsScreen() {
       header={
         <View style={styles.header}>
           <Eyebrow>AfterMeet mobile</Eyebrow>
-          <Title>My Profile</Title>
+          <Title style={styles.title}>My Profile</Title>
           <Body>Manage your account, synchronization and mobile capabilities.</Body>
         </View>
       }>
@@ -88,20 +88,6 @@ export default function SettingsScreen() {
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push('/connections')}
-        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
-        <View style={styles.linkCopy}>
-          <View style={styles.linkTitleRow}>
-            <UsersThree size={18} color={colors.ink} weight="bold" />
-            <Text style={styles.label}>My connections</Text>
-          </View>
-          <Text style={styles.linkHint}>People you&apos;ve met and cards you&apos;ve saved</Text>
-        </View>
-        <CaretRight size={18} color={colors.muted} weight="bold" />
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
         onPress={() => router.push('/settings/follow-ups')}
         style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
         <View style={styles.linkCopy}>
@@ -116,20 +102,6 @@ export default function SettingsScreen() {
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push('/settings/connected-accounts')}
-        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
-        <View style={styles.linkCopy}>
-          <View style={styles.linkTitleRow}>
-            <Plugs size={18} color={colors.ink} weight="bold" />
-            <Text style={styles.label}>Connected accounts</Text>
-          </View>
-          <Text style={styles.linkHint}>Google, Microsoft, and future integrations</Text>
-        </View>
-        <CaretRight size={18} color={colors.muted} weight="bold" />
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
         onPress={() => router.push('/settings/recent-scans')}
         style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
         <View style={styles.linkCopy}>
@@ -138,6 +110,34 @@ export default function SettingsScreen() {
             <Text style={styles.label}>Recent scans</Text>
           </View>
           <Text style={styles.linkHint}>People who scanned your card but aren&apos;t saved yet</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/connections')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <UsersThree size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>My connections</Text>
+          </View>
+          <Text style={styles.linkHint}>People you&apos;ve met and cards you&apos;ve saved</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/settings/connected-accounts')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <Plugs size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Connected accounts</Text>
+          </View>
+          <Text style={styles.linkHint}>Google, Microsoft, and future integrations</Text>
         </View>
         <CaretRight size={18} color={colors.muted} weight="bold" />
       </Pressable>
@@ -249,6 +249,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   header: { gap: spacing.x3 },
+  title: { fontSize: 30, lineHeight: 32 },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   value: { marginTop: 8, color: colors.ink, fontSize: 17, fontWeight: '800' },
   hint: { marginTop: 5, color: colors.muted, fontSize: 12, lineHeight: 18 },

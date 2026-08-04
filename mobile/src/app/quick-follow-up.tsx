@@ -177,7 +177,7 @@ export default function QuickFollowUpScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.x6 }]}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
@@ -272,13 +272,15 @@ export default function QuickFollowUpScreen() {
               </>
             ) : null}
           </View>
-
-          <Button loading={saving} disabled={saving} onPress={() => void submit()}>
-            <CheckCircle size={19} color={colors.ink} weight="bold" />
-            Add follow-up
-          </Button>
         </View>
       </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.x2 }]}>
+        <Button loading={saving} disabled={saving} onPress={() => void submit()}>
+          <CheckCircle size={19} color={colors.ink} weight="bold" />
+          Add follow-up
+        </Button>
+      </View>
 
       <BottomSheet
         visible={addPersonSheetOpen}
@@ -438,7 +440,13 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.canvas },
   header: { paddingHorizontal: spacing.x5, gap: spacing.x2 },
   scroll: { flex: 1, marginTop: spacing.x4 },
-  content: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
+  content: { paddingHorizontal: spacing.x5, gap: spacing.x3, paddingBottom: spacing.x4 },
+  footer: {
+    paddingHorizontal: spacing.x5,
+    paddingTop: spacing.x3,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   linkHint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   personTrigger: {

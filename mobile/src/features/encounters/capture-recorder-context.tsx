@@ -57,12 +57,16 @@ export function CaptureRecorderProvider({ children }: PropsWithChildren) {
       handlersRef.current.onRecordingUriChange(uri, source, meta);
       void persistRecorderDraft(handlersRef.current.encounterId, {
         recordingUri: uri,
+        recordingSegments: meta?.segments ?? [],
         recordingSource: source,
         importFileName: meta?.fileName || '',
         importMimeType: meta?.mimeType || '',
         hasLocalAudio: Boolean(uri),
         sessionStatus: 'review_ready',
-        failureReason: '',
+        // Preserved so the review screen can tell "you tapped Finish" apart
+        // from "the system cut this off" and offer Resume instead of Record
+        // again for the latter.
+        failureReason: meta?.interrupted ? 'recording_auto_saved_interrupted' : '',
         recordingStoppedAt: new Date().toISOString(),
       });
     },

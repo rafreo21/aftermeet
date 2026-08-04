@@ -1,5 +1,17 @@
+import { isOnline } from '@/lib/connectivity';
 import { readEnv } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
+
+// RN's fetch polyfill throws a TypeError specifically for connectivity
+// failures, while every deliberate domain error in this codebase throws a
+// plain Error — so `instanceof TypeError` is a reliable signal without
+// depending on fragile message text. isOnline() is layered on top so that
+// if we already know we're offline, any error at that call site counts too.
+export function isNetworkError(error: unknown): boolean {
+  if (!isOnline()) return true;
+  if (error instanceof TypeError) return true;
+  return error instanceof Error && /network request failed/i.test(error.message);
+}
 
 export async function mobileFetch(path: string, accessToken: string, init?: RequestInit) {
   const env = readEnv();

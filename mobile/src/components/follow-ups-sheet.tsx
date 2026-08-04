@@ -56,11 +56,11 @@ export function FollowUpsSheet({
   }, [items, query, sortMode]);
 
   function runGroup(group: FollowUpGroup) {
+    // Close this sheet before opening the next one — whether that's the
+    // action directly or the grouped-actions list — two RN <Modal>
+    // instances visible at once hangs on iOS.
+    onClose();
     if (group.items.length === 1) {
-      // Close this sheet before running the action — it may open another
-      // sheet (missing contact info, audience choice), and two RN <Modal>
-      // instances visible at once hangs on iOS.
-      onClose();
       onPressItem(group.items[0]);
       return;
     }

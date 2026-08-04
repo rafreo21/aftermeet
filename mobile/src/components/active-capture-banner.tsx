@@ -37,7 +37,7 @@ export function ActiveCaptureBanner() {
   }
 
   return (
-    <View pointerEvents="box-none" style={[styles.layer, { bottom: Math.max(insets.bottom, 12) + 66 }]}>
+    <View pointerEvents="box-none" style={[styles.layer, { bottom: Math.max(insets.bottom, 12) + 78 }]}>
       <View style={styles.banner} accessibilityRole="summary">
         <Pressable
           accessibilityRole="button"
@@ -45,7 +45,7 @@ export function ActiveCaptureBanner() {
           onPress={openCapture}
           style={({ pressed }) => [styles.summary, pressed && styles.pressed]}>
           <View style={[styles.icon, isPaused && styles.pausedIcon]}>
-            <Microphone size={20} color={colors.ink} weight="fill" />
+            <Microphone size={20} color={colors.accent} weight="fill" />
           </View>
           <View style={styles.copy}>
             <Text style={styles.label}>{statusLabel}</Text>
@@ -60,8 +60,8 @@ export function ActiveCaptureBanner() {
             onPress={() => void active.pauseOrResume()}
             style={({ pressed }) => [styles.control, pressed && styles.pressed]}>
             {isPaused
-              ? <Play size={19} color={colors.white} weight="fill" />
-              : <Pause size={19} color={colors.white} weight="fill" />}
+              ? <Play size={19} color={colors.ink} weight="fill" />
+              : <Pause size={19} color={colors.ink} weight="fill" />}
           </Pressable>
         ) : null}
 
@@ -71,8 +71,7 @@ export function ActiveCaptureBanner() {
             accessibilityLabel="Finish recording"
             onPress={() => void active.finish()}
             style={({ pressed }) => [styles.finish, pressed && styles.pressed]}>
-            <Stop size={17} color={colors.ink} weight="fill" />
-            <Text style={styles.finishText}>Finish</Text>
+            <Stop size={17} color={colors.accent} weight="fill" />
           </Pressable>
         ) : null}
       </View>
@@ -84,7 +83,9 @@ const styles = StyleSheet.create({
   layer: {
     position: 'absolute',
     left: spacing.x4,
-    right: spacing.x4,
+    // Home's FAB floats at right: spacing.x5, width 56 — stopping short of
+    // that zone (rather than going edge-to-edge) keeps this from covering it.
+    right: 92,
     zIndex: 100,
     elevation: 12,
   },
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     padding: spacing.x2,
     borderRadius: radius.medium,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.x2,
@@ -114,33 +115,30 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.small,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pausedIcon: { backgroundColor: colors.surfaceMuted },
+  pausedIcon: { backgroundColor: colors.inkSoft },
   copy: { minWidth: 0, flex: 1 },
-  label: { color: colors.white, fontSize: 14, fontWeight: '800' },
-  duration: { color: '#CFE1C8', fontSize: 12, fontWeight: '700', marginTop: 2 },
+  label: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  duration: { color: colors.inkSoft, fontSize: 12, fontWeight: '700', marginTop: 2 },
   control: {
     width: 44,
     height: 44,
     borderRadius: radius.small,
     borderWidth: 1,
-    borderColor: '#47633B',
+    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   finish: {
+    width: 44,
     height: 44,
     borderRadius: radius.small,
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.x3,
-    flexDirection: 'row',
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.x2,
   },
-  finishText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
   pressed: { opacity: 0.72 },
 });

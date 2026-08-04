@@ -42,6 +42,7 @@ import {
   type GatherPerson,
 } from '@/features/encounters/gather-people';
 import { filterConnections, type ConnectionItem } from '@/features/connections/connections-api';
+import { fetchDeviceContacts, filterDeviceContacts, type DeviceContactMatch } from '@/features/connections/device-contacts';
 import type { CaptureRecorder } from '@/features/encounters/use-capture-recorder';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -198,11 +199,12 @@ export function CaptureInteractionStep({
   openConsentOnMount = false,
 }: CaptureInteractionStepProps) {
   const { card, publicUrl } = useCard();
-  const [consentIntent, setConsentIntent] = useState<'confirm' | 'record' | null>(() => (
+  const [consentIntent, setConsentIntent] = useState<'confirm' | 'record' | 'continue' | null>(() => (
     openConsentOnMount && recorder.recordingState === 'idle' ? 'record' : null
   ));
   const [addPersonSheetOpen, setAddPersonSheetOpen] = useState(false);
   const [personSearchQuery, setPersonSearchQuery] = useState('');
+  const [deviceContacts, setDeviceContacts] = useState<DeviceContactMatch[]>([]);
   const [manualOpen, setManualOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [scansOpen, setScansOpen] = useState(false);
@@ -243,6 +245,11 @@ export function CaptureInteractionStep({
     }
   })();
 
+  // The Finish button and the interruption watchdog both land the recorder
+  // in 'stopped' with a real recordingUri — this is the only signal telling
+  // them apart, so "resume, nothing lost" only shows for the latter.
+  const wasInterrupted = draft.failureReason === 'recording_auto_saved_interrupted';
+
   const recorderTitle = isTranscribingImport
     ? 'Transcribing import'
     : recorder.recordingState === 'recording'
@@ -250,12 +257,20 @@ export function CaptureInteractionStep({
       : recorder.recordingState === 'paused'
         ? 'Paused'
         : recorder.recordingState === 'stopped'
-          ? (isImported ? 'Imported recording' : 'Recording ready')
+          ? (isImported ? 'Imported recording' : wasInterrupted ? 'Recording paused' : 'Recording ready')
           : 'Ready to capture';
 
   useEffect(() => {
     onPathStateChange?.(true);
   }, [onPathStateChange]);
+
+  useEffect(() => {
+    if (!addPersonSheetOpen || deviceContacts.length) return;
+    // Fetch once per sheet session and filter client-side per keystroke —
+    // re-requesting permission and re-reading the address book on every
+    // character typed would be slow and intrusive.
+    void fetchDeviceContacts().then(setDeviceContacts).catch(() => {});
+  }, [addPersonSheetOpen, deviceContacts.length]);
 
   function updatePeople(nextPeople: GatherPerson[]) {
     onDraftChange(syncLegacyPersonFields(nextPeople.slice(0, MAX_GATHER_PEOPLE)));
@@ -330,12 +345,17 @@ export function CaptureInteractionStep({
   }
 
   function confirmConsent() {
-    const shouldStartRecording = consentIntent === 'record';
+    const intent = consentIntent;
     setConsentIntent(null);
-    if (!shouldStartRecording) return;
-    requestAnimationFrame(() => {
-      void recorder.startRecording(true);
-    });
+    if (intent === 'record') {
+      requestAnimationFrame(() => {
+        void recorder.startRecording(true);
+      });
+    } else if (intent === 'continue') {
+      requestAnimationFrame(() => {
+        void recorder.continueRecording(true);
+      });
+    }
   }
 
   return (
@@ -435,11 +455,19 @@ export function CaptureInteractionStep({
               <Button
                 variant="secondary"
                 onPress={() => {
+                  if (wasInterrupted) {
+                    // Preserve the segment/transcript already captured —
+                    // resetRecording would throw it away, which is exactly
+                    // what "resume" must not do.
+                    onConsentChange(false);
+                    setConsentIntent('continue');
+                    return;
+                  }
                   void recorder.resetRecording();
                   onConsentChange(false);
                   setConsentIntent('record');
                 }}>
-                Record again
+                {wasInterrupted ? 'Resume recording' : 'Record again'}
               </Button>
             ) : null}
           </View>
@@ -498,7 +526,7 @@ export function CaptureInteractionStep({
         onClose={closeConsentSheet}
         footer={
           <Button disabled={!consent} onPress={confirmConsent}>
-            {consentIntent === 'record' ? 'Confirm and record' : 'Confirm consent'}
+            {consentIntent === 'record' ? 'Confirm and record' : consentIntent === 'continue' ? 'Confirm and resume' : 'Confirm consent'}
           </Button>
         }>
         <Body>
@@ -560,9 +588,13 @@ export function CaptureInteractionStep({
         {(() => {
           const query = personSearchQuery.trim();
           const searchResults = query ? filterConnections(connections, query) : [];
-          if (query && searchResults.length) {
+          const deviceMatches = query ? filterDeviceContacts(deviceContacts, query) : [];
+          if (query && (searchResults.length || deviceMatches.length)) {
             return (
               <View style={[styles.exchangeList, styles.personSearchResults]}>
+                {searchResults.length ? (
+                  <Text style={styles.personSearchSectionLabel}>Your connections</Text>
+                ) : null}
                 {searchResults.map((connection) => {
                   const email = connection.email?.trim().toLowerCase();
                   const already = Boolean(email) && people.some((person) => person.email.trim().toLowerCase() === email);
@@ -585,6 +617,36 @@ export function CaptureInteractionStep({
                       <Text style={styles.exchangeName}>{connection.name}</Text>
                       <Text style={styles.exchangeMeta}>
                         {[connection.email, connection.phone].filter(Boolean).join(' · ') || connection.subtitle}
+                      </Text>
+                      {already ? <Text style={styles.exchangeSelected}>Added</Text> : null}
+                    </Pressable>
+                  );
+                })}
+                {deviceMatches.length ? (
+                  <Text style={styles.personSearchSectionLabel}>From your phone</Text>
+                ) : null}
+                {deviceMatches.map((contact) => {
+                  const email = contact.email.trim().toLowerCase();
+                  const already = Boolean(email) && people.some((person) => person.email.trim().toLowerCase() === email);
+                  const disabled = already || atCapacity;
+                  return (
+                    <Pressable
+                      key={contact.id}
+                      accessibilityRole="button"
+                      disabled={disabled}
+                      onPress={() => {
+                        setAddPersonSheetOpen(false);
+                        setPersonSearchQuery('');
+                        openManualSheet(createGatherPerson({ name: contact.name, email: contact.email, phone: contact.phone }));
+                      }}
+                      style={[
+                        styles.exchangeCard,
+                        already && styles.exchangeCardSelected,
+                        disabled && !already && styles.exchangeCardDisabled,
+                      ]}>
+                      <Text style={styles.exchangeName}>{contact.name}</Text>
+                      <Text style={styles.exchangeMeta}>
+                        {[contact.email, contact.phone].filter(Boolean).join(' · ')}
                       </Text>
                       {already ? <Text style={styles.exchangeSelected}>Added</Text> : null}
                     </Pressable>
@@ -969,6 +1031,13 @@ const styles = StyleSheet.create({
   },
   personSearchInput: { flex: 1, color: colors.ink, fontSize: 15 },
   personSearchResults: { marginTop: spacing.x3 },
+  personSearchSectionLabel: {
+    marginTop: spacing.x2,
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
   personChoiceList: { gap: spacing.x2, marginTop: spacing.x3 },
   personChoice: {
     minHeight: 72,

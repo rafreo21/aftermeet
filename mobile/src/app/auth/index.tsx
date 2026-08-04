@@ -9,6 +9,18 @@ import { useAuth } from '@/features/auth/auth-context';
 import { consumeAuthReturnPath } from '@/features/encounters/capture-draft';
 import { colors, radius, spacing } from '@/theme/tokens';
 
+// Supabase's dashboard-configured email OTP expiry isn't readable from the
+// client — this mirrors what's been observed in testing (~1 minute). Update
+// this constant if the actual configured value in Supabase Auth settings
+// (Email OTP Expiration) turns out to be different.
+const OTP_EXPIRY_SECONDS = 60;
+
+function formatCountdown(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
 export default function AuthScreen() {
   const { signIn, verifyEmailCode, configured, session } = useAuth();
   const [email, setEmail] = useState('');
@@ -16,6 +28,19 @@ export default function AuthScreen() {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(OTP_EXPIRY_SECONDS);
+  // Bumped every time a code is (re)sent, so the countdown restarts even
+  // though `step` itself doesn't change on a resend.
+  const [codeSentAt, setCodeSentAt] = useState(0);
+
+  useEffect(() => {
+    if (step !== 'code') return;
+    setSecondsLeft(OTP_EXPIRY_SECONDS);
+    const interval = setInterval(() => {
+      setSecondsLeft((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [step, codeSentAt]);
 
   useEffect(() => {
     if (!session) return;
@@ -33,6 +58,7 @@ export default function AuthScreen() {
     setLoading(false);
     if (result.error) return setMessage(result.error);
     setStep('code');
+    setCodeSentAt((current) => current + 1);
     setMessage('Check your email for your 6-digit sign-in code.');
   }
 
@@ -103,6 +129,11 @@ export default function AuthScreen() {
               style={[styles.input, styles.codeInput]}
             />
           </View>
+          <Text style={[styles.expiry, secondsLeft === 0 && styles.expiryExpired]}>
+            {secondsLeft > 0
+              ? `Code expires in ${formatCountdown(secondsLeft)}`
+              : 'Code expired — resend to get a new one.'}
+          </Text>
           {message ? <Text style={[styles.message, message.startsWith('Check') && styles.success]}>{message}</Text> : null}
           <Button loading={loading} disabled={!configured || code.replace(/\D/g, '').length < 6} onPress={submitCode}>
             Verify and continue
@@ -134,5 +165,7 @@ const styles = StyleSheet.create({
   codeInput: { letterSpacing: 8, fontSize: 24, fontWeight: '700', textAlign: 'center' },
   message: { color: colors.danger, fontSize: 13 },
   success: { color: colors.ink },
+  expiry: { color: colors.muted, fontSize: 13, textAlign: 'center' },
+  expiryExpired: { color: colors.danger, fontWeight: '700' },
   config: { color: colors.warning, fontSize: 12, lineHeight: 18 },
 });
