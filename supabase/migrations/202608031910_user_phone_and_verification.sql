@@ -8,24 +8,63 @@ alter table public.users
   add column phone_verified_at timestamptz;
 
 -- Adds new output columns, so the existing function must be dropped first —
--- CREATE OR REPLACE cannot change a function's return shape.
+-- CREATE OR REPLACE cannot change a function's return shape. Keeps the
+-- workspace_name/type/role + active-workspace selection added by
+-- team_workspaces — this function is also used by the team switcher.
 drop function if exists public.get_my_app_context();
 
 create function public.get_my_app_context()
 returns table (
-  user_id uuid, primary_email text, display_name text, avatar_url text,
-  locale text, time_zone text, onboarding_status text, workspace_id uuid,
-  phone text, phone_verified boolean, email_verified boolean
+  user_id uuid,
+  primary_email text,
+  display_name text,
+  avatar_url text,
+  locale text,
+  time_zone text,
+  onboarding_status text,
+  workspace_id uuid,
+  workspace_name text,
+  workspace_type text,
+  workspace_role text,
+  phone text,
+  phone_verified boolean,
+  email_verified boolean
 )
 language sql stable security definer set search_path = ''
 as $$
-  select u.id, u.primary_email, u.display_name, u.avatar_url, u.locale, u.time_zone,
-    u.onboarding_status, w.id, u.phone, u.phone_verified, (au.email_confirmed_at is not null)
+  select
+    u.id,
+    u.primary_email,
+    u.display_name,
+    u.avatar_url,
+    u.locale,
+    u.time_zone,
+    u.onboarding_status,
+    w.id,
+    w.name,
+    w.type,
+    m.role,
+    u.phone,
+    u.phone_verified,
+    (au.email_confirmed_at is not null)
   from public.users u
   join public.workspace_memberships m on m.user_id = u.id and m.status = 'active'
   join public.workspaces w on w.id = m.workspace_id and w.status = 'active'
   join auth.users au on au.id = u.auth_user_id
-  where u.auth_user_id = auth.uid() and u.status = 'active'
+  where u.auth_user_id = (select auth.uid())
+    and u.status = 'active'
+    and w.id = coalesce(
+      u.active_workspace_id,
+      (
+        select w2.id
+        from public.workspaces w2
+        join public.workspace_memberships m2 on m2.workspace_id = w2.id
+        where m2.user_id = u.id
+          and m2.status = 'active'
+          and m2.membership_kind = 'personal'
+        limit 1
+      )
+    )
   limit 1
 $$;
 

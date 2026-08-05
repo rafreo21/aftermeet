@@ -8,6 +8,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_auth_user_id uuid := auth.uid();
   v_user_id uuid;
@@ -35,13 +36,22 @@ begin
     updated_at = now()
   returning id, (xmax = 0) into v_user_id, v_user_created;
 
-  insert into public.workspaces(name, owner_user_id)
-  values ('My workspace', v_user_id)
-  on conflict (owner_user_id) do update set updated_at = public.workspaces.updated_at
+  -- workspaces only has a partial unique index on owner_user_id where
+  -- type = 'personal' (added by team_workspaces so a user can also own team
+  -- workspaces) so the conflict target and insert must say so explicitly.
+  insert into public.workspaces(name, owner_user_id, type)
+  values ('My workspace', v_user_id, 'personal')
+  on conflict (owner_user_id) where (type = 'personal') do update set updated_at = public.workspaces.updated_at
   returning id, (xmax = 0) into v_workspace_id, v_workspace_created;
 
-  insert into public.workspace_memberships(workspace_id, user_id, role)
-  values (v_workspace_id, v_user_id, 'owner')
+  if v_workspace_id is null then
+    select w.id into v_workspace_id
+    from public.workspaces w
+    where w.owner_user_id = v_user_id and w.type = 'personal';
+  end if;
+
+  insert into public.workspace_memberships(workspace_id, user_id, role, membership_kind)
+  values (v_workspace_id, v_user_id, 'owner', 'personal')
   on conflict (workspace_id, user_id) do nothing;
 
   if v_workspace_created then
