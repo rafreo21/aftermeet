@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BrandMark } from '@/components/brand-mark';
-import { Body, Button, PageHeader, Screen } from '@/components/ui';
+import { BackButton, Body, Button, Eyebrow, Screen, Title } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { consumeAuthReturnPath } from '@/features/encounters/capture-draft';
 import { colors, radius, spacing } from '@/theme/tokens';
@@ -76,13 +76,15 @@ export default function AuthScreen() {
 
   return (
     <Screen scroll={false} style={styles.screen} edges={['top', 'bottom']} reserveTabBar={false}>
-      <PageHeader
-        eyebrow="Welcome"
-        title={step === 'email' ? 'Sign in or sign up in seconds.' : 'Enter your sign-in code.'}
-        titleStyle={styles.authTitle}
-      />
+      <BackButton />
       <View style={styles.brandWrap}>
         <BrandMark size={44} />
+      </View>
+      <View style={styles.authHeaderCopy}>
+        <Eyebrow>Welcome</Eyebrow>
+        <Title style={styles.authTitle}>
+          {step === 'email' ? 'Sign in or sign up in seconds.' : 'Enter your sign-in code.'}
+        </Title>
       </View>
       <Body>
         {step === 'email'
@@ -159,6 +161,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   screen: { justifyContent: 'center' },
   brandWrap: { alignItems: 'flex-start', marginBottom: spacing.x2 },
+  authHeaderCopy: { gap: spacing.x2 },
   authTitle: { fontSize: 34, lineHeight: 36, letterSpacing: -1.2 },
   field: { minHeight: 54, paddingHorizontal: spacing.x4, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderWidth: 1, borderColor: colors.line, borderRadius: radius.medium, backgroundColor: colors.surface },
   input: { flex: 1, color: colors.ink, fontSize: 16 },
