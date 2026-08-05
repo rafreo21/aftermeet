@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
@@ -73,16 +72,16 @@ export function AppShell({ children }: AppShellProps) {
   const initials = label.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 
   const renderNavItem = ([key, href, Icon, itemLabel]: (typeof consumerNav)[number]) => (
-    <Link className={active === key ? "active" : ""} href={href} key={key} prefetch={false} onClick={() => setMobileNav(false)}>
+    <a className={active === key ? "active" : ""} href={href} key={key} onClick={() => setMobileNav(false)}>
       <Icon size={20} weight="bold" /> <span>{itemLabel}</span>
       {key === "followups" && actionableCount ? <b className="nav-count" aria-label={`${actionableCount} due follow-ups`}>{actionableCount > 99 ? "99+" : actionableCount}</b> : null}
-    </Link>
+    </a>
   );
 
   return (
     <main className="product-shell">
       <aside className={`product-sidebar consumer-sidebar ${mobileNav ? "open" : ""}`}>
-        <Link className="product-logo" href="/app" prefetch={false}><BrandMark size={38} /><strong>AfterMeet</strong></Link>
+        <a className="product-logo" href="/app"><BrandMark size={38} /><strong>AfterMeet</strong></a>
         <nav aria-label="Consumer navigation">
           {consumerNav.map(renderNavItem)}
         </nav>

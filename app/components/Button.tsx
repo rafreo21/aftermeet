@@ -1,5 +1,4 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
-import Link from "next/link";
 
 type SharedButtonProps = {
   children: ReactNode;
@@ -10,7 +9,7 @@ type SharedButtonProps = {
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & SharedButtonProps;
-type LinkButtonProps = AnchorHTMLAttributes<HTMLAnchorElement> & SharedButtonProps & { href: string; hardNavigation?: boolean };
+type LinkButtonProps = AnchorHTMLAttributes<HTMLAnchorElement> & SharedButtonProps & { href: string };
 
 const variants = {
   primary:
@@ -76,7 +75,6 @@ export function LinkButton({
   className = "",
   disabled,
   href,
-  hardNavigation = false,
   ...props
 }: LinkButtonProps & { disabled?: boolean }) {
   const classes = buttonClasses(variant, size, fullWidth, className);
@@ -85,13 +83,6 @@ export function LinkButton({
       <span className={classes} aria-disabled="true">
         {children}
       </span>
-    );
-  }
-  if (href.startsWith("/") && !hardNavigation) {
-    return (
-      <Link {...props} href={href} prefetch={false} className={classes}>
-        {children}
-      </Link>
     );
   }
   return (
@@ -136,13 +127,6 @@ export function IconLinkButton({
     size === "small" ? "h-9 w-9 min-h-9 p-0" : "h-11 w-11 min-h-11 p-0",
     className,
   ].join(" "));
-  if (typeof props.href === "string" && props.href.startsWith("/")) {
-    return (
-      <Link {...props} href={props.href} prefetch={false} aria-label={ariaLabel} className={classes}>
-        {children}
-      </Link>
-    );
-  }
   return (
     <a
       {...props}

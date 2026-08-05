@@ -5,7 +5,6 @@ import { sanitizeIntendedDestination } from "../../lib/auth/redirect";
 import { parseVisitorIntent, VISITOR_DEFAULT_DESTINATION } from "../../lib/auth/visitor-intent";
 import { AuthForm } from "./AuthForm";
 import { BrandMark } from "../components/BrandMark";
-import Link from "next/link";
 import "./auth.css";
 
 type ProviderAvailability = {
@@ -52,7 +51,7 @@ export default async function AuthPage({
     : null;
   return (
     <main className="auth-page">
-      <Link className="auth-logo" href="/"><BrandMark size={40} /><strong>AfterMeet</strong></Link>
+      <a className="auth-logo" href="/"><BrandMark size={40} /><strong>AfterMeet</strong></a>
       <section className="auth-panel">
         <div className="auth-intro">
           <span><b className="auth-emoji" aria-hidden="true">👋</b> Welcome</span>

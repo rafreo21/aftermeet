@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
@@ -309,14 +308,14 @@ export default function HubPage() {
   return (
     <main className="hub-shell">
       <header className="hub-nav">
-        <Link className="hub-brand" href="/">
+        <a className="hub-brand" href="/">
           <span className="hub-brand-mark">A</span>
           <span>AfterMeet <small>MVP hub</small></span>
-        </Link>
+        </a>
         <div className="hub-nav-actions">
-          <Link href="/"><ArrowLeftIcon size={15} weight="bold" /> Strategy</Link>
-          <Link href="/auth">Sign in</Link>
-          <Link href="/app">Open app</Link>
+          <a href="/"><ArrowLeftIcon size={15} weight="bold" /> Strategy</a>
+          <a href="/auth">Sign in</a>
+          <a href="/app">Open app</a>
           <LinkButton className="hub-nav-cta" size="small" href="#checklist">Checklist <ArrowDownIcon size={15} weight="bold" /></LinkButton>
         </div>
       </header>

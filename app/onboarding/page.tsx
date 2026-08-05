@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getAppUser } from "../../lib/auth/context";
 import { OnboardingUseCase } from "./OnboardingUseCase";
 import { BrandMark } from "../components/BrandMark";
@@ -14,7 +13,7 @@ export default async function OnboardingPage() {
     <main className="onboarding-shell">
       <section className="onboarding-panel onboarding-start">
         <header className="onboarding-header">
-          <Link className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</Link>
+          <a className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</a>
           <span className="step-pill"><b aria-hidden="true">👋</b> Welcome</span>
         </header>
         <div className="onboarding-intro">

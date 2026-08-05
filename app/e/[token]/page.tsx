@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
@@ -183,7 +182,7 @@ export default function GuestEncounterPage() {
     <main className="guest-page">
       <section className="guest-panel">
         <header className="guest-topbar">
-          <Link className="guest-brand" href="/"><BrandMark size={36} />AfterMeet</Link>
+          <a className="guest-brand" href="/"><BrandMark size={36} />AfterMeet</a>
           <span className="guest-secure"><LockKeyIcon size={14} weight="bold" />Private link</span>
         </header>
         <div className="guest-hero">

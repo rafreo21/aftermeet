@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PencilSimpleLineIcon } from "@phosphor-icons/react/dist/csr/PencilSimpleLine";
@@ -163,7 +162,7 @@ export default function ConnectionsPage() {
                   {visibleConnections.map((connection) => (
                     <tr key={connection.id}>
                       <td data-label="Person">
-                        <Link className="table-person" href={`/app/people/${encodeURIComponent(connection.id)}`} prefetch={false}>
+                        <a className="table-person" href={`/app/people/${encodeURIComponent(connection.id)}`}>
                           <img
                             className="connections-avatar"
                             src={connection.photoUrl || connectionAvatarUrl(connection)}
@@ -173,14 +172,14 @@ export default function ConnectionsPage() {
                             <strong>{connection.name}</strong>
                             <small>{connection.subtitle}</small>
                           </span>
-                        </Link>
+                        </a>
                       </td>
                       <td data-label="Source"><span className="table-chip">{connectionSourceLabel(connection.source)}</span></td>
                       <td data-label="Added">{connection.connectedAt ? formatConnectionDate(connection.connectedAt) : "N/A"}</td>
                       <td className="table-open-cell">
-                        <Link className="table-open-link" href={`/app/people/${encodeURIComponent(connection.id)}`} prefetch={false} aria-label={`Open ${connection.name}`}>
+                        <a className="table-open-link" href={`/app/people/${encodeURIComponent(connection.id)}`} aria-label={`Open ${connection.name}`}>
                           <span>View</span><CaretRightIcon size={16} weight="bold" />
-                        </Link>
+                        </a>
                       </td>
                     </tr>
                   ))}

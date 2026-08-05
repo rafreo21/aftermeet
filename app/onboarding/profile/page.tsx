@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getAppUser } from "../../../lib/auth/context";
@@ -23,7 +22,7 @@ export default async function OnboardingProfilePage({
     <main className="onboarding-shell">
       <section className="onboarding-panel onboarding-profile">
         <header className="onboarding-header">
-          <Link className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</Link>
+          <a className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</a>
           <span className="step-pill"><b aria-hidden="true">👋</b> {mode === "team" ? "Team workspace" : "Quick setup"}</span>
         </header>
         <div className="onboarding-intro">

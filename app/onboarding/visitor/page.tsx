@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 
 import { getAppUser } from "../../../lib/auth/context";
 import { parseVisitorIntent } from "../../../lib/auth/visitor-intent";
@@ -28,7 +27,7 @@ export default async function VisitorOnboardingPage({
     <main className="onboarding-shell">
       <section className="onboarding-panel onboarding-profile">
         <header className="onboarding-header">
-          <Link className="onboarding-brand" href="/"><BrandMark size={40} /></Link>
+          <a className="onboarding-brand" href="/"><BrandMark size={40} /></a>
           <span className="step-pill"><b aria-hidden="true">👋</b> Light account</span>
         </header>
         <div className="onboarding-intro">

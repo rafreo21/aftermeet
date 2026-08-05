@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -1515,8 +1514,8 @@ export default function NewEncounterPage() {
                     <option value="onedrive" disabled={!googleStatus.microsoft.capabilities.onedrive}>Keep in my OneDrive</option>
                   </SelectField>
                   {recordingDestination === "local_only" ? <SelectField label="Local retention" value={retention} onChange={(event) => setRetention(event.target.value as AudioRetention)}><option value="after_transcription">Delete after transcript</option><option value="24_hours">For 24 hours</option><option value="7_days">For 7 days</option><option value="never">Until I delete it</option></SelectField> : null}
-                  {!googleStatus.google.capabilities.drive ? <p className="drive-connection-note">Want to keep recordings in Drive? <Link href="/api/integrations/google/connect?return_to=/app/settings">Connect or reconnect Google</Link>.</p> : null}
-                  {!googleStatus.microsoft.capabilities.onedrive ? <p className="drive-connection-note">Want to keep recordings in OneDrive? <Link href="/api/integrations/microsoft/connect?return_to=/app/settings">Connect or reconnect Microsoft</Link>.</p> : null}
+                  {!googleStatus.google.capabilities.drive ? <p className="drive-connection-note">Want to keep recordings in Drive? <a href="/api/integrations/google/connect?return_to=/app/settings">Connect or reconnect Google</a>.</p> : null}
+                  {!googleStatus.microsoft.capabilities.onedrive ? <p className="drive-connection-note">Want to keep recordings in OneDrive? <a href="/api/integrations/microsoft/connect?return_to=/app/settings">Connect or reconnect Microsoft</a>.</p> : null}
                 </div>
               )}
             </section>

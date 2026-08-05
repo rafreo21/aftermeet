@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { BellIcon } from "@phosphor-icons/react/dist/csr/Bell";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -218,11 +217,11 @@ export function NotificationBell({ onActionableCountChange }: { onActionableCoun
               const Icon = iconForType(alert.type);
               const isUnread = !alert.readAt;
               return (
-                <Link className={`notification-item ${isUnread ? "is-unread" : ""}`} href={notificationHref(alert)} key={alert.id} prefetch={false} onClick={() => void markRead(alert)}>
+                <a className={`notification-item ${isUnread ? "is-unread" : ""}`} href={notificationHref(alert)} key={alert.id} onClick={() => void markRead(alert)}>
                   <span className={`notification-status notification-status-${alert.type}`}><Icon size={17} weight="bold" /></span>
                   <span><strong>{alert.title}</strong>{alert.body ? <small>{alert.body}</small> : null}<em>{relativeTime(alert.createdAt)}</em></span>
                   {isUnread ? <i aria-label="Unread" /> : null}
-                </Link>
+                </a>
               );
             }) : (
               <div className="notification-empty"><span><CheckIcon size={22} weight="bold" /></span><strong>You&apos;re all caught up</strong><p>Review-ready captures, due follow-ups, and shared-meeting updates will appear here.</p></div>

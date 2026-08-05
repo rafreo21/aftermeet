@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { IdentificationCardIcon } from "@phosphor-icons/react/dist/csr/IdentificationCard";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
@@ -188,7 +187,7 @@ export default function HomeDashboard() {
           <PageSkeleton rows={3} />
         ) : (
           <>
-            <Link className="home-followup-summary" href="/app/followups" prefetch={false}>
+            <a className="home-followup-summary" href="/app/followups">
               <span className={nudge.urgentCount ? "attention" : ""}>
                 <ListChecksIcon size={25} weight="bold" />
               </span>
@@ -197,17 +196,17 @@ export default function HomeDashboard() {
                 <small>{attentionCopy}</small>
               </div>
               <ArrowRightIcon size={19} weight="bold" />
-            </Link>
+            </a>
             {followUpsFailed ? <p className="home-inline-error">Could not load follow-ups. <button type="button" onClick={() => void loadFollowUps()}>Retry</button></p> : null}
 
             {activeWork.length ? (
               <div className="home-active-work">
                 {activeWork.map((item) => (
-                  <Link className="home-active-work-row" href={item.href} key={item.key} prefetch={false}>
+                  <a className="home-active-work-row" href={item.href} key={item.key}>
                     <span><item.icon size={17} weight="bold" /></span>
                     <strong>{item.label}</strong>
                     <ArrowRightIcon size={15} weight="bold" />
-                  </Link>
+                  </a>
                 ))}
               </div>
             ) : null}
@@ -223,7 +222,7 @@ export default function HomeDashboard() {
               <div className="home-section-head">
                 <h2>Recent people</h2>
                 {sortedConnections.length > 3 ? (
-                  <Link className="home-view-all" href="/app/people" prefetch={false}>View all</Link>
+                  <a className="home-view-all" href="/app/people">View all</a>
                 ) : null}
               </div>
               {connectionsFailed ? (
@@ -237,7 +236,7 @@ export default function HomeDashboard() {
                         || (item.personName || "").trim().toLowerCase() === connection.name.trim().toLowerCase())
                     ));
                     return (
-                      <Link className="home-person-row" href={`/app/people/${encodeURIComponent(connection.id)}`} key={connection.id} prefetch={false}>
+                      <a className="home-person-row" href={`/app/people/${encodeURIComponent(connection.id)}`} key={connection.id}>
                         <img className="connections-avatar" src={connection.photoUrl || connectionAvatarUrl(connection)} alt="" />
                         <span>
                           <strong>{connection.name}</strong>
@@ -249,7 +248,7 @@ export default function HomeDashboard() {
                           </em>
                         ) : null}
                         <ArrowRightIcon size={15} weight="bold" />
-                      </Link>
+                      </a>
                     );
                   })}
                 </div>
@@ -268,7 +267,7 @@ export default function HomeDashboard() {
             <section className="home-section">
               <h2>My card</h2>
               {hasCards && card ? (
-                <Link className="home-card-row" href="/app/cards" prefetch={false}>
+                <a className="home-card-row" href="/app/cards">
                   {card.photo ? <img className="home-card-avatar" src={card.photo} alt="" /> : (
                     <span className="home-card-avatar home-card-avatar-fallback"><IdentificationCardIcon size={20} weight="bold" /></span>
                   )}
@@ -278,7 +277,7 @@ export default function HomeDashboard() {
                   </span>
                   <em>Open card</em>
                   <ArrowRightIcon size={15} weight="bold" />
-                </Link>
+                </a>
               ) : (
                 <div className="home-empty-compact">
                   <IdentificationCardIcon size={20} weight="bold" />

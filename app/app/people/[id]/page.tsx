@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -215,7 +214,7 @@ export default function ConnectionDetailPage() {
               {timeline.length ? (
                 <div className="connections-list">
                   {timeline.map((item) => (
-                    <Link className="connections-row timeline-row" key={item.id} href={`/app/encounters/${item.encounterId}`} prefetch={false}>
+                    <a className="connections-row timeline-row" key={item.id} href={`/app/encounters/${item.encounterId}`}>
                       <span className={`timeline-marker ${item.kind}`} aria-hidden="true">
                         {item.kind === "completed" ? <CheckCircleIcon size={16} weight="fill" /> : <MicrophoneIcon size={16} weight="fill" />}
                       </span>
@@ -225,7 +224,7 @@ export default function ConnectionDetailPage() {
                         {item.copy ? <small>{item.copy}</small> : null}
                       </div>
                       <CaretRightIcon size={16} weight="bold" />
-                    </Link>
+                    </a>
                   ))}
                 </div>
               ) : (
@@ -244,13 +243,13 @@ export default function ConnectionDetailPage() {
                 </div>
                 <div className="connections-list">
                   {followUpPreview.map((item) => (
-                    <Link className="connections-row" key={`${item.encounterId}-${item.actionId}`} href="/app/followups" prefetch={false}>
+                    <a className="connections-row" key={`${item.encounterId}-${item.actionId}`} href="/app/followups">
                       <div className="connections-copy">
                         <strong>{item.title}</strong>
                         <span>{item.dueAt ? `Due ${item.dueAt}` : "No due date"}</span>
                       </div>
                       <CaretRightIcon size={16} weight="bold" />
-                    </Link>
+                    </a>
                   ))}
                 </div>
               </section>

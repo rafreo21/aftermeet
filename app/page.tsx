@@ -55,8 +55,8 @@ export default function Home() {
           <span>AfterMeet</span>
         </a>
         <div className="nav-links">
-          <LinkButton size="small" variant="ghost" href="/auth" hardNavigation>Login</LinkButton>
-          <LinkButton className="nav-cta" size="small" href="/auth?next=/onboarding" hardNavigation>Start for free <ArrowRightIcon size={15} weight="bold" /></LinkButton>
+          <LinkButton size="small" variant="ghost" href="/auth">Login</LinkButton>
+          <LinkButton className="nav-cta" size="small" href="/auth?next=/onboarding">Start for free <ArrowRightIcon size={15} weight="bold" /></LinkButton>
         </div>
       </nav>
 
@@ -199,7 +199,7 @@ export default function Home() {
       <footer>
         <div><BrandMark className="brand-mark" size={38} /><strong>AfterMeet</strong></div>
         <p>Share identity. Capture people. Remember context. Activate later.</p>
-        <LinkButton variant="ghost" href="/auth?next=/onboarding" hardNavigation>Open the app <ArrowUpIcon size={15} weight="bold" /></LinkButton>
+        <LinkButton variant="ghost" href="/auth?next=/onboarding">Open the app <ArrowUpIcon size={15} weight="bold" /></LinkButton>
       </footer>
     </main>
   );
