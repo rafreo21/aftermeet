@@ -33,7 +33,7 @@ async function main() {
   const content = readFileSync(ENTRY, "utf8");
   console.log(`Deploying ${FUNCTION_NAME} to ${PROJECT_REF}...`);
 
-  const response = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/functions/${FUNCTION_NAME}`, {
+  let response = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/functions/${FUNCTION_NAME}`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -48,6 +48,24 @@ async function main() {
       files: [{ name: "index.ts", content }],
     }),
   });
+
+  // A project that has never had this function deployed has nothing to PUT
+  // onto — the create endpoint takes a different (non-multi-file) shape.
+  if (response.status === 404) {
+    response = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/functions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        slug: FUNCTION_NAME,
+        name: FUNCTION_NAME,
+        verify_jwt: false,
+        body: content,
+      }),
+    });
+  }
 
   const body = await response.text();
   if (!response.ok) {
