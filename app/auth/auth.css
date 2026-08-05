@@ -12,6 +12,7 @@
   flex-direction: column;
   padding: 36px 5vw 24px;
 }
+.auth-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .auth-logo { width: fit-content; display: flex; align-items: center; gap: 10px; font-size: 18px; letter-spacing: -.03em; }
 .auth-logo img { width: 40px; height: 40px; display: block; }
 .auth-panel { width: min(100%, 520px); margin: auto; padding: 45px 0 70px; }

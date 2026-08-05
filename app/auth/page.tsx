@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/ssr/ArrowLeft";
 import { resolveAppUrlFromHeaders } from "../../lib/auth/app-url";
 import { readPublicSupabaseConfig } from "../../lib/supabase/env";
 import { sanitizeIntendedDestination } from "../../lib/auth/redirect";
 import { parseVisitorIntent, VISITOR_DEFAULT_DESTINATION } from "../../lib/auth/visitor-intent";
 import { AuthForm } from "./AuthForm";
 import { BrandMark } from "../components/BrandMark";
+import { LinkButton } from "../components/Button";
 import "./auth.css";
 
 type ProviderAvailability = {
@@ -51,7 +53,10 @@ export default async function AuthPage({
     : null;
   return (
     <main className="auth-page">
-      <a className="auth-logo" href="/"><BrandMark size={40} /><strong>AfterMeet</strong></a>
+      <div className="auth-header">
+        <a className="auth-logo" href="/"><BrandMark size={40} /><strong>AfterMeet</strong></a>
+        <LinkButton size="small" variant="ghost" href="/"><ArrowLeftIcon size={16} weight="bold" />Back to home</LinkButton>
+      </div>
       <section className="auth-panel">
         <div className="auth-intro">
           <span><b className="auth-emoji" aria-hidden="true">👋</b> Welcome</span>
