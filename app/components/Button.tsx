@@ -10,7 +10,7 @@ type SharedButtonProps = {
 };
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & SharedButtonProps;
-type LinkButtonProps = AnchorHTMLAttributes<HTMLAnchorElement> & SharedButtonProps & { href: string };
+type LinkButtonProps = AnchorHTMLAttributes<HTMLAnchorElement> & SharedButtonProps & { href: string; hardNavigation?: boolean };
 
 const variants = {
   primary:
@@ -76,6 +76,7 @@ export function LinkButton({
   className = "",
   disabled,
   href,
+  hardNavigation = false,
   ...props
 }: LinkButtonProps & { disabled?: boolean }) {
   const classes = buttonClasses(variant, size, fullWidth, className);
@@ -86,7 +87,7 @@ export function LinkButton({
       </span>
     );
   }
-  if (href.startsWith("/")) {
+  if (href.startsWith("/") && !hardNavigation) {
     return (
       <Link {...props} href={href} prefetch={false} className={classes}>
         {children}
