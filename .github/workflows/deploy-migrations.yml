@@ -1,13 +1,18 @@
 name: Deploy database migrations
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
   push:
     branches: [main]
     paths:
       - "supabase/migrations/**"
 
 jobs:
-  deploy:
+  staging:
+    name: Push to staging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,7 +21,29 @@ jobs:
         with:
           version: latest
 
-      - name: Link project
+      - name: Link staging project
+        run: supabase link --project-ref vgrxsdjfrkmpmpqvuqty
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Push pending migrations
+        run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  production:
+    name: Push to production
+    needs: staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link production project
         run: supabase link --project-ref tgpzxgrvdmmwnodxrooh
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

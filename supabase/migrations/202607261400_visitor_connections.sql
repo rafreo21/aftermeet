@@ -253,7 +253,11 @@ grant execute on function public.link_people_connection_from_scan(text) to authe
 grant execute on function public.link_people_connection_from_exchange(uuid) to authenticated;
 grant execute on function public.list_my_people_connections() to authenticated;
 
-create or replace function public.get_my_app_context()
+-- Adds signup_intent to the output columns, so the existing function must be
+-- dropped first — CREATE OR REPLACE cannot change a function's return shape.
+drop function if exists public.get_my_app_context();
+
+create function public.get_my_app_context()
 returns table (
   user_id uuid,
   primary_email text,
