@@ -76,14 +76,14 @@ export default function AuthScreen() {
 
   return (
     <Screen scroll={false} style={styles.screen} edges={['top', 'bottom']} reserveTabBar={false}>
-      <View style={styles.brandWrap}>
-        <BrandMark size={44} />
-      </View>
       <PageHeader
         eyebrow="Welcome"
         title={step === 'email' ? 'Sign in or sign up in seconds.' : 'Enter your sign-in code.'}
         titleStyle={styles.authTitle}
       />
+      <View style={styles.brandWrap}>
+        <BrandMark size={44} />
+      </View>
       <Body>
         {step === 'email'
           ? 'We’ll email you a 6-digit sign-in code.'
