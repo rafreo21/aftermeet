@@ -105,7 +105,6 @@ function PublicCardView({
             </span>
           )}
         </div>
-        <p className="public-card-brand">AFTERMEET</p>
         <h1>{ownerName}</h1>
         {roleLine ? <p className="public-card-role">{roleLine}</p> : null}
 
