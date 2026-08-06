@@ -9,8 +9,16 @@ export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 
+export APP_VARIANT="${APP_VARIANT:-production}"
+if [[ "$APP_VARIANT" == "staging" ]]; then
+  PACKAGE="com.aftermeet.app.staging"
+  SCHEME="aftermeet-staging"
+else
+  PACKAGE="com.aftermeet.app"
+  SCHEME="aftermeet"
+fi
+
 APK="$ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
-SCHEME="aftermeet"
 METRO_PORT=8081
 
 cd "$ROOT"
@@ -52,7 +60,7 @@ fi
 
 echo "Device: $device"
 
-if adb shell run-as com.aftermeet.app true >/dev/null 2>&1; then
+if adb shell run-as "$PACKAGE" true >/dev/null 2>&1; then
   echo "Dev client already installed (debug build)."
 else
   echo "Release or unknown build detected — installing debug dev client…"
@@ -73,7 +81,7 @@ deep_link="${SCHEME}://expo-development-client/?url=${encoded_url}"
 
 echo "Opening AfterMeet dev client…"
 adb shell am start -a android.intent.action.VIEW -d "$deep_link" >/dev/null 2>&1 \
-  || adb shell monkey -p com.aftermeet.app -c android.intent.category.LAUNCHER 1 >/dev/null
+  || adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
 
 echo ""
 echo "Connected."

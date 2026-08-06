@@ -9,7 +9,12 @@
 #   driver.sh screenshot <out.png>      # screenshot the currently booted simulator
 #   driver.sh full [device-name] <out.png>  # boot + run + screenshot in one go
 
-BUNDLE_ID="com.aftermeet.app"
+export APP_VARIANT="${APP_VARIANT:-production}"
+if [ "$APP_VARIANT" = "staging" ]; then
+  BUNDLE_ID="com.aftermeet.app.staging"
+else
+  BUNDLE_ID="com.aftermeet.app"
+fi
 set -euo pipefail
 
 # CocoaPods needs a UTF-8 locale or `pod install` crashes in Ruby's
@@ -48,6 +53,13 @@ cmd_run() {
   local udid
   udid="$(cmd_boot "$name")"
   cd "$MOBILE_DIR"
+  # ios/ reflects whichever variant it was last prebuilt for — the bundle ID
+  # is baked into Info.plist, so switching variants needs a clean prebuild.
+  local variant_marker="$MOBILE_DIR/ios/.variant-configured"
+  if [ ! -f "$variant_marker" ] || [ "$(cat "$variant_marker" 2>/dev/null)" != "$APP_VARIANT" ]; then
+    npx expo prebuild --platform ios --clean
+    echo "$APP_VARIANT" > "$variant_marker"
+  fi
   npx expo run:ios --device "$udid"
 }
 

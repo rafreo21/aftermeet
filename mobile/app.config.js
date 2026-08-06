@@ -1,0 +1,195 @@
+// Dynamic config so a "staging" build can be installed side-by-side with
+// production on the same device (own bundle ID/package, own app name, own
+// backend) instead of overwriting it. Selected via APP_VARIANT — set by the
+// mobile/scripts/*.sh helpers, defaults to production for a plain build.
+const APP_VARIANT = process.env.APP_VARIANT === "staging" ? "staging" : "production";
+const IS_STAGING = APP_VARIANT === "staging";
+
+const BASE_BUNDLE_ID = "com.aftermeet.app";
+const bundleId = IS_STAGING ? `${BASE_BUNDLE_ID}.staging` : BASE_BUNDLE_ID;
+
+const BACKEND = IS_STAGING
+  ? {
+      supabaseUrl: "https://vgrxsdjfrkmpmpqvuqty.supabase.co",
+      supabaseAnonKey: "sb_publishable_eSjPw8e5uHqCDUtAf_vdDQ_SXAS-hsW",
+      publicCardBaseUrl: "https://aftermeet-git-staging-rafreo21-8924s-projects.vercel.app",
+    }
+  : {
+      supabaseUrl: "https://tgpzxgrvdmmwnodxrooh.supabase.co",
+      supabaseAnonKey: "sb_publishable_pKxGkQpYza-qmBXOMrP7qQ_D4BfJ3Uj",
+      publicCardBaseUrl: "https://aftermeet-beta.vercel.app",
+    };
+
+module.exports = {
+  expo: {
+    name: IS_STAGING ? "AfterMeet Staging" : "AfterMeet",
+    slug: "aftermeet",
+    version: "1.0.1",
+    orientation: "portrait",
+    icon: "./assets/images/icon.png",
+    scheme: IS_STAGING ? "aftermeet-staging" : "aftermeet",
+    userInterfaceStyle: "automatic",
+    ios: {
+      icon: "./assets/images/icon.png",
+      bundleIdentifier: bundleId,
+      supportsTablet: true,
+      infoPlist: {
+        LSApplicationQueriesSchemes: [
+          "linkedin",
+          "twitter",
+          "instagram",
+          "whatsapp",
+          "tg",
+          "fb",
+          "barcelona",
+          "snapchat",
+          "paypal",
+          "venmo",
+          "cashapp",
+          "comgooglecalendar",
+          "googlecalendar",
+          "ms-outlook",
+          "googlegmail",
+        ],
+      },
+    },
+    android: {
+      versionCode: 3,
+      package: bundleId,
+      adaptiveIcon: {
+        backgroundColor: "#87EA5C",
+        foregroundImage: "./assets/images/android-icon-foreground.png",
+        backgroundImage: "./assets/images/android-icon-background.png",
+        monochromeImage: "./assets/images/android-icon-monochrome.png",
+      },
+      predictiveBackGestureEnabled: false,
+      softwareKeyboardLayoutMode: "resize",
+    },
+    androidStatusBar: {
+      backgroundColor: "#F5F7F3",
+      barStyle: "dark-content",
+      translucent: false,
+    },
+    androidNavigationBar: {
+      backgroundColor: "#F5F7F3",
+      barStyle: "dark-content",
+    },
+    web: {
+      output: "static",
+      favicon: "./assets/images/favicon.png",
+    },
+    plugins: [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/android-icon-monochrome.png",
+          color: "#9FE870",
+          defaultChannel: "follow-ups",
+        },
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          style: "dark",
+          enforceContrast: true,
+        },
+      ],
+      [
+        "expo-splash-screen",
+        {
+          backgroundColor: "#163300",
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 76,
+        },
+      ],
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          cameraPermission: "Allow AfterMeet to scan contact card QR codes.",
+        },
+      ],
+      [
+        "expo-contacts",
+        {
+          contactsPermission: "Allow AfterMeet to save people you meet to your contacts.",
+        },
+      ],
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Allow AfterMeet to use photos on your contact card.",
+        },
+      ],
+      [
+        "expo-audio",
+        {
+          microphonePermission: "Allow AfterMeet to record meetings you choose to capture.",
+          enableBackgroundRecording: true,
+        },
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          microphonePermission: "Allow AfterMeet to record meetings you choose to capture.",
+          speechRecognitionPermission: "Allow AfterMeet to transcribe your meetings while you record.",
+          androidSpeechServicePackages: [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.tts",
+            "com.google.android.as",
+          ],
+        },
+      ],
+      [
+        "expo-widgets",
+        {
+          bundleIdentifier: `${bundleId}.widgets`,
+          groupIdentifier: `group.${bundleId}`,
+          widgets: [
+            {
+              name: "QrScanWidget",
+              displayName: "AfterMeet QR Scan",
+              description: "Large scannable QR code for your card.",
+              supportedFamilies: ["systemSmall"],
+            },
+            {
+              name: "BusinessCardWidget",
+              displayName: "AfterMeet Business Card",
+              description: "QR code plus your name, role, and company.",
+              supportedFamilies: ["systemMedium"],
+            },
+            {
+              name: "RecentConnectionsWidget",
+              displayName: "AfterMeet Recent Connections",
+              description: "Recent people who shared their details with you.",
+              supportedFamilies: ["systemMedium"],
+            },
+          ],
+        },
+      ],
+      "./plugins/withAndroidQuickShareWidget",
+      "./plugins/withAndroidSystemBars",
+      [
+        "react-native-nfc-manager",
+        {
+          nfcPermission: "Allow AfterMeet to program NFC tags and share your card when someone taps your phone.",
+        },
+      ],
+      "./plugins/withAndroidNfcHce",
+      "@react-native-community/datetimepicker",
+    ],
+    experiments: {
+      typedRoutes: true,
+    },
+    extra: {
+      publicCardBaseUrl: BACKEND.publicCardBaseUrl,
+      supabaseUrl: BACKEND.supabaseUrl,
+      supabaseAnonKey: BACKEND.supabaseAnonKey,
+      buildNumber: 4,
+      buildStamp: IS_STAGING ? "2026-07-28-standalone-staging" : "2026-07-28-standalone",
+      appVariant: APP_VARIANT,
+    },
+  },
+};

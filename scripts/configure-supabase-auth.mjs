@@ -51,6 +51,8 @@ const REDIRECT_URLS = [
   "http://localhost:3001/**",
   "aftermeet://auth/callback",
   "aftermeet://**",
+  "aftermeet-staging://auth/callback",
+  "aftermeet-staging://**",
   "exp://**",
   "https://aftermeet-*-rafreo21-8924s-projects.vercel.app/**",
   "https://aftermeet-rafreo21-8924s-projects.vercel.app/**",
@@ -162,6 +164,9 @@ async function main() {
     uri_allow_list: REDIRECT_URLS,
     external_email_enabled: true,
     mailer_secure_email_change_enabled: false,
+    // A fresh project defaults to 8 — the client (and the email template
+    // above) hard-codes an expectation of exactly 6 digits.
+    mailer_otp_length: 6,
   };
 
   if (!useSupabaseEmail) {

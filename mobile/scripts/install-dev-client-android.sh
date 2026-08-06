@@ -9,6 +9,8 @@ export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 
+export APP_VARIANT="${APP_VARIANT:-production}"
+
 REBUILD=0
 for arg in "$@"; do
   if [[ "$arg" == "--rebuild" ]]; then
@@ -20,11 +22,19 @@ cd "$ROOT"
 node scripts/patch-react-native-hce.mjs
 APK="$ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
 MARKER="$ROOT/android/.dev-client-configured"
+VARIANT_MARKER="$ROOT/android/.variant-configured"
+
+# Switching variants always needs a clean prebuild — package name/app name
+# are baked into the native manifest, not just the JS bundle.
+if [[ ! -f "$VARIANT_MARKER" || "$(cat "$VARIANT_MARKER" 2>/dev/null)" != "$APP_VARIANT" ]]; then
+  REBUILD=1
+fi
 
 if [[ "$REBUILD" == "1" || ! -f "$MARKER" ]]; then
-  echo "Configuring Android project for expo-dev-client…"
+  echo "Configuring Android project for expo-dev-client ($APP_VARIANT)…"
   if [[ "$REBUILD" == "1" ]]; then
     npx expo prebuild --platform android --clean
+    echo "$APP_VARIANT" > "$VARIANT_MARKER"
   else
     npx expo prebuild --platform android
   fi
@@ -48,12 +58,20 @@ done
 echo "Forwarding Metro port 8081…"
 adb reverse tcp:8081 tcp:8081
 
+if [[ "$APP_VARIANT" == "staging" ]]; then
+  PACKAGE="com.aftermeet.app.staging"
+  SCHEME="aftermeet-staging"
+else
+  PACKAGE="com.aftermeet.app"
+  SCHEME="aftermeet"
+fi
+
 echo "Installing $APK"
 adb install -r -d "$APK"
 
 encoded_url="$(python3 -c "import urllib.parse; print(urllib.parse.quote('http://127.0.0.1:8081', safe=''))")"
-adb shell am start -a android.intent.action.VIEW -d "aftermeet://expo-development-client/?url=${encoded_url}" >/dev/null 2>&1 \
-  || adb shell monkey -p com.aftermeet.app -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+adb shell am start -a android.intent.action.VIEW -d "${SCHEME}://expo-development-client/?url=${encoded_url}" >/dev/null 2>&1 \
+  || adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 
 echo ""
 echo "Dev client installed."

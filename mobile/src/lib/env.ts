@@ -9,10 +9,13 @@ type PublicEnv = {
 };
 
 export function readEnv(): PublicEnv | null {
+  // app.config.js's `extra` is variant-aware (production vs. staging); the
+  // EXPO_PUBLIC_* env vars are only a fallback for a bare `expo start` that
+  // hasn't gone through the variant-selecting config, so extra must win.
   const extra = Constants.expoConfig?.extra;
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || extra?.supabaseUrl;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || extra?.supabaseAnonKey;
-  const publicCardBaseUrl = process.env.EXPO_PUBLIC_CARD_BASE_URL || extra?.publicCardBaseUrl || 'http://localhost:3000';
+  const supabaseUrl = extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const publicCardBaseUrl = extra?.publicCardBaseUrl || process.env.EXPO_PUBLIC_CARD_BASE_URL || 'http://localhost:3000';
   if (!supabaseUrl || !supabaseAnonKey) return null;
   return { supabaseUrl, supabaseAnonKey, publicCardBaseUrl: publicCardBaseUrl.replace(/\/+$/, '') };
 }

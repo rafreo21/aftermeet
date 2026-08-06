@@ -10,8 +10,12 @@ export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 cd "$ROOT"
 
+export APP_VARIANT="${APP_VARIANT:-production}"
 METRO_PORT=8081
 SCHEME="aftermeet"
+if [[ "$APP_VARIANT" == "staging" ]]; then
+  SCHEME="aftermeet-staging"
+fi
 
 if adb devices | grep -v '^List' | grep -q 'device$'; then
   echo "Forwarding phone port $METRO_PORT → Mac Metro ($METRO_PORT)…"
