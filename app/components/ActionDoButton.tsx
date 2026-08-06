@@ -88,7 +88,7 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
         </LinkButton>
       )}
       {action.channel === "meeting" && integrations.microsoft.connected ? (
-        <Button size={buttonSize} variant="ghost" loading={scheduling === "microsoft"} onClick={() => void scheduleViaConnected("microsoft")}>
+        <Button size={buttonSize} variant="secondary" loading={scheduling === "microsoft"} onClick={() => void scheduleViaConnected("microsoft")}>
           Schedule in Outlook
         </Button>
       ) : null}
@@ -96,7 +96,7 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
         <LinkButton
           key={link.label}
           size={buttonSize}
-          variant="ghost"
+          variant="secondary"
           href={link.href}
           target={link.external ? "_blank" : undefined}
           rel={link.external ? "noreferrer" : undefined}
