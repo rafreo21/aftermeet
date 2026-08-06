@@ -282,21 +282,16 @@ export default function FollowupsPage() {
             <div className="followup-groups">
               {followUpGroups.map(({ encounter, actions }) => (
                 <article className="followup-group" key={encounter.id}>
-                  <header>
-                    <div>
-                      <h3>{encounter.personName || "Meeting follow-ups"}</h3>
-                      <p>{encounter.title}</p>
-                    </div>
-                    <LinkButton size="small" variant="ghost" href={`/app/encounters/${encounter.id}`}>View meeting</LinkButton>
-                  </header>
                   <div className="data-table-shell followup-table-shell">
                     <table className="data-table followup-table">
                       <thead>
                         <tr>
-                          <th scope="col">Follow-up</th>
+                          <th scope="col" aria-label="Follow-up">{encounter.personName || "Meeting follow-ups"}</th>
                           <th scope="col">Owner</th>
                           <th scope="col">Due</th>
-                          <th scope="col"><span className="sr-only">Actions</span></th>
+                          <th scope="col" className="followup-table-view-meeting">
+                            <LinkButton size="small" variant="ghost" href={`/app/encounters/${encounter.id}`}>View meeting</LinkButton>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
