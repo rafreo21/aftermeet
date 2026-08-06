@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PaperPlaneTiltIcon } from "@phosphor-icons/react/dist/csr/PaperPlaneTilt";
@@ -20,7 +22,8 @@ import { SelectField, TextField } from "../../../components/FormField";
 import { getActiveCardId, readCardLibrary } from "../../../../lib/card-library";
 import { fetchAllConnectionsMerged, filterConnections, type ConnectionItem } from "../../../../lib/connections";
 import { encounterToApiBody, writeEncounter, type Encounter } from "../../../../lib/encounters";
-import { FOLLOW_UP_TEMPLATES, followUpDueDate } from "../../../../lib/follow-up-templates";
+import { displayFollowUpTitle, SELECTABLE_FOLLOW_UP_CHANNELS, type FollowUpChannel } from "../../../../lib/follow-up-channels";
+import { followUpDueDate } from "../../../../lib/follow-up-templates";
 
 type InboundExchange = {
   id: string;
@@ -29,21 +32,6 @@ type InboundExchange = {
   visitor_phone?: string;
   status?: string;
 };
-
-type FollowUpChannel = Encounter["actions"][number]["channel"];
-
-const CHANNELS: Array<{ id: FollowUpChannel; label: string }> = [
-  { id: "email", label: "Email" },
-  { id: "call", label: "Call" },
-  { id: "meeting", label: "Meeting" },
-  { id: "linkedin", label: "LinkedIn" },
-  { id: "whatsapp", label: "WhatsApp" },
-  { id: "instagram", label: "Instagram" },
-  { id: "x", label: "X" },
-  { id: "tiktok", label: "TikTok" },
-  { id: "send", label: "Send something" },
-  { id: "other", label: "Other" },
-];
 
 function createId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -63,6 +51,7 @@ export default function NewFollowUpPage() {
   const [title, setTitle] = useState("");
   const [channel, setChannel] = useState<FollowUpChannel>("email");
   const [dueAt, setDueAt] = useState(followUpDueDate(1));
+  const [detailOpen, setDetailOpen] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -154,29 +143,14 @@ export default function NewFollowUpPage() {
 
   const pronoun = owner === "me" ? "you" : "they";
 
-  const selectedTemplate = useMemo(
-    () => FOLLOW_UP_TEMPLATES.find((template) => template.channel === channel && template.buildTitle(personName) === title),
-    [channel, personName, title],
-  );
-
-  function applyTemplate(template: (typeof FOLLOW_UP_TEMPLATES)[number]) {
-    setChannel(template.channel);
-    setTitle(template.buildTitle(personName));
-    setDueAt(followUpDueDate(template.dueInDays));
-  }
-
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanName = personName.trim();
-    const cleanTitle = title.trim();
     if (cleanName.length < 2) {
       setError("Add the person this follow-up is for.");
       return;
     }
-    if (cleanTitle.length < 2) {
-      setError("Describe the next step.");
-      return;
-    }
+    const cleanTitle = displayFollowUpTitle(title, channel);
 
     setSaving(true);
     setError("");
@@ -283,38 +257,32 @@ export default function NewFollowUpPage() {
             </div>
           </div>
 
-          <div className="follow-up-template-picker">
-            <div>
-              <strong>Start with a template</strong>
-              <small>You can edit the wording after selecting one.</small>
-            </div>
-            <div className="follow-up-template-list">
-              {FOLLOW_UP_TEMPLATES.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  className={`follow-up-template-chip ${selectedTemplate?.id === template.id ? "is-selected" : ""}`}
-                  onClick={() => applyTemplate(template)}
-                >
-                  {template.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <TextField
-            label="Next step"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="e.g. Send Sarah the revised product draft"
-            required
-          />
-
           <div className="quick-follow-up-meta">
             <SelectField label={`How will ${pronoun} follow up?`} value={channel} onChange={(event) => setChannel(event.target.value as FollowUpChannel)}>
-              {CHANNELS.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
+              {SELECTABLE_FOLLOW_UP_CHANNELS.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
             </SelectField>
             <TextField label="Due date" type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
+          </div>
+
+          <div className="quick-follow-up-detail">
+            <button
+              type="button"
+              aria-expanded={detailOpen}
+              onClick={() => setDetailOpen((value) => !value)}
+              className="quick-follow-up-detail-toggle"
+            >
+              <small className="block text-[11px] font-extrabold uppercase tracking-wide text-[#8391a5]">What do {pronoun} need to do? (optional)</small>
+              {detailOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
+            </button>
+            {detailOpen ? (
+              <TextField
+                label="Next step"
+                hint="Shown in your reminders so you know what this one's about."
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g. Send Sarah the revised product draft"
+              />
+            ) : null}
           </div>
 
           <div className="quick-follow-up-actions">

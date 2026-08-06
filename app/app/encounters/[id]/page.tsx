@@ -29,7 +29,7 @@ import {
 } from "../../../../lib/recording-metadata";
 import { formatMeetingEmailDate, recordingShareMailtoHref } from "../../../../lib/recording-email";
 import { renameSpeakerAssignees, renameTranscriptSpeakers, transcriptSpeakerLabels } from "../../../../lib/speaker-labels";
-import { FOLLOW_UP_TEMPLATES, followUpDueDate } from "../../../../lib/follow-up-templates";
+import { displayFollowUpTitle } from "../../../../lib/follow-up-channels";
 
 type UploadStatus = "idle" | "uploading" | "uploaded" | "failed";
 
@@ -180,7 +180,6 @@ export default function EncounterReviewPage() {
   }
 
   function addAction() {
-    if (!newAction.title.trim()) return;
     patch((current) => {
       const participant = current.participants?.find((person) => person.id === newAction.participantId)
         ?? current.participants?.[0];
@@ -188,7 +187,7 @@ export default function EncounterReviewPage() {
         ...current,
         actions: [...(current.actions ?? []), {
         id: crypto.randomUUID(),
-        title: newAction.title.trim(),
+        title: displayFollowUpTitle(newAction.title, newAction.channel),
         owner: newAction.owner,
         participantId: participant?.id,
         assigneeName: participant?.name,
@@ -447,29 +446,7 @@ export default function EncounterReviewPage() {
               {actionComposerOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
             </button>
             {actionComposerOpen ? <div className="new-action">
-              <div className="follow-up-template-picker">
-                <div><strong>Start with a template</strong><small>Choose a common next step, then adjust the owner or date.</small></div>
-                <div className="follow-up-template-list" role="list" aria-label="Follow-up templates">
-                  {FOLLOW_UP_TEMPLATES.map((template) => {
-                    const personName = encounter.participants?.map((person) => person.name).filter(Boolean).join(", ") || encounter.personName;
-                    const title = template.buildTitle(personName);
-                    const selected = newAction.title === title && newAction.channel === template.channel;
-                    return <button
-                      key={template.id}
-                      type="button"
-                      className={selected ? "follow-up-template-chip is-selected" : "follow-up-template-chip"}
-                      aria-pressed={selected}
-                      onClick={() => setNewAction((current) => ({
-                        ...current,
-                        title,
-                        channel: template.channel,
-                        dueAt: followUpDueDate(template.dueInDays),
-                      }))}
-                    >{template.label}</button>;
-                  })}
-                </div>
-              </div>
-              <TextField label="Follow-up" value={newAction.title} onChange={(event) => setNewAction((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Send the introduction" />
+              <TextField label="Follow-up (optional)" value={newAction.title} onChange={(event) => setNewAction((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Send the introduction" />
               <SelectField
                 label="Owner"
                 value={newAction.owner === "guest" ? newAction.participantId || "guest" : "me"}

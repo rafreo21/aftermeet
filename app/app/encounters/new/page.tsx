@@ -47,7 +47,6 @@ import { uploadRecordingToOneDrive } from "../../../../lib/onedrive-recording";
 import type { ConnectedAccountStatus } from "../../../../lib/integrations/types";
 import { emptyConnectedAccountStatus } from "../../../../lib/integrations/types";
 import { isSupportedAudioFile } from "../../../../lib/audio-file";
-import { FOLLOW_UP_TEMPLATES, followUpDueDate } from "../../../../lib/follow-up-templates";
 
 type RecordingState = "idle" | "recording" | "paused" | "stopped";
 type RecordingDestination = "local_only" | "shared_3_days" | "google_drive" | "onedrive";
@@ -1587,32 +1586,7 @@ export default function NewEncounterPage() {
                   <div>{confirmedPeople.map((person) => <span key={`${person.name}-${person.email}`}>{person.name}</span>)}</div>
                 </div>
               )}
-              <div className="follow-up-template-picker">
-                <div>
-                  <strong>Start with a template</strong>
-                  <small>Choose a common next step, then make it specific.</small>
-                </div>
-                <div className="follow-up-template-list" role="list" aria-label="Follow-up templates">
-                  {FOLLOW_UP_TEMPLATES.map((template) => {
-                    const peopleName = confirmedPeople.map((person) => person.name).filter(Boolean).join(", ") || form.personName;
-                    const title = template.buildTitle(peopleName);
-                    const selected = form.followUp === title && form.followUpType === template.channel;
-                    return <button
-                      key={template.id}
-                      type="button"
-                      className={selected ? "follow-up-template-chip is-selected" : "follow-up-template-chip"}
-                      aria-pressed={selected}
-                      onClick={() => setForm((current) => ({
-                        ...current,
-                        followUp: title,
-                        followUpType: template.channel,
-                        dueAt: followUpDueDate(template.dueInDays),
-                      }))}
-                    >{template.label}</button>;
-                  })}
-                </div>
-              </div>
-              <TextField label={selectedCommitmentKeys.length ? "Add another follow-up" : "What needs to be done?"} value={form.followUp} onChange={(event) => update("followUp", event.target.value)} placeholder="e.g. Send Sarah the revised product draft" />
+              <TextField label={selectedCommitmentKeys.length ? "Add another follow-up (optional)" : "What needs to be done? (optional)"} value={form.followUp} onChange={(event) => update("followUp", event.target.value)} placeholder="e.g. Send Sarah the revised product draft" />
               <div className="follow-up-meta">
                 <SelectField label="Follow-up type" value={form.followUpType} onChange={(event) => setForm((current) => ({ ...current, followUpType: event.target.value as Encounter["actions"][number]["channel"] }))}>
                   <option value="email">Send an email</option>

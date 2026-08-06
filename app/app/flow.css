@@ -58,6 +58,8 @@
 .quick-follow-up-page { max-width: 860px; }
 .quick-follow-up-form { display: grid; gap: 22px; }
 .quick-follow-up-person, .quick-follow-up-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.quick-follow-up-detail { display: grid; gap: 8px; }
+.quick-follow-up-detail-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; border: none; background: none; font: inherit; cursor: pointer; color: var(--p-ink); }
 .quick-follow-up-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 .quick-follow-up-note { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--p-muted); font-size: 12px; }
 .empty-state-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
@@ -548,13 +550,6 @@
 .encounter-commitment-assignment label { display: flex; align-items: center; gap: 6px; color: var(--p-muted); font-size: 11px; font-weight: 750; }
 .encounter-commitment-assignment select { min-height: 32px; padding: 4px 28px 4px 8px; border: 1px solid var(--p-line); border-radius: 7px; background: white; color: var(--p-ink); font: inherit; }
 .follow-up-meta { display: grid; grid-template-columns: minmax(180px, 240px) minmax(180px, 220px); gap: 12px; align-items: end; }
-.follow-up-template-picker { display: grid; gap: 10px; padding: 14px; border-radius: 10px; background: var(--p-ice); }
-.follow-up-template-picker > div:first-child { display: grid; gap: 3px; }
-.follow-up-template-picker small { color: var(--p-muted); }
-.follow-up-template-list { display: flex; flex-wrap: wrap; gap: 7px; }
-.follow-up-template-chip { min-height: 34px; padding: 7px 11px; border: 1px solid var(--p-line); border-radius: 7px; background: white; color: var(--p-ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.follow-up-template-chip:hover { border-color: var(--p-ink); }
-.follow-up-template-chip.is-selected { border-color: var(--p-ink); background: var(--p-green); box-shadow: 0 0 0 2px rgba(159,232,112,.28); }
 .follow-up-note { margin: 0; color: var(--p-muted); font-size: 12px; line-height: 1.45; }
 .product-shell input[type="date"],
 .product-shell input[type="datetime-local"],
