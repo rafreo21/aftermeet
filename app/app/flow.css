@@ -684,6 +684,10 @@
    dropdown button, so there are at most two controls here (the action,
    Done) — a normal single-line row, not a stack. */
 .followup-table-controls { width: 1%; white-space: nowrap; }
+/* width: 1% shrink-to-fit only sees the widest single flex-wrapped child as
+   the column's minimum width, letting Done overflow onto its own line even
+   though there's room — force the row to report its true combined width. */
+.followup-table-controls .inbox-actions, .followup-table-controls .action-do-group { flex-wrap: nowrap; }
 .followup-draft-row td { padding: 0; background: #f8fbf3; }
 .followup-draft-row:hover td { background: #f8fbf3 !important; }
 .followup-draft-row .outbound-draft { border-top: 0; }
