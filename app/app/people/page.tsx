@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { PencilSimpleLineIcon } from "@phosphor-icons/react/dist/csr/PencilSimpleLine";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -177,9 +176,9 @@ export default function ConnectionsPage() {
                       <td data-label="Source"><span className="table-chip">{connectionSourceLabel(connection.source)}</span></td>
                       <td data-label="Added">{connection.connectedAt ? formatConnectionDate(connection.connectedAt) : "N/A"}</td>
                       <td className="table-open-cell">
-                        <a className="table-open-link" href={`/app/people/${encodeURIComponent(connection.id)}`} aria-label={`Open ${connection.name}`}>
-                          <span>View</span><CaretRightIcon size={16} weight="bold" />
-                        </a>
+                        <LinkButton size="small" variant="secondary" href={`/app/people/${encodeURIComponent(connection.id)}`} aria-label={`Open ${connection.name}`}>
+                          View
+                        </LinkButton>
                       </td>
                     </tr>
                   ))}
