@@ -14,7 +14,6 @@ export default async function OnboardingPage() {
       <section className="onboarding-panel onboarding-start">
         <header className="onboarding-header">
           <a className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</a>
-          <span className="step-pill"><b aria-hidden="true">👋</b> Welcome</span>
         </header>
         <div className="onboarding-intro">
           <h1>How will you use AfterMeet?</h1>

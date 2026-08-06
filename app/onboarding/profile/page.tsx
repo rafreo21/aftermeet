@@ -23,7 +23,6 @@ export default async function OnboardingProfilePage({
       <section className="onboarding-panel onboarding-profile">
         <header className="onboarding-header">
           <a className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</a>
-          <span className="step-pill"><b aria-hidden="true">👋</b> {mode === "team" ? "Team workspace" : "Quick setup"}</span>
         </header>
         <div className="onboarding-intro">
           <h1>{mode === "team" ? "Set up your team workspace." : "Almost there."}</h1>
