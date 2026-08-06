@@ -416,13 +416,6 @@ export default function EncounterReviewPage() {
                     aria-label={action.status === "completed" ? "Mark open" : "Mark complete"}
                   ><CheckCircleIcon size={22} weight={action.status === "completed" ? "fill" : "regular"} /></button>
                   <div><strong>{action.title}</strong><small>{actionOwnerLabel(action)}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {channelLabel(action.channel)}</small></div>
-                  <button
-                    type="button"
-                    className="action-edit"
-                    aria-label={`Edit owner and due date for ${action.title}`}
-                    aria-expanded={editingActionId === action.id}
-                    onClick={() => setEditingActionId((current) => current === action.id ? "" : action.id)}
-                  ><PencilSimpleIcon size={17} weight="bold" />Edit</button>
                   {editingActionId === action.id ? (
                     <div className="action-inline-editor">
                       <SelectField
@@ -488,6 +481,13 @@ export default function EncounterReviewPage() {
                       <Button variant="secondary" onClick={() => setEditingActionId("")}>Done</Button>
                     </div>
                   ) : null}
+                  <button
+                    type="button"
+                    className="action-edit"
+                    aria-label={`Edit owner and due date for ${action.title}`}
+                    aria-expanded={editingActionId === action.id}
+                    onClick={() => setEditingActionId((current) => current === action.id ? "" : action.id)}
+                  ><PencilSimpleIcon size={17} weight="bold" />Edit</button>
                   {actionContext && <ActionDoButton action={action} context={actionContext} showSecondary />}
                   {actionContext && action.owner === "me" && supportsOutboundDraft(action.channel) ? (
                     <OutboundDraftPanel

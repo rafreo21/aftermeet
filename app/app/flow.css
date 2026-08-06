@@ -626,7 +626,14 @@
 .action-list article { padding: 13px; display: flex; align-items: center; gap: 11px; border-radius: 8px; background: var(--p-ice); }
 .action-list article { flex-wrap: wrap; }
 .action-list article div { flex: 1 1 180px; }
+.action-list article div strong, .action-list article div small { display: block; }
+.action-list article div strong { margin-bottom: 2px; }
 .action-list .action-edit { min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 7px; background: var(--p-surface); color: var(--p-ink); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+/* Edit and the primary action (Schedule/Send/...) sit together at the
+   right edge — only the first of the two should claim the flex line's
+   free space, or the auto margins split it and space them apart. */
+.action-list article .action-edit { margin-left: auto; }
+.action-list article .action-do-group { margin-left: 0; }
 .action-list .action-inline-editor { flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); align-items: end; gap: 10px; padding-top: 10px; border-top: 1px solid var(--p-line); }
 .action-list .action-inline-editor > * { min-width: 0; }
 @media (max-width: 680px) {
