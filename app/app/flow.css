@@ -55,8 +55,12 @@
   .home-empty-compact > a { grid-column: 1 / -1; margin-top: 4px; }
 }
 
-.quick-follow-up-page { max-width: 860px; }
-.quick-follow-up-form { display: grid; gap: 22px; }
+.quick-follow-up-page { max-width: 760px; }
+/* .contact-form-card's own margin: 0 auto makes it a shrink-to-content,
+   auto-centered grid item here (this page's heading sits outside the card,
+   unlike other contact-form-card pages) — stretch it flush with the
+   heading above instead of letting it float centered and narrower. */
+.quick-follow-up-form { display: grid; gap: 22px; width: 100%; margin: 0; max-width: none; }
 .quick-follow-up-person, .quick-follow-up-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .quick-follow-up-detail { display: grid; gap: 8px; }
 .quick-follow-up-detail-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; border: none; background: none; font: inherit; cursor: pointer; color: var(--p-ink); }
