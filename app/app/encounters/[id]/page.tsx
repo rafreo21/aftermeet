@@ -38,7 +38,7 @@ export default function EncounterReviewPage() {
   const [encounterId, setEncounterId] = useState("");
   const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", participantId: "", dueAt: "", channel: "email" as EncounterAction["channel"] });
   const [message, setMessage] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [reviewTab, setReviewTab] = useState<"recap" | "details">("recap");
   const [actionComposerOpen, setActionComposerOpen] = useState(false);
   const [editingActionId, setEditingActionId] = useState("");
   const [transcriptOpen, setTranscriptOpen] = useState(false);
@@ -308,9 +308,79 @@ export default function EncounterReviewPage() {
             </section>
           ) : null}
 
-          <section className="review-section shared-section review-primary-section">
-            <header><span><ShareNetworkIcon size={20} weight="bold" /></span><div><h2>Meeting recap</h2><p>This is what participants will see after you approve the guest view.</p></div></header>
-            <TextAreaField label="Shared summary" hint="Participant can see this" rows={4} value={encounter.sharedSummary} onChange={(event) => patch((current) => ({ ...current, sharedSummary: event.target.value }))} />
+          <section className="review-section review-primary-section review-tabs-section">
+            <div className="review-tabs" role="tablist" aria-label="Meeting recap and details">
+              <button type="button" role="tab" aria-selected={reviewTab === "recap"} className={reviewTab === "recap" ? "active" : ""} onClick={() => setReviewTab("recap")}>
+                <ShareNetworkIcon size={16} weight="bold" />Recap
+              </button>
+              <button type="button" role="tab" aria-selected={reviewTab === "details"} className={reviewTab === "details" ? "active" : ""} onClick={() => setReviewTab("details")}>
+                <LockKeyIcon size={16} weight="bold" />Details
+              </button>
+            </div>
+            {reviewTab === "recap" ? (
+              <div className="review-tab-panel" role="tabpanel">
+                <p className="review-tab-hint">This is what participants will see after you approve the guest view.</p>
+                <TextAreaField label="Shared summary" hint="Participant can see this" rows={4} value={encounter.sharedSummary} onChange={(event) => patch((current) => ({ ...current, sharedSummary: event.target.value }))} />
+              </div>
+            ) : (
+              <div className="review-tab-panel review-details-content" role="tabpanel">
+                <p className="review-tab-hint">Recording, transcript, speaker names, and private notes — only you can see this.</p>
+                {localAudioUrl ? (
+                  <article className="review-recording-detail">
+                    <strong>Recording</strong>
+                    <audio controls preload="metadata" src={localAudioUrl} />
+                  </article>
+                ) : null}
+                {encounter.transcript.trim() ? (
+                <>
+                  <button type="button" className="review-transcript-toggle" onClick={() => setTranscriptOpen((value) => !value)} aria-expanded={transcriptOpen}>
+                    <div><strong>Full transcript</strong><small>{transcriptOpen ? "Hide the raw transcript while you focus on what to share." : "Expand to edit the full transcript. Collapsed by default on review."}</small></div>
+                    {transcriptOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
+                  </button>
+                  {transcriptOpen ? (
+                    <>
+                      {speakerLabels.length ? (
+                        <div className="speaker-identity-editor">
+                          <div>
+                            <strong>Identify speakers</strong>
+                            <small>Confirm who each detected voice belongs to before you review the summary.</small>
+                          </div>
+                          {speakerLabels.map((label) => (
+                            <label key={label}>
+                              <span>{label}</span>
+                              <select
+                                value={speakerNames[label] || ""}
+                                onChange={(event) => setSpeakerNames((current) => ({ ...current, [label]: event.target.value }))}
+                              >
+                                <option value="">Choose a person</option>
+                                {speakerCandidates.map((candidate) => <option key={candidate} value={candidate}>{candidate}</option>)}
+                              </select>
+                            </label>
+                          ))}
+                          <Button
+                            variant="secondary"
+                            disabled={!speakerLabels.every((label) => speakerNames[label])}
+                            onClick={() => {
+                              patch((current) => ({
+                                ...current,
+                                transcript: renameTranscriptSpeakers(current.transcript, speakerNames),
+                                actions: renameSpeakerAssignees(current.actions ?? [], speakerNames, current.participants ?? []),
+                              }));
+                              setMessage("Speaker names applied to the transcript and follow-up owners.");
+                            }}
+                          >Apply speaker names</Button>
+                        </div>
+                      ) : null}
+                      <TextAreaField label="Full transcript" hint="Private" rows={8} value={encounter.transcript} onChange={(event) => patch((current) => ({ ...current, transcript: event.target.value }))} />
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <p className="muted-copy">No transcript saved for this encounter.</p>
+              )}
+              <TextAreaField label="Private notes" hint="Only you" rows={4} value={encounter.privateNotes} onChange={(event) => patch((current) => ({ ...current, privateNotes: event.target.value }))} />
+              </div>
+            )}
           </section>
 
           <section className="review-section">
@@ -489,69 +559,6 @@ export default function EncounterReviewPage() {
             </div> : null}
           </section>
 
-          <section className="review-section private-section review-details-section">
-            <button type="button" className="review-details-toggle" onClick={() => setDetailsOpen((value) => !value)} aria-expanded={detailsOpen}>
-              <span><LockKeyIcon size={20} weight="bold" /></span>
-              <div><strong>Meeting details</strong><small>Recording, transcript, speaker names, and private notes</small></div>
-              {detailsOpen ? <CaretUpIcon size={17} weight="bold" /> : <CaretDownIcon size={17} weight="bold" />}
-            </button>
-            {detailsOpen ? <div className="review-details-content">
-              {localAudioUrl ? (
-                <article className="review-recording-detail">
-                  <strong>Recording</strong>
-                  <audio controls preload="metadata" src={localAudioUrl} />
-                </article>
-              ) : null}
-              {encounter.transcript.trim() ? (
-              <>
-                <button type="button" className="review-transcript-toggle" onClick={() => setTranscriptOpen((value) => !value)} aria-expanded={transcriptOpen}>
-                  <div><strong>Full transcript</strong><small>{transcriptOpen ? "Hide the raw transcript while you focus on what to share." : "Expand to edit the full transcript. Collapsed by default on review."}</small></div>
-                  {transcriptOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
-                </button>
-                {transcriptOpen ? (
-                  <>
-                    {speakerLabels.length ? (
-                      <div className="speaker-identity-editor">
-                        <div>
-                          <strong>Identify speakers</strong>
-                          <small>Confirm who each detected voice belongs to before you review the summary.</small>
-                        </div>
-                        {speakerLabels.map((label) => (
-                          <label key={label}>
-                            <span>{label}</span>
-                            <select
-                              value={speakerNames[label] || ""}
-                              onChange={(event) => setSpeakerNames((current) => ({ ...current, [label]: event.target.value }))}
-                            >
-                              <option value="">Choose a person</option>
-                              {speakerCandidates.map((candidate) => <option key={candidate} value={candidate}>{candidate}</option>)}
-                            </select>
-                          </label>
-                        ))}
-                        <Button
-                          variant="secondary"
-                          disabled={!speakerLabels.every((label) => speakerNames[label])}
-                          onClick={() => {
-                            patch((current) => ({
-                              ...current,
-                              transcript: renameTranscriptSpeakers(current.transcript, speakerNames),
-                              actions: renameSpeakerAssignees(current.actions ?? [], speakerNames, current.participants ?? []),
-                            }));
-                            setMessage("Speaker names applied to the transcript and follow-up owners.");
-                          }}
-                        >Apply speaker names</Button>
-                      </div>
-                    ) : null}
-                    <TextAreaField label="Full transcript" hint="Private" rows={8} value={encounter.transcript} onChange={(event) => patch((current) => ({ ...current, transcript: event.target.value }))} />
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <p className="muted-copy">No transcript saved for this encounter.</p>
-            )}
-            <TextAreaField label="Private notes" hint="Only you" rows={4} value={encounter.privateNotes} onChange={(event) => patch((current) => ({ ...current, privateNotes: event.target.value }))} />
-            </div> : null}
-          </section>
         </main>
 
         <aside className="share-rail">

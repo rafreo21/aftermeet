@@ -612,19 +612,16 @@
 .review-section h2 { margin: 1px 0 4px; font-size: 21px; }
 .review-section header p { margin: 0; color: var(--p-muted); font-size: 12px; line-height: 1.5; }
 .review-primary-section { border: 1px solid rgba(22, 51, 0, .12); }
-.review-details-section { padding: 0; gap: 0; box-shadow: none; border: 1px solid var(--p-line); overflow: hidden; }
-.review-details-toggle { width: 100%; padding: 18px 20px; display: flex; align-items: center; gap: 12px; border: 0; background: white; color: var(--p-ink); text-align: left; cursor: pointer; }
-.review-details-toggle:hover { background: var(--p-soft); }
-.review-details-toggle > span { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 8px; background: var(--p-sky); }
-.review-details-toggle > div { min-width: 0; display: grid; gap: 3px; flex: 1; }
-.review-details-toggle strong { font-size: 15px; }
-.review-details-toggle small { color: var(--p-muted); font-size: 11px; line-height: 1.4; }
-.review-details-content { padding: 0 20px 20px; display: grid; gap: 18px; border-top: 1px solid var(--p-line); }
-.review-details-content > :first-child { margin-top: 20px; }
+.review-tabs-section { padding: 0; gap: 0; overflow: hidden; }
+.review-tabs { display: flex; border-bottom: 1px solid var(--p-line); }
+.review-tabs button { flex: 1; padding: 16px 20px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-bottom: 2px solid transparent; background: white; color: var(--p-muted); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.review-tabs button:hover { background: var(--p-soft); }
+.review-tabs button.active { border-bottom-color: var(--p-navy); color: var(--p-navy); }
+.review-tab-panel { padding: 20px; display: grid; gap: 18px; }
+.review-tab-hint { margin: -8px 0 0; color: var(--p-muted); font-size: 12px; line-height: 1.5; }
+.review-details-content { border-top: 0; }
 .review-recording-detail { display: grid; gap: 10px; }
 .review-recording-detail audio { width: 100%; }
-.private-section { background: #f8f9f7; }
-.shared-section { box-shadow: inset 4px 0 0 var(--p-blue), 0 10px 30px rgba(22,51,0,.05); }
 .action-list { display: grid; gap: 8px; }
 .action-list article { padding: 13px; display: flex; align-items: center; gap: 11px; border-radius: 8px; background: var(--p-ice); }
 .action-list article { flex-wrap: wrap; }
