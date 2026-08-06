@@ -7,13 +7,21 @@ import type { ActionLinkContext } from "../../lib/action-links";
 import { resolveActionLink, resolveSecondaryActionLinks } from "../../lib/action-links";
 import type { EncounterAction } from "../../lib/encounters";
 import { emptyConnectedAccountStatus, type ConnectedAccountStatus } from "../../lib/integrations/types";
-import { Button, LinkButton } from "./Button";
+import { LinkButton } from "./Button";
+import { DropdownButton, type DropdownItem } from "./DropdownButton";
 
 type ActionDoButtonProps = {
   action: Pick<EncounterAction, "channel" | "title" | "dueAt" | "status" | "owner">;
   context: ActionLinkContext;
   size?: "small" | "medium";
   showSecondary?: boolean;
+};
+
+const TRIGGER_LABEL: Partial<Record<EncounterAction["channel"], string>> = {
+  meeting: "Schedule in Calendar",
+  send: "Send the file",
+  email: "Send email",
+  other: "Send email",
 };
 
 export function ActionDoButton({ action, context, size = "small", showSecondary = false }: ActionDoButtonProps) {
@@ -70,41 +78,58 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
     return <span className="action-do-unavailable" title={primary.unavailableReason}>{primary.label} unavailable</span>;
   }
 
+  // Meeting always has two providers to choose between — always offer both
+  // as a dropdown rather than defaulting to whichever the code picks first.
+  if (action.channel === "meeting") {
+    const items: DropdownItem[] = [
+      integrations.google.connected
+        ? { key: "google", label: "Google Calendar", onSelect: () => void scheduleViaConnected("google") }
+        : { key: "google", label: "Google Calendar", href: primary.href, external: primary.external },
+      integrations.microsoft.connected
+        ? { key: "outlook", label: "Outlook Calendar", onSelect: () => void scheduleViaConnected("microsoft") }
+        : { key: "outlook", label: "Outlook Calendar", href: secondary.find((link) => link.label === "Outlook Calendar")?.href, external: true },
+    ];
+    return (
+      <div className="action-do-group">
+        <DropdownButton
+          label={TRIGGER_LABEL.meeting}
+          icon={<CalendarBlankIcon size={14} weight="bold" />}
+          items={items}
+          size={buttonSize}
+          loading={scheduling !== ""}
+        />
+        {scheduleMessage ? <span className="action-do-message" role="status">{scheduleMessage}</span> : null}
+      </div>
+    );
+  }
+
+  // Multiple ways to send (Gmail/Outlook/Mail app/Drive) — collapse into one
+  // dropdown instead of a button per option. Falls through to the plain
+  // single-button case below when there's nothing to choose between (no
+  // email on file, so only one delivery method resolved).
+  if (secondary.length > 0) {
+    const items: DropdownItem[] = [
+      { key: "primary", label: primary.label, href: primary.href, external: primary.external },
+      ...secondary.map((link) => ({ key: link.label, label: link.label, href: link.href, external: link.external })),
+    ];
+    return (
+      <div className="action-do-group">
+        <DropdownButton label={TRIGGER_LABEL[action.channel] ?? primary.label} items={items} size={buttonSize} />
+      </div>
+    );
+  }
+
   return (
     <div className="action-do-group">
-      {action.channel === "meeting" && integrations.google.connected ? (
-        <Button size={buttonSize} loading={scheduling === "google"} onClick={() => void scheduleViaConnected("google")}>
-          <CalendarBlankIcon size={14} weight="bold" />Schedule in Google Calendar
-        </Button>
-      ) : (
-        <LinkButton
-          size={buttonSize}
-          href={primary.href}
-          target={primary.external ? "_blank" : undefined}
-          rel={primary.external ? "noreferrer" : undefined}
-        >
-          {primary.label}
-          {primary.external ? <ArrowSquareOutIcon size={14} weight="bold" /> : null}
-        </LinkButton>
-      )}
-      {action.channel === "meeting" && integrations.microsoft.connected ? (
-        <Button size={buttonSize} variant="secondary" loading={scheduling === "microsoft"} onClick={() => void scheduleViaConnected("microsoft")}>
-          Schedule in Outlook
-        </Button>
-      ) : null}
-      {secondary.map((link) => (
-        <LinkButton
-          key={link.label}
-          size={buttonSize}
-          variant="secondary"
-          href={link.href}
-          target={link.external ? "_blank" : undefined}
-          rel={link.external ? "noreferrer" : undefined}
-        >
-          {link.label}
-        </LinkButton>
-      ))}
-      {scheduleMessage ? <span className="action-do-message" role="status">{scheduleMessage}</span> : null}
+      <LinkButton
+        size={buttonSize}
+        href={primary.href}
+        target={primary.external ? "_blank" : undefined}
+        rel={primary.external ? "noreferrer" : undefined}
+      >
+        {primary.label}
+        {primary.external ? <ArrowSquareOutIcon size={14} weight="bold" /> : null}
+      </LinkButton>
     </div>
   );
 }

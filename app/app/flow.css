@@ -686,6 +686,8 @@
    fit dropped to its own line, right-aligned, with inconsistent widths.
    Stack them as a clean full-width list instead. */
 .followup-table-controls .inbox-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+.followup-table-controls .action-do-group > span { display: block; }
+.followup-table-controls button, .followup-table-controls .action-do-group > a { width: 100%; }
 .followup-table-controls .action-do-group { flex-direction: column; align-items: stretch; margin-left: 0; }
 .followup-table-controls .inbox-actions > .action-do-group + button { margin-top: 2px; }
 .followup-draft-row td { padding: 0; background: #f8fbf3; }
