@@ -34,7 +34,6 @@ export default async function OnboardingCardPage() {
       <section className="onboarding-panel onboarding-card">
         <header className="onboarding-header">
           <a className="onboarding-brand" href="/"><BrandMark size={40} />AfterMeet</a>
-          <span className="step-pill"><b aria-hidden="true">✨</b> Your first card</span>
         </header>
         <div className="onboarding-intro">
           <h1>Create your first card.</h1>

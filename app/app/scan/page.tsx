@@ -16,7 +16,7 @@ import {
 } from "../../../lib/contacts";
 import { resolveAndSaveContact } from "../../../lib/person-links";
 import { parseLinkedInProfileInput } from "../../../lib/linkedin-profile";
-import { parseScanTarget, scanTargetLabel, type ScanTarget } from "../../../lib/scan-targets";
+import { parseScanTarget, type ScanTarget } from "../../../lib/scan-targets";
 import {
   availableQrScanEngine,
   buildCameraConstraints,
@@ -306,7 +306,6 @@ export default function ScanPage() {
         ) : (
           <section className="scan-result-card">
             <header>
-              <span className="step-pill">{scanTargetLabel(target)}</span>
               <h1>{target.type === "aftermeet_card" ? card?.fullName || `@${target.slug}` : target.type === "linkedin" ? `@${target.handle}` : "Ready to add"}</h1>
               {target.type === "aftermeet_card" && card ? (
                 <p>{[card.role, card.company].filter(Boolean).join(" · ") || "AfterMeet card"}</p>

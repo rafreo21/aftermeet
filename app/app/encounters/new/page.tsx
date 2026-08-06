@@ -1162,7 +1162,6 @@ export default function NewEncounterPage() {
         <section className="encounter-main" ref={mainRef}>
           {captureStep > 0 ? (
             <div className="encounter-heading">
-              <span className="step-pill">Step {captureStep + 1} of {captureSteps.length}</span>
               <h1>{stepHeadings[captureStep]?.title ?? "Review"}</h1>
               <p>{stepHeadings[captureStep]?.copy ?? ""}</p>
             </div>
@@ -1494,7 +1493,6 @@ export default function NewEncounterPage() {
 
           {captureStep === 3 && <>
           <section className="encounter-recap">
-            <span className="step-pill">Meeting recap</span>
             <h2>{form.personName.trim() || form.title.trim() || "Untitled meeting"}</h2>
             <p className="encounter-recap-copy">{form.personName.trim() && form.title.trim() ? form.title.trim() : form.personName.trim() ? "Add a title on the previous step if helpful." : "Add a person on the previous step if you can."}{form.sharedSummary.trim() ? ` · ${form.sharedSummary.trim()}` : ""}</p>
           </section>

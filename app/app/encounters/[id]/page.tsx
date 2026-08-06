@@ -292,7 +292,7 @@ export default function EncounterReviewPage() {
       <div className="review-layout">
         <main className="review-main">
           <header className="review-heading">
-            <div><span className="step-pill">Ready to review</span><h1>{encounter.personName || encounter.title}</h1><p>{encounter.personName && encounter.title ? encounter.title : encounter.personName || "Unlinked person"} · {formatDuration(encounter.durationSeconds)}</p></div>
+            <div><h1>{encounter.personName || encounter.title}</h1><p>{encounter.personName && encounter.title ? encounter.title : encounter.personName || "Unlinked person"} · {formatDuration(encounter.durationSeconds)}</p></div>
             {encounter.status === "shared" && <CheckCircleIcon size={42} weight="fill" />}
           </header>
 
@@ -318,7 +318,6 @@ export default function EncounterReviewPage() {
             <header><span><CheckCircleIcon size={20} weight="bold" /></span><div><h2>Follow-ups</h2><p>Confirm the owner and due date for each commitment.</p></div></header>
             {guestCommitments.length ? (
               <div className="guest-response-list">
-                <span className="step-pill">Confirmed by participants</span>
                 {guestCommitments.map((commitment, index) => (
                   <article key={commitment.id || `${commitment.committedAt}-${index}`}>
                     <CheckCircleIcon size={20} weight="fill" />

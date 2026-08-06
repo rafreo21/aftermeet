@@ -339,7 +339,6 @@ export default function CardsPage() {
         {!hydrated ? <PageSkeleton rows={3} /> : !cards.length ? (
           <section className="cards-empty-state">
             <div className="cards-empty-visual"><div><QrCodeIcon size={42} weight="bold" /></div><span><PlusIcon size={22} weight="bold" /></span></div>
-            <span className="step-pill">Your first card</span>
             <h1>Create a card people can remember.</h1>
             <p>Add your identity and the ways people can reach you. AfterMeet creates the QR code when you save the card.</p>
             <Button onClick={() => createCard()}><PlusIcon size={18} weight="bold" /> Create your first card</Button>

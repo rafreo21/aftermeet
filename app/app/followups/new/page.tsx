@@ -248,7 +248,6 @@ export default function NewFollowUpPage() {
       <div className="flow-page quick-follow-up-page">
         <div className="flow-heading">
           <div>
-            <span className="step-pill">Quick follow-up</span>
             <h1>What needs to happen next?</h1>
             <p>It will appear in Follow-ups, notifications, history, and this person’s timeline.</p>
           </div>

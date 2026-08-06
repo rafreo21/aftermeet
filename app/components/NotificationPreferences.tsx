@@ -153,7 +153,7 @@ export function NotificationPreferences() {
 
   return (
     <section className="settings-panel notification-preferences" aria-labelledby="notification-preferences-heading">
-      <header><div><span className="step-pill">Reminders</span><h2 id="notification-preferences-heading">Notification preferences</h2><p>Choose how AfterMeet reminds you about follow-ups.</p></div></header>
+      <header><div><h2 id="notification-preferences-heading">Notification preferences</h2><p>Choose how AfterMeet reminds you about follow-ups.</p></div></header>
       {message ? <StatusMessage tone={message.tone}>{message.text}</StatusMessage> : null}
       <div className="preference-row">
         <span className="preference-icon"><EnvelopeSimpleIcon size={22} weight="bold" /></span>

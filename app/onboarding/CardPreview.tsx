@@ -2,7 +2,7 @@ import { EnvelopeSimpleIcon } from "@phosphor-icons/react/dist/csr/EnvelopeSimpl
 import { PhoneIcon } from "@phosphor-icons/react/dist/csr/Phone";
 import { Button } from "../components/Button";
 
-import { themeGradientCss } from "@/lib/theme-contrast";
+import { themeForegroundColor, themeGradientCss } from "@/lib/theme-contrast";
 
 type PreviewMethod = { type: string; value: string; label: string };
 
@@ -22,6 +22,7 @@ export function CardPreview({
   phone: string;
 }) {
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "AM";
+  const onAccent = themeForegroundColor(theme);
   const methods: PreviewMethod[] = [
     email.trim() ? { type: "email", value: email.trim(), label: "Email" } : null,
     phone.trim() ? { type: "phone", value: phone.trim(), label: "Phone" } : null,
@@ -31,7 +32,7 @@ export function CardPreview({
     <div className="onboarding-phone">
       <div className="onboarding-phone-notch" aria-hidden="true" />
       <article className="public-card onboarding-card-preview">
-        <div className="card-cover" style={{ background: themeGradientCss(theme) }}>
+        <div className="card-cover" style={{ background: themeGradientCss(theme), color: onAccent }}>
           <div className="card-logo">{company.trim()[0]?.toUpperCase() || initials[0] || "A"}</div>
           <span>{company.trim() || "Your company"}</span>
         </div>
@@ -52,7 +53,7 @@ export function CardPreview({
               <div className="card-method card-method-empty"><span><EnvelopeSimpleIcon size={18} weight="bold" /></span><div><strong>Email</strong><small>Add your email to preview it here</small></div></div>
             )}
           </div>
-          <div className="card-actions"><Button fullWidth style={{ background: themeGradientCss(theme) }}>Save contact</Button></div>
+          <div className="card-actions"><Button fullWidth style={{ background: themeGradientCss(theme), color: onAccent }}>Save contact</Button></div>
         </div>
       </article>
     </div>

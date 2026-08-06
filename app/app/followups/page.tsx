@@ -243,7 +243,7 @@ export default function FollowupsPage() {
         {hydrated && scope === "current" && guestCommitments.length ? (
           <section className="guest-commitments" aria-labelledby="guest-commitments-heading">
             <header>
-              <div><span className="step-pill">Their commitments</span><h2 id="guest-commitments-heading">What others said they&apos;ll do</h2></div>
+              <div><h2 id="guest-commitments-heading">What others said they&apos;ll do</h2></div>
               <small>These are confirmations, not tasks assigned to you.</small>
             </header>
             <div className="inbox-list">
@@ -274,7 +274,7 @@ export default function FollowupsPage() {
               </Button>
             </div>
             <div className="followup-section-heading">
-              <div><span className="step-pill">{scope === "current" ? "To do" : "Completed"}</span><h2 id="your-followups-heading">{scope === "current" ? "Your follow-ups" : "Past follow-ups"}</h2></div>
+              <div><h2 id="your-followups-heading">{scope === "current" ? "Your follow-ups" : "Past follow-ups"}</h2></div>
               {followUpGroups.length ? (
                 <p>{followUpGroups.reduce((total, group) => total + group.actions.length, 0)} {followUpGroups.reduce((total, group) => total + group.actions.length, 0) === 1 ? "action" : "actions"} across {followUpGroups.length} {followUpGroups.length === 1 ? "meeting" : "meetings"}</p>
               ) : <p>No follow-ups match your search.</p>}
@@ -358,7 +358,7 @@ export default function FollowupsPage() {
               ))}
             </div>
           </section>
-        ) : scope === "current" && contact ? <div className="follow-list"><article className="follow-card"><div><span className="step-pill">{done ? "Completed" : "Legacy follow-up"}</span><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : error ? (
+        ) : scope === "current" && contact ? <div className="follow-list"><article className="follow-card"><div><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : error ? (
           <div className="empty-state">
             <div>
               <span className="empty-icon"><PaperPlaneTiltIcon size={32} weight="bold" /></span>

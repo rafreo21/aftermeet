@@ -56,7 +56,6 @@ export default function RecordingStorageSettingsPage() {
         </div>
         <section className="activate-panel">
           <header>
-            <span className="step-pill">Recordings</span>
             <h2><CloudArrowUpIcon size={22} weight="bold" /> Recording storage</h2>
           </header>
           <div className="grid gap-2">

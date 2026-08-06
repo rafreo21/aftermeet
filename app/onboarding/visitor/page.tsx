@@ -28,7 +28,6 @@ export default async function VisitorOnboardingPage({
       <section className="onboarding-panel onboarding-profile">
         <header className="onboarding-header">
           <a className="onboarding-brand" href="/"><BrandMark size={40} /></a>
-          <span className="step-pill"><b aria-hidden="true">👋</b> Light account</span>
         </header>
         <div className="onboarding-intro">
           <h1>Remember who you meet.</h1>

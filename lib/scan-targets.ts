@@ -55,15 +55,3 @@ export function parseScanTarget(raw: string): ScanTarget {
 
   return { type: "text", text: value };
 }
-
-export function scanTargetLabel(target: ScanTarget) {
-  switch (target.type) {
-    case "aftermeet_card": return "AfterMeet card";
-    case "linkedin": return "LinkedIn profile";
-    case "vcard": return "Contact card";
-    case "email": return "Email address";
-    case "phone": return "Phone number";
-    case "url": return "Link";
-    default: return "QR content";
-  }
-}
