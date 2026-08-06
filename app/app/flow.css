@@ -680,16 +680,10 @@
 .followup-table th:last-child, .followup-table td:last-child { padding-right: 18px; }
 .followup-table-action { display: flex; align-items: center; gap: 12px; min-width: 240px; }
 .followup-table-action .inbox-channel { width: 72px; flex: 0 0 auto; }
-.followup-table-controls { width: 220px; min-width: 220px; }
-/* The primary action, any secondary link, and Done used to sit in one
-   wrapping row squeezed into a narrow column — each button that didn't
-   fit dropped to its own line, right-aligned, with inconsistent widths.
-   Stack them as a clean full-width list instead. */
-.followup-table-controls .inbox-actions { flex-direction: column; align-items: stretch; gap: 8px; }
-.followup-table-controls .action-do-group > span { display: block; }
-.followup-table-controls button, .followup-table-controls .action-do-group > a { width: 100%; }
-.followup-table-controls .action-do-group { flex-direction: column; align-items: stretch; margin-left: 0; }
-.followup-table-controls .inbox-actions > .action-do-group + button { margin-top: 2px; }
+/* Multi-provider actions (email, calendar) now collapse into a single
+   dropdown button, so there are at most two controls here (the action,
+   Done) — a normal single-line row, not a stack. */
+.followup-table-controls { width: 1%; white-space: nowrap; }
 .followup-draft-row td { padding: 0; background: #f8fbf3; }
 .followup-draft-row:hover td { background: #f8fbf3 !important; }
 .followup-draft-row .outbound-draft { border-top: 0; }
