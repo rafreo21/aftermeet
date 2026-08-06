@@ -37,6 +37,7 @@ export default function EncounterReviewPage() {
   const [encounter, setEncounter] = useState<Encounter | null>(null);
   const [encounterId, setEncounterId] = useState("");
   const [newAction, setNewAction] = useState({ title: "", owner: "me" as "me" | "guest", participantId: "", dueAt: "", channel: "email" as EncounterAction["channel"] });
+  const [newActionDetailOpen, setNewActionDetailOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [reviewTab, setReviewTab] = useState<"recap" | "details">("recap");
   const [actionComposerOpen, setActionComposerOpen] = useState(false);
@@ -516,27 +517,26 @@ export default function EncounterReviewPage() {
               {actionComposerOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
             </button>
             {actionComposerOpen ? <div className="new-action">
-              <TextField label="Follow-up (optional)" value={newAction.title} onChange={(event) => setNewAction((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Send the introduction" />
-              <SelectField
-                label="Owner"
-                value={newAction.owner === "guest" ? newAction.participantId || "guest" : "me"}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setNewAction((current) => value === "me"
-                    ? { ...current, owner: "me" }
-                    : { ...current, owner: "guest", participantId: value === "guest" ? "" : value });
-                }}
-              >
-                <option value="me">Me</option>
-                {participants.length > 1 ? (
-                  participants.map((person) => (
-                    <option key={person.id} value={person.id}>{person.name || "Guest"}</option>
-                  ))
-                ) : (
-                  <option value="guest">{encounter.personName || "Guest"}</option>
-                )}
-              </SelectField>
-              {newAction.owner === "me" && participants.length ? (
+              <div className="quick-follow-up-owner">
+                <small className="block text-[11px] font-extrabold uppercase tracking-wide text-[#8391a5]">Owner</small>
+                <div className="flow-heading-actions" style={{ marginTop: 8 }}>
+                  <Button type="button" size="small" variant={newAction.owner === "me" ? "primary" : "secondary"} onClick={() => setNewAction((current) => ({ ...current, owner: "me" }))}>Me</Button>
+                  {participants.length > 1 ? (
+                    participants.map((person) => (
+                      <Button
+                        key={person.id}
+                        type="button"
+                        size="small"
+                        variant={newAction.owner === "guest" && newAction.participantId === person.id ? "primary" : "secondary"}
+                        onClick={() => setNewAction((current) => ({ ...current, owner: "guest", participantId: person.id }))}
+                      >{person.name || "Guest"}</Button>
+                    ))
+                  ) : (
+                    <Button type="button" size="small" variant={newAction.owner === "guest" ? "primary" : "secondary"} onClick={() => setNewAction((current) => ({ ...current, owner: "guest", participantId: "" }))}>{encounter.personName || "Guest"}</Button>
+                  )}
+                </div>
+              </div>
+              {newAction.owner === "me" && participants.length > 1 ? (
                 <SelectField
                   label="For person"
                   value={newAction.participantId || participants[0]?.id || ""}
@@ -547,15 +547,40 @@ export default function EncounterReviewPage() {
                   ))}
                 </SelectField>
               ) : null}
-              <SelectField label="Channel" value={newAction.channel} onChange={(event) => setNewAction((current) => ({ ...current, channel: event.target.value as EncounterAction["channel"] }))}>
-                <option value="email">Email</option>
-                <option value="linkedin">LinkedIn</option>
-                <option value="call">Call</option>
-                <option value="meeting">Meeting</option>
-                <option value="send">Send something</option>
-              </SelectField>
-              <TextField label="Due" type="date" value={newAction.dueAt} onChange={(event) => setNewAction((current) => ({ ...current, dueAt: event.target.value }))} />
-              <Button size="small" onClick={addAction}><PlusIcon size={15} weight="bold" />Add</Button>
+              <div className="quick-follow-up-meta">
+                <SelectField label="Channel" value={newAction.channel} onChange={(event) => setNewAction((current) => ({ ...current, channel: event.target.value as EncounterAction["channel"] }))}>
+                  <option value="email">Email</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="call">Call</option>
+                  <option value="meeting">Meeting</option>
+                  <option value="send">Send something</option>
+                </SelectField>
+                <TextField label="Due date" type="date" value={newAction.dueAt} onChange={(event) => setNewAction((current) => ({ ...current, dueAt: event.target.value }))} />
+              </div>
+              <div className="quick-follow-up-detail">
+                <button
+                  type="button"
+                  aria-expanded={newActionDetailOpen}
+                  onClick={() => setNewActionDetailOpen((value) => !value)}
+                  className="quick-follow-up-detail-toggle"
+                >
+                  <small className="block text-[11px] font-extrabold uppercase tracking-wide text-[#8391a5]">What do you need to do? (optional)</small>
+                  {newActionDetailOpen ? <CaretUpIcon size={16} weight="bold" /> : <CaretDownIcon size={16} weight="bold" />}
+                </button>
+                {newActionDetailOpen ? (
+                  <TextField
+                    label="Follow-up"
+                    hint="Shown in your reminders so you know what this one's about."
+                    value={newAction.title}
+                    onChange={(event) => setNewAction((current) => ({ ...current, title: event.target.value }))}
+                    placeholder="e.g. Send the introduction"
+                  />
+                ) : null}
+              </div>
+              <div className="quick-follow-up-actions">
+                <Button variant="ghost" onClick={() => setActionComposerOpen(false)}>Cancel</Button>
+                <Button onClick={addAction}><PlusIcon size={15} weight="bold" />Add</Button>
+              </div>
             </div> : null}
           </section>
 
