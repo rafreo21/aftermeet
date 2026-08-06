@@ -321,8 +321,8 @@ export default function FollowupsPage() {
                                 ) : (
                                   <>
                                     <ActionDoButton action={action} context={context} showSecondary />
-                                    <LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>View</LinkButton>
                                     <Button size="small" variant="secondary" onClick={() => completeAction(encounter.id, action.id)}><CheckCircleIcon size={16} weight="bold" />Done</Button>
+                                    <LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>View</LinkButton>
                                   </>
                                 )}
                               </div>
