@@ -415,7 +415,7 @@ export default function EncounterReviewPage() {
                     }))}
                     aria-label={action.status === "completed" ? "Mark open" : "Mark complete"}
                   ><CheckCircleIcon size={22} weight={action.status === "completed" ? "fill" : "regular"} /></button>
-                  <div><strong>{action.title}</strong><small>{actionOwnerLabel(action)}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {channelLabel(action.channel)}</small></div>
+                  <div className="action-copy"><strong>{action.title}</strong><small>{actionOwnerLabel(action)}{action.dueAt ? ` · due ${action.dueAt}` : ""} · {channelLabel(action.channel)}</small></div>
                   {editingActionId === action.id ? (
                     <div className="action-inline-editor">
                       <SelectField

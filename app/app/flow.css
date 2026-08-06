@@ -625,9 +625,9 @@
 .action-list { display: grid; gap: 8px; }
 .action-list article { padding: 13px; display: flex; align-items: center; gap: 11px; border-radius: 8px; background: var(--p-ice); }
 .action-list article { flex-wrap: wrap; }
-.action-list article div { flex: 1 1 180px; }
-.action-list article div strong, .action-list article div small { display: block; }
-.action-list article div strong { margin-bottom: 2px; }
+.action-list article .action-copy { flex: 1 1 180px; }
+.action-list article .action-copy strong, .action-list article .action-copy small { display: block; }
+.action-list article .action-copy strong { margin-bottom: 2px; }
 .action-list .action-edit { min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 7px; background: var(--p-surface); color: var(--p-ink); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
 /* Edit and the primary action (Schedule/Send/...) sit together at the
    right edge — only the first of the two should claim the flex line's
