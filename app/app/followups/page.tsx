@@ -280,22 +280,20 @@ export default function FollowupsPage() {
               ) : <p>No follow-ups match your search.</p>}
             </div>
             <div className="followup-groups">
-              {followUpGroups.map(({ encounter, actions }) => (
-                <article className="followup-group" key={encounter.id}>
+              {followUpGroups.length ? (
+              <article className="followup-group">
                   <div className="data-table-shell followup-table-shell">
                     <table className="data-table followup-table">
                       <thead>
                         <tr>
-                          <th scope="col" aria-label="Follow-up">{encounter.personName || "Meeting follow-ups"}</th>
+                          <th scope="col">Follow-up</th>
                           <th scope="col">Owner</th>
                           <th scope="col">Due</th>
-                          <th scope="col" className="followup-table-view-meeting">
-                            <LinkButton size="small" variant="ghost" href={`/app/encounters/${encounter.id}`}>View meeting</LinkButton>
-                          </th>
+                          <th scope="col"><span className="sr-only">Actions</span></th>
                         </tr>
                       </thead>
                       <tbody>
-                    {actions.map((action) => {
+                    {followUpGroups.flatMap(({ encounter, actions }) => actions.map((action) => {
                       const context = buildActionLinkContext(
                         encounter,
                         encounter.contactId ? findContactById(encounter.contactId) : null,
@@ -310,7 +308,7 @@ export default function FollowupsPage() {
                                 <span className="inbox-channel">{channelLabel(action.channel)}</span>
                                 <div className="followup-action-copy">
                               <h4>{action.title}</h4>
-                                  <p>{encounter.title}</p>
+                                  <p>{encounter.personName || "Meeting follow-ups"}</p>
                                 </div>
                               </div>
                             </td>
@@ -323,6 +321,7 @@ export default function FollowupsPage() {
                                 ) : (
                                   <>
                                     <ActionDoButton action={action} context={context} showSecondary />
+                                    <LinkButton size="small" variant="secondary" href={`/app/encounters/${encounter.id}`}>View</LinkButton>
                                     <Button size="small" variant="secondary" onClick={() => completeAction(encounter.id, action.id)}><CheckCircleIcon size={16} weight="bold" />Done</Button>
                                   </>
                                 )}
@@ -345,12 +344,12 @@ export default function FollowupsPage() {
                           ) : null}
                         </Fragment>
                       );
-                    })}
+                    }))}
                       </tbody>
                     </table>
                   </div>
-                </article>
-              ))}
+              </article>
+              ) : null}
             </div>
           </section>
         ) : scope === "current" && contact ? <div className="follow-list"><article className="follow-card"><div><h2>{contact.firstName} {contact.lastName}{contact.company ? ` · ${contact.company}` : ""}</h2><p>{contact.nextAction || "Send a thoughtful follow-up based on the meeting context."}</p>{contact.context && <p><strong>Context:</strong> {contact.context}</p>}</div>{done ? <CheckCircleIcon size={42} weight="fill" /> : <Button onClick={() => { setDone(true); setMessage("Follow-up marked complete."); }}><PaperPlaneTiltIcon size={18} weight="bold" />Mark complete</Button>}</article></div> : error ? (

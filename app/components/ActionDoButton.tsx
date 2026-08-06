@@ -18,7 +18,7 @@ type ActionDoButtonProps = {
 };
 
 const TRIGGER_LABEL: Partial<Record<EncounterAction["channel"], string>> = {
-  meeting: "Schedule in Calendar",
+  meeting: "Schedule",
   send: "Send the file",
   email: "Send email",
   other: "Send email",

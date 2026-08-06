@@ -672,11 +672,6 @@
 .followup-section-heading p { margin: 0; color: var(--p-muted); font-size: 12px; }
 .followup-groups { display: grid; gap: 14px; }
 .followup-group { overflow: hidden; border: 1px solid var(--p-line); border-radius: 10px; background: white; }
-/* The group's person name lives in the table's own header row now instead
-   of a separate bar above it (that repeated the same encounter title every
-   row already shows) — style it like a heading, not a column label. */
-.followup-table th:first-child { font-size: 15px; font-weight: 800; letter-spacing: normal; text-transform: none; color: var(--p-navy); }
-.followup-table-view-meeting { text-align: right; }
 .followup-table-shell { border: 0; border-radius: 0; box-shadow: none; }
 .followup-table th:first-child, .followup-table td:first-child { padding-left: 18px; }
 .followup-table th:last-child, .followup-table td:last-child { padding-right: 18px; }
