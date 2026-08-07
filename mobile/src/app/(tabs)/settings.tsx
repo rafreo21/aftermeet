@@ -77,20 +77,6 @@ export default function SettingsScreen() {
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push('/capture')}
-        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
-        <View style={styles.linkCopy}>
-          <View style={styles.linkTitleRow}>
-            <Microphone size={18} color={colors.ink} weight="bold" />
-            <Text style={styles.label}>Capture context</Text>
-          </View>
-          <Text style={styles.linkHint}>Recordings, drafts, and captures needing review</Text>
-        </View>
-        <CaretRight size={18} color={colors.muted} weight="bold" />
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
         onPress={() => router.push('/settings/follow-ups')}
         style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
         <View style={styles.linkCopy}>
@@ -99,6 +85,20 @@ export default function SettingsScreen() {
             <Text style={styles.label}>Follow-ups</Text>
           </View>
           <Text style={styles.linkHint}>Current actions and completed follow-ups</Text>
+        </View>
+        <CaretRight size={18} color={colors.muted} weight="bold" />
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/capture')}
+        style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
+        <View style={styles.linkCopy}>
+          <View style={styles.linkTitleRow}>
+            <Microphone size={18} color={colors.ink} weight="bold" />
+            <Text style={styles.label}>Capture context</Text>
+          </View>
+          <Text style={styles.linkHint}>Recordings, drafts, and captures needing review</Text>
         </View>
         <CaretRight size={18} color={colors.muted} weight="bold" />
       </Pressable>

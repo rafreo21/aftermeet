@@ -61,15 +61,6 @@ export function QuickActionsFab() {
         <View style={styles.fabOptions}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => void startCaptureNow()}
-            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
-            <View style={styles.fabOptionIcon}>
-              <Microphone size={20} color={colors.ink} weight="bold" />
-            </View>
-            <Text style={styles.fabOptionLabel}>Capture context</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
             onPress={() => {
               setFabOpen(false);
               if (card.status === 'published') {
@@ -107,6 +98,15 @@ export function QuickActionsFab() {
               <Scan size={20} color={colors.ink} weight="bold" />
             </View>
             <Text style={styles.fabOptionLabel}>Quick scan</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void startCaptureNow()}
+            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
+            <View style={styles.fabOptionIcon}>
+              <Microphone size={20} color={colors.ink} weight="bold" />
+            </View>
+            <Text style={styles.fabOptionLabel}>Capture context</Text>
           </Pressable>
         </View>
       </BottomSheet>
