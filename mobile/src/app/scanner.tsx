@@ -11,7 +11,9 @@ import { GreenHeroCard } from '@/components/green-hero-card';
 import { ScanShareSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { connectionFromScannedSlug } from '@/features/connections/connections-api';
+import { enqueueOfflineScan } from '@/features/connections/offline-scan-queue';
 import { setAuthReturnPath } from '@/features/encounters/capture-draft';
+import { isOnline } from '@/lib/connectivity';
 import { parseAfterMeetCardSlugFromScan } from '@/lib/parse-scanned-qr';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, spacing } from '@/theme/tokens';
@@ -26,6 +28,7 @@ export default function ScannerScreen() {
   const [locked, setLocked] = useState(false);
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState('');
+  const [queuedMessage, setQueuedMessage] = useState('');
   const insets = useAppInsets();
 
   async function openScannedCard(slug: string) {
@@ -33,6 +36,13 @@ export default function ScannerScreen() {
     if (!session?.access_token) {
       await setAuthReturnPath(`/connections/scan/${encodeURIComponent(normalized)}`);
       router.replace('/auth');
+      return;
+    }
+
+    if (!isOnline()) {
+      await enqueueOfflineScan(normalized);
+      setQueuedMessage("You're offline — this card will be added to your connections automatically once you're back online.");
+      setLocked(false);
       return;
     }
 
@@ -47,7 +57,12 @@ export default function ScannerScreen() {
       setError('This card could not be added. Ask them to publish their card, then try again.');
       setLocked(false);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not open this card.');
+      if (!isOnline()) {
+        await enqueueOfflineScan(normalized);
+        setQueuedMessage("You're offline — this card will be added to your connections automatically once you're back online.");
+      } else {
+        setError(caught instanceof Error ? caught.message : 'Could not open this card.');
+      }
       setLocked(false);
     } finally {
       setLinking(false);
@@ -58,6 +73,7 @@ export default function ScannerScreen() {
     if (locked || linking) return;
     setLocked(true);
     setError('');
+    setQueuedMessage('');
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const slug = parseCardSlug(result.data);
     if (slug) {
@@ -143,13 +159,19 @@ export default function ScannerScreen() {
           </View>
         </View>
         {linking ? <ActivityIndicator color={colors.white} style={styles.spinner} /> : null}
-        {!linking && !error ? (
+        {!linking && !error && !queuedMessage ? (
           <Text style={styles.helper}>Adds AfterMeet cards to your network. Visitors should use their phone camera instead.</Text>
         ) : null}
         {error ? (
           <View style={styles.errorWrap}>
             <Text style={styles.errorText}>{error}</Text>
             <Button variant="ghost" onPress={() => { setLocked(false); setError(''); }}>Try again</Button>
+          </View>
+        ) : null}
+        {queuedMessage ? (
+          <View style={styles.queuedWrap}>
+            <Text style={styles.queuedText}>{queuedMessage}</Text>
+            <Button variant="ghost" onPress={() => { setLocked(false); setQueuedMessage(''); }}>Scan another</Button>
           </View>
         ) : null}
       </View>
@@ -195,6 +217,8 @@ const styles = StyleSheet.create({
   },
   errorWrap: { marginTop: spacing.x4, gap: spacing.x2, alignItems: 'center' },
   errorText: { color: colors.white, textAlign: 'center', fontWeight: '600' },
+  queuedWrap: { marginTop: spacing.x4, gap: spacing.x2, alignItems: 'center' },
+  queuedText: { color: colors.white, textAlign: 'center', fontWeight: '600' },
   permission: { flex: 1, paddingHorizontal: spacing.x6, backgroundColor: colors.canvas },
   permissionContent: { flex: 1, justifyContent: 'center', gap: spacing.x4 },
   permissionTitle: { color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '800' },
