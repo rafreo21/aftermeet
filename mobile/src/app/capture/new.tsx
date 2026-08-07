@@ -1063,6 +1063,9 @@ export default function CaptureWizardScreen() {
     }
   }
 
+  const editingManualFollowUp = draft.manualFollowUps.find((item) => item.id === editingManualFollowUpId) || null;
+  const editingManualFollowUpPronoun = editingManualFollowUp?.owner === 'guest' ? 'they' : 'you';
+
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2, paddingBottom: insets.bottom }]}>
       {!draftReady ? (
@@ -1239,7 +1242,6 @@ export default function CaptureWizardScreen() {
                       ? (person?.name ? `You → ${person.name}` : 'You')
                       : (person?.name || draft.personName.trim() || 'Guest');
                     const dueLabel = formatDueLabel(item.dueAt);
-                    const pronoun = item.owner === 'me' ? 'you' : 'they';
                     return (
                       <View key={item.id} style={styles.actionItem}>
                         <View style={styles.actionRow}>
@@ -1262,117 +1264,6 @@ export default function CaptureWizardScreen() {
                             <Trash size={19} color={colors.muted} />
                           </Pressable>
                         </View>
-                        <BottomSheet
-                          visible={editingManualFollowUpId === item.id}
-                          title="Edit follow-up"
-                          onClose={() => setEditingManualFollowUpId('')}
-                          footer={<Button onPress={() => setEditingManualFollowUpId('')}>Done</Button>}>
-                          <View style={styles.fieldGroup}>
-                            <Text style={styles.label}>Owner</Text>
-                            <View style={styles.channelRow}>
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: item.owner === 'me' }}
-                                onPress={() => updateManualFollowUp(item.id, {
-                                  owner: 'me',
-                                  targetPersonId: item.targetPersonId || draft.people[0]?.id || '',
-                                })}
-                                style={[styles.channelChip, item.owner === 'me' && styles.channelChipActive]}>
-                                <Text style={[styles.channelText, item.owner === 'me' && styles.channelTextActive]}>You</Text>
-                              </Pressable>
-                              {draft.people.length ? draft.people.map((candidate) => {
-                                const selected = item.owner === 'guest' && item.targetPersonId === candidate.id;
-                                return (
-                                  <Pressable
-                                    key={candidate.id}
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected }}
-                                    onPress={() => updateManualFollowUp(item.id, { owner: 'guest', targetPersonId: candidate.id })}
-                                    style={[styles.channelChip, selected && styles.channelChipActive]}>
-                                    <Text style={[styles.channelText, selected && styles.channelTextActive]}>{candidate.name.trim() || 'Guest'}</Text>
-                                  </Pressable>
-                                );
-                              }) : (
-                                <Pressable
-                                  accessibilityRole="button"
-                                  accessibilityState={{ selected: item.owner === 'guest' }}
-                                  onPress={() => updateManualFollowUp(item.id, { owner: 'guest', targetPersonId: '' })}
-                                  style={[styles.channelChip, item.owner === 'guest' && styles.channelChipActive]}>
-                                  <Text style={[styles.channelText, item.owner === 'guest' && styles.channelTextActive]}>{draft.personName.trim() || 'Guest'}</Text>
-                                </Pressable>
-                              )}
-                            </View>
-                          </View>
-                          {item.owner === 'me' && draft.people.length > 1 ? (
-                            <View style={styles.fieldGroup}>
-                              <Text style={styles.label}>Track with</Text>
-                              <View style={styles.channelRow}>
-                                {draft.people.map((candidate) => {
-                                  const selected = (item.targetPersonId || draft.people[0]?.id) === candidate.id;
-                                  return (
-                                    <Pressable
-                                      key={candidate.id}
-                                      accessibilityRole="button"
-                                      accessibilityState={{ selected }}
-                                      onPress={() => updateManualFollowUp(item.id, { targetPersonId: candidate.id })}
-                                      style={[styles.channelChip, selected && styles.channelChipActive]}>
-                                      <Text style={[styles.channelText, selected && styles.channelTextActive]}>{candidate.name.trim() || 'Guest'}</Text>
-                                    </Pressable>
-                                  );
-                                })}
-                              </View>
-                            </View>
-                          ) : null}
-                          <View style={styles.fieldGroup}>
-                            <Text style={styles.label}>How do {pronoun} want to follow up?</Text>
-                            <View style={styles.channelRow}>
-                              {SELECTABLE_FOLLOW_UP_CHANNELS.map((channel) => {
-                                const selected = item.channel === channel.id;
-                                return (
-                                  <Pressable
-                                    key={channel.id}
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected }}
-                                    onPress={() => updateManualFollowUp(item.id, { channel: channel.id })}
-                                    style={[styles.channelChip, selected && styles.channelChipActive]}>
-                                    <Text style={[styles.channelText, selected && styles.channelTextActive]}>{channel.label}</Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                          </View>
-                          <FollowUpDuePicker
-                            dueAt={item.dueAt}
-                            onChange={(dueAt) => updateManualFollowUp(item.id, { dueAt })}
-                            label={`When should ${pronoun} do this?`}
-                          />
-                          <View style={styles.fieldGroup}>
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityState={{ expanded: Boolean(manualFollowUpDetailOpen[item.id]) }}
-                              onPress={() => setManualFollowUpDetailOpen((current) => ({ ...current, [item.id]: !current[item.id] }))}
-                              style={styles.detailToggle}>
-                              <Text style={styles.label}>What do {pronoun} need to do? (optional)</Text>
-                              {manualFollowUpDetailOpen[item.id] ? (
-                                <CaretUp size={16} color={colors.ink} weight="bold" />
-                              ) : (
-                                <CaretDown size={16} color={colors.ink} weight="bold" />
-                              )}
-                            </Pressable>
-                            {manualFollowUpDetailOpen[item.id] ? (
-                              <>
-                                <Text style={styles.fieldHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
-                                <TextInput
-                                  value={item.title}
-                                  onChangeText={(value) => updateManualFollowUp(item.id, { title: value })}
-                                  placeholder="Send the proposal on Friday"
-                                  placeholderTextColor={colors.muted}
-                                  style={styles.input}
-                                />
-                              </>
-                            ) : null}
-                          </View>
-                        </BottomSheet>
                       </View>
                     );
                   })}
@@ -1522,6 +1413,122 @@ export default function CaptureWizardScreen() {
                     </>
                   );
                 })()}
+              </BottomSheet>
+
+              <BottomSheet
+                visible={Boolean(editingManualFollowUp)}
+                title="Edit follow-up"
+                onClose={() => setEditingManualFollowUpId('')}
+                footer={<Button onPress={() => setEditingManualFollowUpId('')}>Done</Button>}>
+                {editingManualFollowUp ? (
+                  <>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Owner</Text>
+                      <View style={styles.channelRow}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: editingManualFollowUp.owner === 'me' }}
+                          onPress={() => updateManualFollowUp(editingManualFollowUp.id, {
+                            owner: 'me',
+                            targetPersonId: editingManualFollowUp.targetPersonId || draft.people[0]?.id || '',
+                          })}
+                          style={[styles.channelChip, editingManualFollowUp.owner === 'me' && styles.channelChipActive]}>
+                          <Text style={[styles.channelText, editingManualFollowUp.owner === 'me' && styles.channelTextActive]}>You</Text>
+                        </Pressable>
+                        {draft.people.length ? draft.people.map((candidate) => {
+                          const selected = editingManualFollowUp.owner === 'guest' && editingManualFollowUp.targetPersonId === candidate.id;
+                          return (
+                            <Pressable
+                              key={candidate.id}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected }}
+                              onPress={() => updateManualFollowUp(editingManualFollowUp.id, { owner: 'guest', targetPersonId: candidate.id })}
+                              style={[styles.channelChip, selected && styles.channelChipActive]}>
+                              <Text style={[styles.channelText, selected && styles.channelTextActive]}>{candidate.name.trim() || 'Guest'}</Text>
+                            </Pressable>
+                          );
+                        }) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: editingManualFollowUp.owner === 'guest' }}
+                            onPress={() => updateManualFollowUp(editingManualFollowUp.id, { owner: 'guest', targetPersonId: '' })}
+                            style={[styles.channelChip, editingManualFollowUp.owner === 'guest' && styles.channelChipActive]}>
+                            <Text style={[styles.channelText, editingManualFollowUp.owner === 'guest' && styles.channelTextActive]}>{draft.personName.trim() || 'Guest'}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                    {editingManualFollowUp.owner === 'me' && draft.people.length > 1 ? (
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.label}>Track with</Text>
+                        <View style={styles.channelRow}>
+                          {draft.people.map((candidate) => {
+                            const selected = (editingManualFollowUp.targetPersonId || draft.people[0]?.id) === candidate.id;
+                            return (
+                              <Pressable
+                                key={candidate.id}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected }}
+                                onPress={() => updateManualFollowUp(editingManualFollowUp.id, { targetPersonId: candidate.id })}
+                                style={[styles.channelChip, selected && styles.channelChipActive]}>
+                                <Text style={[styles.channelText, selected && styles.channelTextActive]}>{candidate.name.trim() || 'Guest'}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ) : null}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>How do {editingManualFollowUpPronoun} want to follow up?</Text>
+                      <View style={styles.channelRow}>
+                        {SELECTABLE_FOLLOW_UP_CHANNELS.map((channel) => {
+                          const selected = editingManualFollowUp.channel === channel.id;
+                          return (
+                            <Pressable
+                              key={channel.id}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected }}
+                              onPress={() => updateManualFollowUp(editingManualFollowUp.id, { channel: channel.id })}
+                              style={[styles.channelChip, selected && styles.channelChipActive]}>
+                              <Text style={[styles.channelText, selected && styles.channelTextActive]}>{channel.label}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                    <FollowUpDuePicker
+                      dueAt={editingManualFollowUp.dueAt}
+                      onChange={(dueAt) => updateManualFollowUp(editingManualFollowUp.id, { dueAt })}
+                      label={`When should ${editingManualFollowUpPronoun} do this?`}
+                    />
+                    <View style={styles.fieldGroup}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: Boolean(manualFollowUpDetailOpen[editingManualFollowUp.id]) }}
+                        onPress={() => setManualFollowUpDetailOpen((current) => ({ ...current, [editingManualFollowUp.id]: !current[editingManualFollowUp.id] }))}
+                        style={styles.detailToggle}>
+                        <Text style={styles.label}>What do {editingManualFollowUpPronoun} need to do? (optional)</Text>
+                        {manualFollowUpDetailOpen[editingManualFollowUp.id] ? (
+                          <CaretUp size={16} color={colors.ink} weight="bold" />
+                        ) : (
+                          <CaretDown size={16} color={colors.ink} weight="bold" />
+                        )}
+                      </Pressable>
+                      {manualFollowUpDetailOpen[editingManualFollowUp.id] ? (
+                        <>
+                          <Text style={styles.fieldHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
+                          <TextInput
+                            value={editingManualFollowUp.title}
+                            onChangeText={(value) => updateManualFollowUp(editingManualFollowUp.id, { title: value })}
+                            placeholder="Send the proposal on Friday"
+                            placeholderTextColor={colors.muted}
+                            style={styles.input}
+                          />
+                        </>
+                      ) : null}
+                    </View>
+                  </>
+                ) : null}
               </BottomSheet>
 
               <Pressable

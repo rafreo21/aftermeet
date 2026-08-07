@@ -150,6 +150,8 @@ export default function QuickFollowUpScreen() {
   }
 
   const searchResults = personSearchQuery.trim() ? filterConnections(connections, personSearchQuery) : [];
+  const editingItem = followUps.find((item) => item.id === editingFollowUpId) || null;
+  const editingPronoun = editingItem?.owner === 'guest' ? 'they' : 'you';
 
   async function submit() {
     const cleanName = personName.trim();
@@ -254,7 +256,6 @@ export default function QuickFollowUpScreen() {
                 ? (personName.trim() ? `You → ${personName.trim()}` : 'You')
                 : (personName.trim() || 'Them');
               const dueLabel = formatDueLabel(item.dueAt);
-              const itemPronoun = item.owner === 'me' ? 'you' : 'they';
               return (
                 <View key={item.id} style={styles.actionItem}>
                   <View style={styles.actionRow}>
@@ -277,84 +278,6 @@ export default function QuickFollowUpScreen() {
                       <Trash size={19} color={colors.muted} />
                     </Pressable>
                   </View>
-
-                  <BottomSheet
-                    visible={editingFollowUpId === item.id}
-                    title="Edit follow-up"
-                    onClose={() => setEditingFollowUpId('')}
-                    footer={<Button onPress={() => setEditingFollowUpId('')}>Done</Button>}>
-                    <View style={styles.fieldGroup}>
-                      <Text style={styles.label}>Owner</Text>
-                      <View style={styles.chips}>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: item.owner === 'me' }}
-                          onPress={() => updateFollowUp(item.id, { owner: 'me' })}
-                          style={[styles.chip, item.owner === 'me' && styles.chipActive]}>
-                          <Text style={[styles.chipText, item.owner === 'me' && styles.chipTextActive]}>You</Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: item.owner === 'guest' }}
-                          onPress={() => updateFollowUp(item.id, { owner: 'guest' })}
-                          style={[styles.chip, item.owner === 'guest' && styles.chipActive]}>
-                          <Text style={[styles.chipText, item.owner === 'guest' && styles.chipTextActive]}>
-                            {personName.trim() || 'Them'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    <View style={styles.fieldGroup}>
-                      <Text style={styles.label}>How do {itemPronoun} want to follow up?</Text>
-                      <View style={styles.chips}>
-                        {SELECTABLE_FOLLOW_UP_CHANNELS.map((option) => (
-                          <Pressable
-                            key={option.id}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: item.channel === option.id }}
-                            onPress={() => updateFollowUp(item.id, { channel: option.id })}
-                            style={[styles.chip, item.channel === option.id && styles.chipActive]}>
-                            <Text style={[styles.chipText, item.channel === option.id && styles.chipTextActive]}>{option.label}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-
-                    <FollowUpDuePicker
-                      dueAt={item.dueAt}
-                      onChange={(nextDueAt) => updateFollowUp(item.id, { dueAt: nextDueAt })}
-                      label={`When should ${itemPronoun} do this?`}
-                    />
-
-                    <View style={styles.fieldGroup}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ expanded: Boolean(followUpDetailOpen[item.id]) }}
-                        onPress={() => setFollowUpDetailOpen((current) => ({ ...current, [item.id]: !current[item.id] }))}
-                        style={styles.detailToggle}>
-                        <Text style={styles.label}>What do {itemPronoun} need to do? (optional)</Text>
-                        {followUpDetailOpen[item.id] ? (
-                          <CaretUp size={16} color={colors.ink} weight="bold" />
-                        ) : (
-                          <CaretDown size={16} color={colors.ink} weight="bold" />
-                        )}
-                      </Pressable>
-                      {followUpDetailOpen[item.id] ? (
-                        <>
-                          <Text style={styles.linkHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
-                          <TextInput
-                            value={item.title}
-                            onChangeText={(value) => updateFollowUp(item.id, { title: value })}
-                            placeholder="e.g. Send Sarah the revised product draft"
-                            placeholderTextColor={colors.muted}
-                            multiline
-                            style={[styles.input, styles.inputMultiline]}
-                          />
-                        </>
-                      ) : null}
-                    </View>
-                  </BottomSheet>
                 </View>
               );
             })}
@@ -466,6 +389,88 @@ export default function QuickFollowUpScreen() {
           Save follow-ups
         </Button>
       </View>
+
+      <BottomSheet
+        visible={Boolean(editingItem)}
+        title="Edit follow-up"
+        onClose={() => setEditingFollowUpId('')}
+        footer={<Button onPress={() => setEditingFollowUpId('')}>Done</Button>}>
+        {editingItem ? (
+          <>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Owner</Text>
+              <View style={styles.chips}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: editingItem.owner === 'me' }}
+                  onPress={() => updateFollowUp(editingItem.id, { owner: 'me' })}
+                  style={[styles.chip, editingItem.owner === 'me' && styles.chipActive]}>
+                  <Text style={[styles.chipText, editingItem.owner === 'me' && styles.chipTextActive]}>You</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: editingItem.owner === 'guest' }}
+                  onPress={() => updateFollowUp(editingItem.id, { owner: 'guest' })}
+                  style={[styles.chip, editingItem.owner === 'guest' && styles.chipActive]}>
+                  <Text style={[styles.chipText, editingItem.owner === 'guest' && styles.chipTextActive]}>
+                    {personName.trim() || 'Them'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>How do {editingPronoun} want to follow up?</Text>
+              <View style={styles.chips}>
+                {SELECTABLE_FOLLOW_UP_CHANNELS.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: editingItem.channel === option.id }}
+                    onPress={() => updateFollowUp(editingItem.id, { channel: option.id })}
+                    style={[styles.chip, editingItem.channel === option.id && styles.chipActive]}>
+                    <Text style={[styles.chipText, editingItem.channel === option.id && styles.chipTextActive]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <FollowUpDuePicker
+              dueAt={editingItem.dueAt}
+              onChange={(nextDueAt) => updateFollowUp(editingItem.id, { dueAt: nextDueAt })}
+              label={`When should ${editingPronoun} do this?`}
+            />
+
+            <View style={styles.fieldGroup}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: Boolean(followUpDetailOpen[editingItem.id]) }}
+                onPress={() => setFollowUpDetailOpen((current) => ({ ...current, [editingItem.id]: !current[editingItem.id] }))}
+                style={styles.detailToggle}>
+                <Text style={styles.label}>What do {editingPronoun} need to do? (optional)</Text>
+                {followUpDetailOpen[editingItem.id] ? (
+                  <CaretUp size={16} color={colors.ink} weight="bold" />
+                ) : (
+                  <CaretDown size={16} color={colors.ink} weight="bold" />
+                )}
+              </Pressable>
+              {followUpDetailOpen[editingItem.id] ? (
+                <>
+                  <Text style={styles.linkHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
+                  <TextInput
+                    value={editingItem.title}
+                    onChangeText={(value) => updateFollowUp(editingItem.id, { title: value })}
+                    placeholder="e.g. Send Sarah the revised product draft"
+                    placeholderTextColor={colors.muted}
+                    multiline
+                    style={[styles.input, styles.inputMultiline]}
+                  />
+                </>
+              ) : null}
+            </View>
+          </>
+        ) : null}
+      </BottomSheet>
 
       <BottomSheet
         visible={addPersonSheetOpen}
