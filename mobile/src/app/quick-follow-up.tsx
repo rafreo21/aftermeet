@@ -78,6 +78,7 @@ export default function QuickFollowUpScreen() {
   const [outcomeError, setOutcomeError] = useState('');
   const [successOpen, setSuccessOpen] = useState(false);
   const [queuedOffline, setQueuedOffline] = useState(false);
+  const [newGuestName, setNewGuestName] = useState('');
   const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Resume an in-progress Quick Follow-up if the app was backgrounded or
@@ -201,6 +202,7 @@ export default function QuickFollowUpScreen() {
     await clearQuickFollowUpDraft();
     setSaving(false);
     setQueuedOffline(true);
+    setNewGuestName('');
     setSuccessOpen(true);
   }
 
@@ -256,10 +258,11 @@ export default function QuickFollowUpScreen() {
         durationSeconds: 0,
         startedAt: new Date().toISOString(),
       });
-      await saveEncounter(session.access_token, encounter);
+      const result = await saveEncounter(session.access_token, encounter);
       await clearQuickFollowUpDraft();
       setSaving(false);
       setQueuedOffline(false);
+      setNewGuestName(result.newGuestNames[0] || '');
       setSuccessOpen(true);
     } catch (caught) {
       if (!isOnline()) {
@@ -684,7 +687,9 @@ export default function QuickFollowUpScreen() {
         title={queuedOffline ? 'Saved for when you’re back online' : 'Follow-up added'}
         message={queuedOffline
           ? "You're offline — this will be added to Follow-ups automatically the moment you reconnect."
-          : 'It is now in Follow-ups and will stay there until you complete it.'}
+          : newGuestName
+            ? `It is now in Follow-ups. We also emailed ${newGuestName} to let them know and invite them to claim their own AfterMeet card.`
+            : 'It is now in Follow-ups and will stay there until you complete it.'}
         onClose={() => router.replace('/settings/follow-ups')}
       />
     </View>

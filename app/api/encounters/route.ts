@@ -92,6 +92,8 @@ async function syncParticipantsToContacts(
   addedByName: string,
   participants: EncounterParticipant[],
 ) {
+  const newGuestNames: string[] = [];
+
   for (const participant of participants) {
     const email = participant.email.trim().toLowerCase();
     const { firstName, lastName } = splitParticipantName(participant.name);
@@ -130,6 +132,7 @@ async function syncParticipantsToContacts(
             appUrl,
           });
           await sendEmail({ to: participant.email.trim(), subject, html });
+          newGuestNames.push(participant.name.trim());
         }
       } catch {
         // Best-effort — the contact is already saved either way.
@@ -147,6 +150,8 @@ async function syncParticipantsToContacts(
       }, { onConflict: "workspace_id,legacy_id" });
     }
   }
+
+  return newGuestNames;
 }
 
 export async function GET(request: Request) {
@@ -285,7 +290,7 @@ export async function POST(request: Request) {
   }
 
   await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
-  await syncParticipantsToContacts(supabase, user.workspaceId, user.id, user.displayName || "Someone you met", participants);
+  const newGuestNames = await syncParticipantsToContacts(supabase, user.workspaceId, user.id, user.displayName || "Someone you met", participants);
 
   // The encounter is reviewable — and its transcript actually has content —
   // the first time it is saved. This is the single place both mobile and
@@ -330,5 +335,8 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, updatedAt: nextUpdatedAt }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json(
+    { ok: true, updatedAt: nextUpdatedAt, newGuestNames },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }

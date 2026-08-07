@@ -647,7 +647,7 @@ export async function saveEncounter(
   accessToken: string,
   encounter: EncounterPayload,
   options?: { expectedUpdatedAt?: string },
-): Promise<{ updatedAt?: string }> {
+): Promise<{ updatedAt?: string; newGuestNames: string[] }> {
   const response = await mobileFetch('/api/encounters', accessToken, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -692,7 +692,14 @@ export async function saveEncounter(
         : null,
     }),
   });
-  const payload = await readMobileApiJson<{ ok?: boolean; error?: string; conflict?: boolean; serverUpdatedAt?: string; updatedAt?: string }>(
+  const payload = await readMobileApiJson<{
+    ok?: boolean;
+    error?: string;
+    conflict?: boolean;
+    serverUpdatedAt?: string;
+    updatedAt?: string;
+    newGuestNames?: string[];
+  }>(
     response,
     'Could not read the meeting save response.',
   );
@@ -706,7 +713,7 @@ export async function saveEncounter(
     throw new Error(payload.error || 'Could not save this meeting.');
   }
   requestFollowUpNotificationSync();
-  return { updatedAt: payload.updatedAt };
+  return { updatedAt: payload.updatedAt, newGuestNames: payload.newGuestNames ?? [] };
 }
 
 export async function getEncounter(accessToken: string, id: string) {
