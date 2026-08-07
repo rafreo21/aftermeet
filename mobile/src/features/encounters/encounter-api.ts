@@ -15,6 +15,12 @@ import {
   type FollowUpChannel,
 } from '@/features/follow-ups/follow-up-channels';
 
+// Longer than mobileFetch's default — transcribing a long recording
+// genuinely takes a while server-side, and this is the one call site where
+// the default 45s would fire false-positive timeouts on real, still-working
+// requests.
+const TRANSCRIBE_TIMEOUT_MS = 240_000;
+
 export type FollowUpChannelId = FollowUpChannel;
 
 export type EncounterDraft = {
@@ -485,6 +491,7 @@ async function transcribeViaMultipart(
   const response = await mobileFetch('/api/encounters/transcribe', accessToken, {
     method: 'POST',
     body: formData,
+    timeoutMs: TRANSCRIBE_TIMEOUT_MS,
   });
   return parseTranscribeResponse(response);
 }
@@ -503,6 +510,7 @@ async function transcribeViaBase64Json(
       mimeType: prepared.mimeType,
       lang: language,
     }),
+    timeoutMs: TRANSCRIBE_TIMEOUT_MS,
   });
   return parseTranscribeResponse(response);
 }

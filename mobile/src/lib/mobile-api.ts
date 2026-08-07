@@ -13,19 +13,45 @@ export function isNetworkError(error: unknown): boolean {
   return error instanceof Error && /network request failed/i.test(error.message);
 }
 
-export async function mobileFetch(path: string, accessToken: string, init?: RequestInit) {
+// Plain fetch() has no timeout — a request that hangs server-side (or a
+// dropped connection that never surfaces as an error) leaves the caller
+// awaiting forever. That's exactly what left a capture stuck at "Preparing
+// review" indefinitely with no way to cancel it. Every mobileFetch call now
+// aborts after timeoutMs so a hang always resolves into a normal catchable
+// error instead of hanging the UI state that depends on it.
+const DEFAULT_TIMEOUT_MS = 45_000;
+
+export async function mobileFetch(
+  path: string,
+  accessToken: string,
+  init?: RequestInit & { timeoutMs?: number },
+) {
   const env = readEnv();
   const base = env?.publicCardBaseUrl;
   if (!base) throw new Error('AfterMeet API URL is not configured.');
 
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...requestInit } = init ?? {};
+
   async function request(token: string) {
-    return fetch(`${base}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(init?.headers || {}),
-      },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(`${base}${path}`, {
+        ...requestInit,
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(requestInit.headers || {}),
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error("This is taking longer than expected. Check your connection and try again.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   let response = await request(accessToken);
