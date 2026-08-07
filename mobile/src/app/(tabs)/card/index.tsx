@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { CardLibraryTile } from '@/components/card-library-tile';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
 import { GreenHeroCard } from '@/components/green-hero-card';
+import { QuickActionsFab } from '@/components/quick-actions-fab';
 import { CardGridSkeleton } from '@/components/skeleton';
 
 import { Body, Button, Eyebrow, HeaderActionButton, Title } from '@/components/ui';
@@ -67,7 +68,7 @@ export default function CardLibraryScreen() {
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + spacing.x6 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + spacing.x3 + 56 + spacing.x4 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {!session && !hasCards ? (
@@ -138,6 +139,8 @@ export default function CardLibraryScreen() {
           setErrorMessage('');
         }}
       />
+
+      <QuickActionsFab />
     </View>
   );
 }

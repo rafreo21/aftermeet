@@ -8,18 +8,15 @@ import {
   ListChecks,
   Microphone,
   Notebook,
-  Plus,
-  QrCode,
-  Scan,
   UsersThree,
 } from 'phosphor-react-native';
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BottomSheet } from '@/components/bottom-sheet';
 import { MiniPromptCard } from '@/components/mini-prompt-card';
 import { OfflineBanner } from '@/components/offline-banner';
 import { ProgressRing } from '@/components/progress-ring';
+import { QuickActionsFab } from '@/components/quick-actions-fab';
 import { Skeleton, SkeletonCircle, SkeletonLine } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
@@ -29,7 +26,7 @@ import {
 } from '@/features/encounters/active-capture-controller';
 import { fetchEncounters, type EncounterSummary } from '@/features/encounters/encounter-api';
 import { formatDuration } from '@/features/encounters/local-recordings';
-import { createFreshCaptureDraft, listCaptureDrafts, writeCaptureDraft, type CaptureDraftSummary } from '@/features/encounters/capture-draft';
+import { listCaptureDrafts, type CaptureDraftSummary } from '@/features/encounters/capture-draft';
 import {
   connectionAvatarUrl,
 } from '@/features/connections/connection-public-card';
@@ -74,7 +71,6 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [fabOpen, setFabOpen] = useState(false);
 
   const activeCapture = useSyncExternalStore(
     subscribeToActiveCapture,
@@ -154,23 +150,6 @@ export default function HomeScreen() {
   );
 
   const activeCaptureId = activeCapture?.snapshot.encounterId;
-
-  async function startCaptureNow() {
-    setFabOpen(false);
-    if (activeCapture) {
-      router.navigate({
-        pathname: '/capture/new',
-        params: { draftId: activeCapture.snapshot.encounterId },
-      });
-      return;
-    }
-    const draft = { ...createFreshCaptureDraft(), captureMode: 'recording' as const };
-    await writeCaptureDraft(draft);
-    router.navigate({
-      pathname: '/capture/new',
-      params: { draftId: draft.encounterId, openConsent: '1' },
-    });
-  }
 
   const draftCount = useMemo(
     () => drafts.filter((item) => item.encounterId !== activeCaptureId).length,
@@ -405,71 +384,7 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Quick actions"
-        onPress={() => setFabOpen(true)}
-        style={({ pressed }) => [
-          styles.fab,
-          { bottom: fabBottomOffset },
-          pressed && styles.fabPressed,
-        ]}>
-        <Plus size={24} color={colors.white} weight="bold" />
-      </Pressable>
-
-      <BottomSheet visible={fabOpen} title="Quick actions" onClose={() => setFabOpen(false)}>
-        <View style={styles.fabOptions}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void startCaptureNow()}
-            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
-            <View style={styles.fabOptionIcon}>
-              <Microphone size={20} color={colors.ink} weight="bold" />
-            </View>
-            <Text style={styles.fabOptionLabel}>Capture context</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setFabOpen(false);
-              if (card.status === 'published') {
-                router.navigate(`/share-card?id=${card.id}`);
-              } else {
-                router.navigate(`/edit-card?id=${card.id}`);
-              }
-            }}
-            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
-            <View style={styles.fabOptionIcon}>
-              <QrCode size={20} color={colors.ink} weight="bold" />
-            </View>
-            <Text style={styles.fabOptionLabel}>Share my card</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setFabOpen(false);
-              router.push('/quick-follow-up');
-            }}
-            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
-            <View style={styles.fabOptionIcon}>
-              <ListChecks size={20} color={colors.ink} weight="bold" />
-            </View>
-            <Text style={styles.fabOptionLabel}>Quick follow-up</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setFabOpen(false);
-              router.push('/scanner');
-            }}
-            style={({ pressed }) => [styles.fabOption, pressed && styles.fabOptionPressed]}>
-            <View style={styles.fabOptionIcon}>
-              <Scan size={20} color={colors.ink} weight="bold" />
-            </View>
-            <Text style={styles.fabOptionLabel}>Quick scan</Text>
-          </Pressable>
-        </View>
-      </BottomSheet>
+      <QuickActionsFab />
     </View>
   );
 }
@@ -699,41 +614,4 @@ const styles = StyleSheet.create({
   skeletonRow: { flexDirection: 'row', gap: spacing.x3 },
   skeletonButton: { flex: 1, height: 48, borderRadius: radius.small },
   skeletonPersonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.x3 },
-  fab: {
-    position: 'absolute',
-    right: spacing.x5,
-    width: 56,
-    height: 56,
-    borderRadius: radius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.ink,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  fabPressed: { opacity: 0.88 },
-  fabOptions: { gap: spacing.x2 },
-  fabOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.x3,
-    padding: spacing.x3,
-    borderRadius: radius.medium,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  fabOptionPressed: { opacity: 0.9 },
-  fabOptionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.round,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-  },
-  fabOptionLabel: { color: colors.ink, fontSize: 14, fontWeight: '800' },
 });

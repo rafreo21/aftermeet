@@ -24,6 +24,10 @@ export function ActiveCaptureBanner() {
   // every other destination, so it must never duplicate those controls here.
   if (!active || pathname.startsWith('/capture')) return null;
 
+  // Only the three tab root screens float a quick-actions FAB over this
+  // banner's lane; everywhere else it can stretch to match the left inset.
+  const hasFab = pathname === '/' || pathname === '/card' || pathname === '/settings';
+
   const { snapshot } = active;
   const isProcessing = snapshot.status === 'processing';
   const isPaused = snapshot.status === 'paused';
@@ -37,7 +41,12 @@ export function ActiveCaptureBanner() {
   }
 
   return (
-    <View pointerEvents="box-none" style={[styles.layer, { bottom: Math.max(insets.bottom, 12) + 78 }]}>
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.layer,
+        { bottom: Math.max(insets.bottom, 12) + 78, right: hasFab ? 92 : spacing.x4 },
+      ]}>
       <View style={styles.banner} accessibilityRole="summary">
         <Pressable
           accessibilityRole="button"
@@ -83,9 +92,6 @@ const styles = StyleSheet.create({
   layer: {
     position: 'absolute',
     left: spacing.x4,
-    // Home's FAB floats at right: spacing.x5, width 56 — stopping short of
-    // that zone (rather than going edge-to-edge) keeps this from covering it.
-    right: 92,
     zIndex: 100,
     elevation: 12,
   },

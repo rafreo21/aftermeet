@@ -40,6 +40,10 @@ function RootNavigator() {
         animation: 'slide_from_right',
       }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="onboarding/use-case"
+        options={{ presentation: 'transparentModal', headerShown: false, animation: 'slide_from_bottom', gestureEnabled: false }}
+      />
       <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
       <Stack.Screen name="auth/callback" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="share-card" options={{ presentation: 'fullScreenModal' }} />

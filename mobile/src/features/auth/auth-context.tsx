@@ -1,14 +1,14 @@
 import type { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
-import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createAuthRedirectUri } from '@/lib/auth-redirect';
 import { describeOtpDeliveryError } from '@/lib/otp-delivery-error';
 import { completeAuthSessionFromUrl, readLaunchAuthUrl } from '@/lib/auth-session-url';
 import { readMobileAuthRedirectUris } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
-import { consumeAuthReturnPath } from '@/features/encounters/capture-draft';
+import { consumeAuthReturnPath, setAuthReturnPath } from '@/features/encounters/capture-draft';
 
 type AuthValue = {
   session: Session | null;
@@ -18,6 +18,7 @@ type AuthValue = {
   signIn: (email: string) => Promise<{ error?: string; sent?: boolean }>;
   verifyEmailCode: (email: string, token: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  completeUseCaseSelection: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -41,25 +42,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const sessionTimeout = setTimeout(() => setLoading(false), 5000);
 
-    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (event === 'SIGNED_IN' && nextSession) {
-        void consumeAuthReturnPath().then((path) => {
-          if (path) router.replace(path as '/capture');
-          else router.replace('/(tabs)');
-        });
-      }
     });
 
     async function handleUrl(url: string | null) {
       if (!url || !supabase) return;
-      const result = await completeAuthSessionFromUrl(supabase, url);
-      if (result.ok) {
-        void consumeAuthReturnPath().then((path) => {
-          if (path) router.replace(path as '/capture');
-          else router.replace('/(tabs)');
-        });
-      }
+      await completeAuthSessionFromUrl(supabase, url);
     }
 
     readLaunchAuthUrl().then(handleUrl);
@@ -74,10 +63,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, [supabase]);
 
+  const provisionedForUserId = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!supabase || !session) return;
-    supabase.rpc('provision_personal_workspace').then(() => {
+    if (!supabase || !session) {
+      provisionedForUserId.current = null;
+      return;
+    }
+    if (provisionedForUserId.current === session.user.id) return;
+    provisionedForUserId.current = session.user.id;
+
+    supabase.rpc('provision_personal_workspace').then(({ data }) => {
       void supabase.rpc('link_people_connections_for_email');
+      const onboardingStatus = Array.isArray(data) ? data[0]?.onboarding_status : undefined;
+      void consumeAuthReturnPath().then((path) => {
+        if (onboardingStatus && onboardingStatus !== 'completed') {
+          if (path) void setAuthReturnPath(path);
+          router.replace('/onboarding/use-case');
+        } else if (path) {
+          router.replace(path as '/capture');
+        } else {
+          router.replace('/(tabs)');
+        }
+      });
     });
   }, [session, supabase]);
 
@@ -106,6 +114,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return error ? { error: error.message } : {};
     },
     signOut: async () => { await supabase?.auth.signOut(); },
+    completeUseCaseSelection: async () => {
+      await supabase?.rpc('complete_use_case_selection');
+    },
   }), [session, loading, supabase, redirectUri]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

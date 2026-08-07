@@ -7,6 +7,7 @@ import { CardDeleteSheet } from '@/components/card-delete-sheet';
 import { MakePrimarySheet } from '@/components/make-primary-sheet';
 import { OnlyCardPrimarySheet } from '@/components/only-card-primary-sheet';
 import { OutcomeErrorSheet } from '@/components/outcome-error-sheet';
+import { OutcomeSuccessSheet } from '@/components/outcome-success-sheet';
 import { MobileCardPreview } from '@/components/mobile-card';
 import { BackButton, Button, Eyebrow, HeaderActionButton } from '@/components/ui';
 import { cardDisplayLabel } from '@/features/card/card-display';
@@ -42,6 +43,7 @@ export default function CardDetailScreen() {
   const [primaryBusy, setPrimaryBusy] = useState(false);
   const [errorSheetOpen, setErrorSheetOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [deleteSuccessOpen, setDeleteSuccessOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -67,7 +69,7 @@ export default function CardDetailScreen() {
     try {
       await deleteCard(selected.id);
       setDeleteOpen(false);
-      router.back();
+      setDeleteSuccessOpen(true);
     } catch (caught) {
       setErrorMessage(caught instanceof Error ? caught.message : 'Could not delete this card.');
       setErrorSheetOpen(true);
@@ -215,6 +217,15 @@ export default function CardDetailScreen() {
         onClose={() => {
           setErrorSheetOpen(false);
           setErrorMessage('');
+        }}
+      />
+
+      <OutcomeSuccessSheet
+        visible={deleteSuccessOpen}
+        message="Card deleted."
+        onClose={() => {
+          setDeleteSuccessOpen(false);
+          router.back();
         }}
       />
     </View>

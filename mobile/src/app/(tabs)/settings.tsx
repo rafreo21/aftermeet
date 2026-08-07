@@ -3,6 +3,7 @@ import { Bell, CaretRight, CloudArrowUp, DeviceMobile, IdentificationBadge, List
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BottomSheet } from '@/components/bottom-sheet';
+import { QuickActionsFab } from '@/components/quick-actions-fab';
 import { Body, Button, Eyebrow, Panel, Screen, Title } from '@/components/ui';
 import { SettingsSkeleton } from '@/components/skeleton';
 import { useAuth } from '@/features/auth/auth-context';
@@ -50,15 +51,17 @@ export default function SettingsScreen() {
   }
 
   return (
-    <Screen
-      header={
-        <View style={styles.header}>
-          <Eyebrow>AfterMeet mobile</Eyebrow>
-          <Title style={styles.title}>My Profile</Title>
-          <Body>Manage your account, synchronization and mobile capabilities.</Body>
-        </View>
-      }>
-      <Pressable
+    <View style={styles.root}>
+      <Screen
+        contentContainerStyle={styles.scrollContent}
+        header={
+          <View style={styles.header}>
+            <Eyebrow>AfterMeet mobile</Eyebrow>
+            <Title style={styles.title}>My Profile</Title>
+            <Body>Manage your account, synchronization and mobile capabilities.</Body>
+          </View>
+        }>
+        <Pressable
         accessibilityRole="button"
         onPress={() => router.push('/settings/edit-profile')}
         style={({ pressed }) => [styles.linkPanel, pressed && styles.linkPanelPressed]}>
@@ -243,11 +246,16 @@ export default function SettingsScreen() {
           Sign out
         </Button>
       )}
-    </Screen>
+      </Screen>
+
+      <QuickActionsFab />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
+  scrollContent: { paddingBottom: spacing.x3 + 56 + spacing.x4 },
   header: { gap: spacing.x3 },
   title: { fontSize: 30, lineHeight: 32 },
   label: { color: colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },

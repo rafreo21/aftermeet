@@ -72,7 +72,12 @@ export default function EditProfileScreen() {
           title="Edit profile"
           onBack={() => router.back()}
         />
-      }>
+      }
+      footer={loading ? undefined : (
+        <Button onPress={() => void save()} loading={saving}>
+          Save changes
+        </Button>
+      )}>
       {loading ? (
         <SettingsSkeleton />
       ) : (
@@ -138,10 +143,6 @@ export default function EditProfileScreen() {
               </Text>
             </View>
           </Panel>
-
-          <Button onPress={() => void save()} loading={saving}>
-            Save changes
-          </Button>
         </View>
       )}
 

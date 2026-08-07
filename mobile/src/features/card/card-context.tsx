@@ -49,7 +49,7 @@ type CardValue = {
   sync: () => Promise<void>;
   publish: () => Promise<PublishCardResult>;
   publishCard: (id?: string, cardOverride?: MobileCard) => Promise<PublishCardResult>;
-  deleteCard: (id: string) => Promise<boolean>;
+  deleteCard: (id: string) => Promise<void>;
 };
 
 const CardContext = createContext<CardValue | null>(null);
@@ -442,7 +442,7 @@ export function CardProvider({ children }: PropsWithChildren) {
   const deleteCard = useCallback(async (id: string) => {
     const currentCards = cardsRef.current;
     const target = currentCards.find((item) => item.id === id);
-    if (!target?.id) return false;
+    if (!target?.id) throw new Error('This card could not be found.');
 
     const supabase = getSupabase();
     if (supabase && session) {
@@ -459,7 +459,6 @@ export function CardProvider({ children }: PropsWithChildren) {
     await persistCards(nextCards, nextActiveId);
     await setCardDirty(id, false);
     void clearPublishedBaseline(id);
-    return true;
   }, [persistCards, session, setCardDirty]);
 
   const getCardById = useCallback(
