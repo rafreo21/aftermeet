@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '@/features/auth/auth-context';
 import { CardProvider } from '@/features/card/card-context';
 import { FollowUpSyncManager } from '@/features/follow-ups/follow-up-sync-manager';
+import { QuickFollowUpSyncManager } from '@/features/follow-ups/quick-follow-up-sync-manager';
 import { OfflineScanSyncManager } from '@/features/connections/offline-scan-sync-manager';
 import { NotificationManager } from '@/features/notifications/notification-manager';
 import { ActiveCaptureBanner } from '@/components/active-capture-banner';
@@ -90,6 +91,7 @@ export default function RootLayout() {
         <AuthProvider>
           <NotificationManager />
           <FollowUpSyncManager />
+          <QuickFollowUpSyncManager />
           <OfflineScanSyncManager />
           <CaptureTranscriptionSyncManager />
           <CardProvider>

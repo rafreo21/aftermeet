@@ -26,17 +26,15 @@ import { useCard } from '@/features/card/card-context';
 import { fetchAllConnectionsMerged, filterConnections, type ConnectionItem } from '@/features/connections/connections-api';
 import { buildEncounterPayload, fetchInboundExchanges, saveEncounter, type InboundExchange } from '@/features/encounters/encounter-api';
 import { displayFollowUpTitle, SELECTABLE_FOLLOW_UP_CHANNELS, type FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
+import { clearQuickFollowUpDraft, readQuickFollowUpDraft, writeQuickFollowUpDraft } from '@/features/follow-ups/quick-follow-up-draft';
+import { enqueueQuickFollowUp } from '@/features/follow-ups/quick-follow-up-queue';
+import type { QuickFollowUpItem } from '@/features/follow-ups/quick-follow-up-types';
 import { formatDueLabel } from '@/lib/due-date';
+import { isOnline } from '@/lib/connectivity';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
 
-type QuickFollowUpDraft = {
-  id: string;
-  title: string;
-  channel: FollowUpChannel;
-  owner: 'me' | 'guest';
-  dueAt: string;
-};
+type QuickFollowUpDraft = QuickFollowUpItem;
 
 export default function QuickFollowUpScreen() {
   const params = useLocalSearchParams<{
@@ -79,6 +77,44 @@ export default function QuickFollowUpScreen() {
   const [validationError, setValidationError] = useState('');
   const [outcomeError, setOutcomeError] = useState('');
   const [successOpen, setSuccessOpen] = useState(false);
+  const [queuedOffline, setQueuedOffline] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+
+  // Resume an in-progress Quick Follow-up if the app was backgrounded or
+  // closed before it was saved. Only when there's no explicit navigation
+  // target (from a connection's detail page) or the draft matches it — a
+  // stale draft for a different person should never silently take over.
+  useEffect(() => {
+    (async () => {
+      const draft = await readQuickFollowUpDraft();
+      const targetName = params.personName?.trim().toLowerCase();
+      const draftMatchesTarget = !targetName || draft?.personName.trim().toLowerCase() === targetName;
+      if (draft && draftMatchesTarget) {
+        if (draft.personName) setPersonName(draft.personName);
+        if (draft.personEmail) setPersonEmail(draft.personEmail);
+        if (draft.followUps.length) setFollowUps(draft.followUps);
+      }
+      setDraftHydrated(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume is a one-time mount effect
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+    if (!personName.trim() && !followUps.length) {
+      void clearQuickFollowUpDraft();
+      return;
+    }
+    void writeQuickFollowUpDraft({
+      personName,
+      personEmail,
+      sourceId: params.sourceId,
+      contactId: params.contactId,
+      exchangeId: params.exchangeId,
+      followUps,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [draftHydrated, personName, personEmail, followUps, params.sourceId, params.contactId, params.exchangeId]);
 
   useEffect(() => {
     if (!addPersonSheetOpen || !session?.access_token) return;
@@ -153,6 +189,21 @@ export default function QuickFollowUpScreen() {
   const editingItem = followUps.find((item) => item.id === editingFollowUpId) || null;
   const editingPronoun = editingItem?.owner === 'guest' ? 'they' : 'you';
 
+  async function queueForLater(cleanName: string) {
+    await enqueueQuickFollowUp({
+      personName: cleanName,
+      personEmail: personEmail.trim(),
+      sourceId: params.sourceId,
+      contactId: params.contactId,
+      exchangeId: params.exchangeId,
+      followUps,
+    });
+    await clearQuickFollowUpDraft();
+    setSaving(false);
+    setQueuedOffline(true);
+    setSuccessOpen(true);
+  }
+
   async function submit() {
     const cleanName = personName.trim();
     if (!session?.access_token) {
@@ -171,6 +222,12 @@ export default function QuickFollowUpScreen() {
     setSaving(true);
     setValidationError('');
     setOutcomeError('');
+
+    if (!isOnline()) {
+      await queueForLater(cleanName);
+      return;
+    }
+
     try {
       const encounter = buildEncounterPayload({
         transcript: '',
@@ -200,9 +257,15 @@ export default function QuickFollowUpScreen() {
         startedAt: new Date().toISOString(),
       });
       await saveEncounter(session.access_token, encounter);
+      await clearQuickFollowUpDraft();
       setSaving(false);
+      setQueuedOffline(false);
       setSuccessOpen(true);
     } catch (caught) {
+      if (!isOnline()) {
+        await queueForLater(cleanName);
+        return;
+      }
       setOutcomeError(caught instanceof Error ? caught.message : 'Could not add this follow-up.');
       setSaving(false);
     }
@@ -618,8 +681,10 @@ export default function QuickFollowUpScreen() {
       />
       <OutcomeSuccessSheet
         visible={successOpen}
-        title="Follow-up added"
-        message="It is now in Follow-ups and will stay there until you complete it."
+        title={queuedOffline ? 'Saved for when you’re back online' : 'Follow-up added'}
+        message={queuedOffline
+          ? "You're offline — this will be added to Follow-ups automatically the moment you reconnect."
+          : 'It is now in Follow-ups and will stay there until you complete it.'}
         onClose={() => router.replace('/settings/follow-ups')}
       />
     </View>
