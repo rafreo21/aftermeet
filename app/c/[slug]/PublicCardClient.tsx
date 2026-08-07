@@ -193,6 +193,14 @@ export function PublicCardClient({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step, showAppDownload]);
 
+  // Best-effort: lets this card reload from cache if opened again while
+  // offline (e.g. weak signal indoors after the initial scan). Scoped to
+  // /c/ so it can never intercept anything outside public card pages.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/card-sw.js", { scope: "/c/" }).catch(() => {});
+  }, []);
+
   function openContactFile() {
     if (isIosDevice()) {
       window.location.href = vcardUrl;
