@@ -10,6 +10,9 @@ import { mergeRecordingMetadataForSave } from "../../../lib/recording-metadata";
 import { detectEncounterConflict } from "../../../lib/encounter-conflict";
 import { createNotification, notificationTypeEnabled } from "../../../lib/notifications-server";
 import { dispatchPushForUser } from "../../../lib/push-dispatch-server";
+import { provisionGuestAccountFromContact } from "../../../lib/guest-contact-provision-server";
+import { buildGuestAddedEmail } from "../../../lib/guest-added-email";
+import { sendEmail } from "../../../lib/send-email";
 
 const allowedStatuses = new Set(["draft", "reviewed", "shared", "archived"]);
 
@@ -76,10 +79,17 @@ function splitParticipantName(name: string) {
 // matched by email and left as the source of truth, new ones are created with
 // source "manual"; participants without an email dedupe on legacy_id instead so
 // re-saving the same encounter doesn't spawn duplicates.
+//
+// A genuinely new contact with an email also gets a bare guest account (if
+// they don't already have one) and a one-time "you were added" email —
+// provision_personal_workspace() takes over the rest of onboarding the
+// moment they actually sign in, so this only ever needs to create the
+// auth.users row and point them at /auth.
 async function syncParticipantsToContacts(
   supabase: SupabaseClient,
   workspaceId: string,
   userId: string,
+  addedByName: string,
   participants: EncounterParticipant[],
 ) {
   for (const participant of participants) {
@@ -106,6 +116,24 @@ async function syncParticipantsToContacts(
         linkedin_url: participant.linkedIn,
         source: "manual",
       });
+
+      try {
+        const provisioned = await provisionGuestAccountFromContact({
+          email: participant.email.trim(),
+          displayName: participant.name.trim(),
+        });
+        if (provisioned.ok && provisioned.created) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://aftermeet.app";
+          const { subject, html } = buildGuestAddedEmail({
+            guestName: participant.name.trim(),
+            addedByName,
+            appUrl,
+          });
+          await sendEmail({ to: participant.email.trim(), subject, html });
+        }
+      } catch {
+        // Best-effort — the contact is already saved either way.
+      }
     } else {
       await supabase.from("contacts").upsert({
         workspace_id: workspaceId,
@@ -257,7 +285,7 @@ export async function POST(request: Request) {
   }
 
   await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
-  await syncParticipantsToContacts(supabase, user.workspaceId, user.id, participants);
+  await syncParticipantsToContacts(supabase, user.workspaceId, user.id, user.displayName || "Someone you met", participants);
 
   // The encounter is reviewable — and its transcript actually has content —
   // the first time it is saved. This is the single place both mobile and
