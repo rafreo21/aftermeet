@@ -302,7 +302,22 @@ export default function HomeScreen() {
                 </View>
                 <CaretRight size={14} color={colors.muted} weight="bold" />
               </Pressable>
-            ) : null}
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sign in to see your follow-ups. Open sign in"
+                onPress={() => router.push('/auth')}
+                style={({ pressed }) => [styles.attentionCard, pressed && styles.attentionCardPressed]}>
+                <View style={styles.attentionIcon}>
+                  <ListChecks size={20} color={colors.ink} weight="bold" />
+                </View>
+                <View style={styles.attentionCopy}>
+                  <Text style={styles.attentionHeadline}>Sign in to see your follow-ups</Text>
+                  <Text style={styles.attentionSubline}>Commitments from your meetings will show up here.</Text>
+                </View>
+                <CaretRight size={14} color={colors.muted} weight="bold" />
+              </Pressable>
+            )}
 
             {activeWorkItems.length ? (
               <View style={styles.activeWork}>
