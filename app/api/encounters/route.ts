@@ -62,6 +62,65 @@ async function syncEncounterParticipants(
   await supabase.from("encounter_participants").insert(rows);
 }
 
+function splitParticipantName(name: string) {
+  const trimmed = name.trim().replace(/\s+/g, " ");
+  const spaceIndex = trimmed.indexOf(" ");
+  if (spaceIndex === -1) return { firstName: trimmed, lastName: "" };
+  return { firstName: trimmed.slice(0, spaceIndex), lastName: trimmed.slice(spaceIndex + 1) };
+}
+
+// People typed manually into a capture only ever land in encounter_participants,
+// which nothing outside that one encounter's detail view ever reads — they were
+// invisible in Connections. Upserting them into contacts (already merged into
+// the Connections list on both clients) closes that gap: existing contacts are
+// matched by email and left as the source of truth, new ones are created with
+// source "manual"; participants without an email dedupe on legacy_id instead so
+// re-saving the same encounter doesn't spawn duplicates.
+async function syncParticipantsToContacts(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+  participants: EncounterParticipant[],
+) {
+  for (const participant of participants) {
+    const email = participant.email.trim().toLowerCase();
+    const { firstName, lastName } = splitParticipantName(participant.name);
+    if (!firstName) continue;
+
+    if (email) {
+      const { data: existing } = await supabase
+        .from("contacts")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .ilike("email", email)
+        .maybeSingle();
+      if (existing) continue;
+
+      await supabase.from("contacts").insert({
+        workspace_id: workspaceId,
+        created_by_user_id: userId,
+        first_name: firstName,
+        last_name: lastName,
+        email: participant.email.trim(),
+        phone: participant.phone,
+        linkedin_url: participant.linkedIn,
+        source: "manual",
+      });
+    } else {
+      await supabase.from("contacts").upsert({
+        workspace_id: workspaceId,
+        created_by_user_id: userId,
+        first_name: firstName,
+        last_name: lastName,
+        phone: participant.phone,
+        linkedin_url: participant.linkedIn,
+        source: "manual",
+        legacy_id: participant.id,
+      }, { onConflict: "workspace_id,legacy_id" });
+    }
+  }
+}
+
 export async function GET(request: Request) {
   const user = await resolveApiUser(request);
   if (!user) return NextResponse.json({ error: "Your session has expired." }, { status: 401 });
@@ -198,6 +257,7 @@ export async function POST(request: Request) {
   }
 
   await syncEncounterParticipants(supabase, body.id, user.workspaceId, participants);
+  await syncParticipantsToContacts(supabase, user.workspaceId, user.id, participants);
 
   // The encounter is reviewable — and its transcript actually has content —
   // the first time it is saved. This is the single place both mobile and
