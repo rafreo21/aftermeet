@@ -43,7 +43,7 @@ function defaultMeetingWindow(dueAt: string) {
 
 export async function createGoogleCalendarEvent(
   accessToken: string,
-  input: { title: string; details: string; dueAt: string },
+  input: { title: string; details: string; dueAt: string; attendeeEmail?: string },
 ) {
   const { start, end } = defaultMeetingWindow(input.dueAt);
   const response = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
@@ -57,6 +57,7 @@ export async function createGoogleCalendarEvent(
       description: input.details,
       start: { dateTime: start.toISOString() },
       end: { dateTime: end.toISOString() },
+      ...(input.attendeeEmail ? { attendees: [{ email: input.attendeeEmail }] } : {}),
     }),
   });
   if (!response.ok) throw new Error("Google Calendar rejected this event.");
@@ -65,7 +66,7 @@ export async function createGoogleCalendarEvent(
 
 export async function createMicrosoftCalendarEvent(
   accessToken: string,
-  input: { title: string; details: string; dueAt: string },
+  input: { title: string; details: string; dueAt: string; attendeeEmail?: string },
 ) {
   const { start, end } = defaultMeetingWindow(input.dueAt);
   const response = await fetch("https://graph.microsoft.com/v1.0/me/events", {
@@ -79,6 +80,9 @@ export async function createMicrosoftCalendarEvent(
       body: { contentType: "Text", content: input.details },
       start: { dateTime: start.toISOString(), timeZone: "UTC" },
       end: { dateTime: end.toISOString(), timeZone: "UTC" },
+      ...(input.attendeeEmail
+        ? { attendees: [{ emailAddress: { address: input.attendeeEmail }, type: "required" }] }
+        : {}),
     }),
   });
   if (!response.ok) throw new Error("Outlook Calendar rejected this event.");

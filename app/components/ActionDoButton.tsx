@@ -28,6 +28,11 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
   const [integrations, setIntegrations] = useState<ConnectedAccountStatus>(emptyConnectedAccountStatus());
   const [scheduling, setScheduling] = useState<"" | "google" | "microsoft">("");
   const [scheduleMessage, setScheduleMessage] = useState("");
+  // AfterMeet never auto-sends anything external — creating a private event
+  // on your own calendar needs no review, but inviting the other person is
+  // an outward-facing action, so it always stops here for an explicit
+  // choice instead of firing straight from the dropdown.
+  const [pendingProvider, setPendingProvider] = useState<"" | "google" | "microsoft">("");
 
   useEffect(() => {
     void fetch("/api/integrations/status")
@@ -50,7 +55,7 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
   });
   const buttonSize = size === "medium" ? "normal" : "small";
 
-  async function scheduleViaConnected(provider: "google" | "microsoft") {
+  async function scheduleViaConnected(provider: "google" | "microsoft", attendeeEmail?: string) {
     const title = action.title.trim() || `Meeting with ${context.personName || "contact"}`;
     const details = `Scheduled from AfterMeet${context.encounterTitle ? `: ${context.encounterTitle}` : ""}.`;
     setScheduling(provider);
@@ -59,18 +64,22 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
       const response = await fetch("/api/integrations/schedule-meeting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, title, details, dueAt: action.dueAt }),
+        body: JSON.stringify({ provider, title, details, dueAt: action.dueAt, attendeeEmail }),
       });
-      const payload = await response.json() as { error?: string };
+      const payload = await response.json() as { error?: string; invited?: boolean };
       if (!response.ok) {
         setScheduleMessage(payload.error || "We couldn’t schedule this meeting.");
         return;
       }
-      setScheduleMessage(`Scheduled in ${provider === "google" ? "Google Calendar" : "Outlook Calendar"}.`);
+      const calendarName = provider === "google" ? "Google Calendar" : "Outlook Calendar";
+      setScheduleMessage(payload.invited
+        ? `Scheduled in ${calendarName} and invited ${context.personName || "them"}.`
+        : `Scheduled in ${calendarName}.`);
     } catch {
       setScheduleMessage("We couldn’t schedule this meeting.");
     } finally {
       setScheduling("");
+      setPendingProvider("");
     }
   }
 
@@ -83,12 +92,13 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
   if (action.channel === "meeting") {
     const items: DropdownItem[] = [
       integrations.google.connected
-        ? { key: "google", label: "Google Calendar", onSelect: () => void scheduleViaConnected("google") }
+        ? { key: "google", label: "Google Calendar", onSelect: () => setPendingProvider("google") }
         : { key: "google", label: "Google Calendar", href: primary.href, external: primary.external },
       integrations.microsoft.connected
-        ? { key: "outlook", label: "Outlook Calendar", onSelect: () => void scheduleViaConnected("microsoft") }
+        ? { key: "outlook", label: "Outlook Calendar", onSelect: () => setPendingProvider("microsoft") }
         : { key: "outlook", label: "Outlook Calendar", href: secondary.find((link) => link.label === "Outlook Calendar")?.href, external: true },
     ];
+    const calendarLabel = pendingProvider === "google" ? "Google Calendar" : "Outlook Calendar";
     return (
       <div className="action-do-group">
         <DropdownButton
@@ -98,6 +108,39 @@ export function ActionDoButton({ action, context, size = "small", showSecondary 
           size={buttonSize}
           loading={scheduling !== ""}
         />
+        {pendingProvider ? (
+          <div className="action-do-confirm" role="group" aria-label={`Confirm ${calendarLabel} event`}>
+            <small>Add to {calendarLabel}{action.dueAt ? ` for ${action.dueAt}` : ""}. Nothing sends until you choose below.</small>
+            <div className="action-do-confirm-buttons">
+              <button
+                type="button"
+                className="action-do-confirm-button"
+                disabled={scheduling !== ""}
+                onClick={() => void scheduleViaConnected(pendingProvider)}
+              >
+                Just block my calendar
+              </button>
+              {context.personEmail ? (
+                <button
+                  type="button"
+                  className="action-do-confirm-button action-do-confirm-button-primary"
+                  disabled={scheduling !== ""}
+                  onClick={() => void scheduleViaConnected(pendingProvider, context.personEmail)}
+                >
+                  Also invite {context.personName || "them"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="action-do-confirm-button action-do-confirm-button-ghost"
+                disabled={scheduling !== ""}
+                onClick={() => setPendingProvider("")}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
         {scheduleMessage ? <span className="action-do-message" role="status">{scheduleMessage}</span> : null}
       </div>
     );
