@@ -333,6 +333,17 @@ export function buildEncounterPayload(input: {
 
   const selectedCommitments = (input.commitments ?? []).filter((commitment) => commitment.title.trim());
   const actions: EncounterAction[] = [];
+  // Every follow-up targeting the same person in this capture shares a
+  // groupId, so the follow-ups list nests them under one person instead of
+  // showing a separate top-level row per follow-up.
+  const groupIdsByPerson = new Map<string, string>();
+  function groupIdFor(personId: string) {
+    const existing = groupIdsByPerson.get(personId);
+    if (existing) return existing;
+    const next = createId();
+    groupIdsByPerson.set(personId, next);
+    return next;
+  }
   for (const commitment of selectedCommitments) {
     const assignee = assignees.find((person) => (
       person.name.trim().toLocaleLowerCase() === commitment.ownerName.trim().toLocaleLowerCase()
@@ -348,6 +359,7 @@ export function buildEncounterPayload(input: {
       assigneeName: assignee.name,
       assigneeEmail: assignee.email,
       participantId: assignee.id,
+      groupId: groupIdFor(assignee.id),
     });
   }
   for (const item of input.manualFollowUps ?? []) {
@@ -372,6 +384,7 @@ export function buildEncounterPayload(input: {
       assigneeName: assignee.name,
       assigneeEmail: assignee.email,
       participantId: assignee.id,
+      groupId: groupIdFor(assignee.id),
     });
   }
 

@@ -9,6 +9,7 @@ import {
   Plus,
   QrCode,
   Scan,
+  Trash,
   X,
 } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
@@ -24,9 +25,18 @@ import { useAuth } from '@/features/auth/auth-context';
 import { useCard } from '@/features/card/card-context';
 import { fetchAllConnectionsMerged, filterConnections, type ConnectionItem } from '@/features/connections/connections-api';
 import { buildEncounterPayload, fetchInboundExchanges, saveEncounter, type InboundExchange } from '@/features/encounters/encounter-api';
-import { SELECTABLE_FOLLOW_UP_CHANNELS, type FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
+import { displayFollowUpTitle, SELECTABLE_FOLLOW_UP_CHANNELS, type FollowUpChannel } from '@/features/follow-ups/follow-up-channels';
+import { formatDueLabel } from '@/lib/due-date';
 import { useAppInsets } from '@/lib/safe-area';
 import { colors, radius, spacing } from '@/theme/tokens';
+
+type QuickFollowUpDraft = {
+  id: string;
+  title: string;
+  channel: FollowUpChannel;
+  owner: 'me' | 'guest';
+  dueAt: string;
+};
 
 export default function QuickFollowUpScreen() {
   const params = useLocalSearchParams<{
@@ -54,11 +64,16 @@ export default function QuickFollowUpScreen() {
   const [exchanges, setExchanges] = useState<InboundExchange[]>([]);
   const [loadingExchanges, setLoadingExchanges] = useState(false);
 
-  const [title, setTitle] = useState('');
-  const [channel, setChannel] = useState<FollowUpChannel>('email');
-  const [owner, setOwner] = useState<'me' | 'guest'>('me');
-  const [dueAt, setDueAt] = useState('');
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [followUps, setFollowUps] = useState<QuickFollowUpDraft[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [editingFollowUpId, setEditingFollowUpId] = useState('');
+  const [followUpDetailOpen, setFollowUpDetailOpen] = useState<Record<string, boolean>>({});
+
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftChannel, setDraftChannel] = useState<FollowUpChannel>('email');
+  const [draftOwner, setDraftOwner] = useState<'me' | 'guest'>('me');
+  const [draftDueAt, setDraftDueAt] = useState('');
+  const [draftDetailOpen, setDraftDetailOpen] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState('');
@@ -110,7 +125,30 @@ export default function QuickFollowUpScreen() {
     setAddPersonSheetOpen(false);
   }
 
-  const pronoun = owner === 'me' ? 'you' : 'they';
+  function addFollowUp() {
+    setFollowUps((current) => [...current, {
+      id: `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: draftTitle.trim(),
+      channel: draftChannel,
+      owner: draftOwner,
+      dueAt: draftDueAt,
+    }]);
+    setDraftTitle('');
+    setDraftChannel('email');
+    setDraftOwner('me');
+    setDraftDueAt('');
+    setDraftDetailOpen(false);
+    setComposerOpen(false);
+  }
+
+  function updateFollowUp(id: string, patch: Partial<QuickFollowUpDraft>) {
+    setFollowUps((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function removeFollowUp(id: string) {
+    setFollowUps((current) => current.filter((item) => item.id !== id));
+  }
+
   const searchResults = personSearchQuery.trim() ? filterConnections(connections, personSearchQuery) : [];
 
   async function submit() {
@@ -121,6 +159,10 @@ export default function QuickFollowUpScreen() {
     }
     if (cleanName.length < 2) {
       setValidationError('Add the person this follow-up is for.');
+      return;
+    }
+    if (!followUps.length) {
+      setValidationError('Add at least one follow-up.');
       return;
     }
 
@@ -143,13 +185,13 @@ export default function QuickFollowUpScreen() {
         exchangeId: params.exchangeId || undefined,
         sharedSummary: '',
         privateNotes: '',
-        manualFollowUps: [{
-          title: title.trim(),
-          channel,
-          owner,
+        manualFollowUps: followUps.map((item) => ({
+          title: item.title,
+          channel: item.channel,
+          owner: item.owner,
           targetPersonId: '',
-          dueAt,
-        }],
+          dueAt: item.dueAt,
+        })),
         consentConfirmed: false,
         status: 'reviewed',
         durationSeconds: 0,
@@ -204,81 +246,224 @@ export default function QuickFollowUpScreen() {
           )}
         </Pressable>
 
-        <View style={styles.form}>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Owner</Text>
-            <View style={styles.chips}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: owner === 'me' }}
-                onPress={() => setOwner('me')}
-                style={[styles.chip, owner === 'me' && styles.chipActive]}>
-                <Text style={[styles.chipText, owner === 'me' && styles.chipTextActive]}>You</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: owner === 'guest' }}
-                onPress={() => setOwner('guest')}
-                style={[styles.chip, owner === 'guest' && styles.chipActive]}>
-                <Text style={[styles.chipText, owner === 'guest' && styles.chipTextActive]}>
-                  {personName.trim() || 'Them'}
-                </Text>
-              </Pressable>
-            </View>
+        {followUps.length ? (
+          <View style={styles.actionList}>
+            {followUps.map((item) => {
+              const channelLabel = SELECTABLE_FOLLOW_UP_CHANNELS.find((entry) => entry.id === item.channel)?.label || item.channel;
+              const ownerLabel = item.owner === 'me'
+                ? (personName.trim() ? `You → ${personName.trim()}` : 'You')
+                : (personName.trim() || 'Them');
+              const dueLabel = formatDueLabel(item.dueAt);
+              const itemPronoun = item.owner === 'me' ? 'you' : 'they';
+              return (
+                <View key={item.id} style={styles.actionItem}>
+                  <View style={styles.actionRow}>
+                    <View style={styles.actionCopy}>
+                      <Text style={styles.actionTitle}>{displayFollowUpTitle(item.title, item.channel)}</Text>
+                      <Text style={styles.linkHint}>{ownerLabel} · {channelLabel}{dueLabel ? ` · ${dueLabel}` : ''}</Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${displayFollowUpTitle(item.title, item.channel)}`}
+                      onPress={() => setEditingFollowUpId(item.id)}
+                      hitSlop={8}>
+                      <PencilSimple size={19} color={colors.ink} weight="bold" />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${displayFollowUpTitle(item.title, item.channel)}`}
+                      onPress={() => removeFollowUp(item.id)}
+                      hitSlop={8}>
+                      <Trash size={19} color={colors.muted} />
+                    </Pressable>
+                  </View>
+
+                  <BottomSheet
+                    visible={editingFollowUpId === item.id}
+                    title="Edit follow-up"
+                    onClose={() => setEditingFollowUpId('')}
+                    footer={<Button onPress={() => setEditingFollowUpId('')}>Done</Button>}>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>Owner</Text>
+                      <View style={styles.chips}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: item.owner === 'me' }}
+                          onPress={() => updateFollowUp(item.id, { owner: 'me' })}
+                          style={[styles.chip, item.owner === 'me' && styles.chipActive]}>
+                          <Text style={[styles.chipText, item.owner === 'me' && styles.chipTextActive]}>You</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: item.owner === 'guest' }}
+                          onPress={() => updateFollowUp(item.id, { owner: 'guest' })}
+                          style={[styles.chip, item.owner === 'guest' && styles.chipActive]}>
+                          <Text style={[styles.chipText, item.owner === 'guest' && styles.chipTextActive]}>
+                            {personName.trim() || 'Them'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.label}>How do {itemPronoun} want to follow up?</Text>
+                      <View style={styles.chips}>
+                        {SELECTABLE_FOLLOW_UP_CHANNELS.map((option) => (
+                          <Pressable
+                            key={option.id}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: item.channel === option.id }}
+                            onPress={() => updateFollowUp(item.id, { channel: option.id })}
+                            style={[styles.chip, item.channel === option.id && styles.chipActive]}>
+                            <Text style={[styles.chipText, item.channel === option.id && styles.chipTextActive]}>{option.label}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+
+                    <FollowUpDuePicker
+                      dueAt={item.dueAt}
+                      onChange={(nextDueAt) => updateFollowUp(item.id, { dueAt: nextDueAt })}
+                      label={`When should ${itemPronoun} do this?`}
+                    />
+
+                    <View style={styles.fieldGroup}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: Boolean(followUpDetailOpen[item.id]) }}
+                        onPress={() => setFollowUpDetailOpen((current) => ({ ...current, [item.id]: !current[item.id] }))}
+                        style={styles.detailToggle}>
+                        <Text style={styles.label}>What do {itemPronoun} need to do? (optional)</Text>
+                        {followUpDetailOpen[item.id] ? (
+                          <CaretUp size={16} color={colors.ink} weight="bold" />
+                        ) : (
+                          <CaretDown size={16} color={colors.ink} weight="bold" />
+                        )}
+                      </Pressable>
+                      {followUpDetailOpen[item.id] ? (
+                        <>
+                          <Text style={styles.linkHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
+                          <TextInput
+                            value={item.title}
+                            onChangeText={(value) => updateFollowUp(item.id, { title: value })}
+                            placeholder="e.g. Send Sarah the revised product draft"
+                            placeholderTextColor={colors.muted}
+                            multiline
+                            style={[styles.input, styles.inputMultiline]}
+                          />
+                        </>
+                      ) : null}
+                    </View>
+                  </BottomSheet>
+                </View>
+              );
+            })}
           </View>
+        ) : null}
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>How do {pronoun} want to follow up?</Text>
-            <View style={styles.chips}>
-              {SELECTABLE_FOLLOW_UP_CHANNELS.map((option) => (
-                <Pressable
-                  key={option.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: channel === option.id }}
-                  onPress={() => setChannel(option.id)}
-                  style={[styles.chip, channel === option.id && styles.chipActive]}>
-                  <Text style={[styles.chipText, channel === option.id && styles.chipTextActive]}>{option.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setComposerOpen(true)}
+          style={styles.actionComposerToggle}>
+          <View style={styles.actionComposerToggleCopy}>
+            <Plus size={17} color={colors.ink} weight="bold" />
+            <Text style={styles.actionComposerToggleText}>
+              {followUps.length ? 'Add another follow-up' : 'Add a follow-up'}
+            </Text>
           </View>
+        </Pressable>
 
-          <FollowUpDuePicker dueAt={dueAt} onChange={setDueAt} label={`When should ${pronoun} do this?`} />
-
-          <View style={styles.fieldGroup}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: detailOpen }}
-              onPress={() => setDetailOpen((value) => !value)}
-              style={styles.detailToggle}>
-              <Text style={styles.label}>What do {pronoun} need to do? (optional)</Text>
-              {detailOpen ? (
-                <CaretUp size={16} color={colors.ink} weight="bold" />
-              ) : (
-                <CaretDown size={16} color={colors.ink} weight="bold" />
-              )}
-            </Pressable>
-            {detailOpen ? (
+        <BottomSheet
+          visible={composerOpen}
+          title="Add a follow-up"
+          onClose={() => setComposerOpen(false)}
+          footer={
+            <Button onPress={addFollowUp}>
+              <Plus size={18} color={colors.ink} weight="bold" />
+              Add follow-up
+            </Button>
+          }>
+          {(() => {
+            const draftPronoun = draftOwner === 'me' ? 'you' : 'they';
+            return (
               <>
-                <Text style={styles.linkHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder="e.g. Send Sarah the revised product draft"
-                  placeholderTextColor={colors.muted}
-                  multiline
-                  style={[styles.input, styles.inputMultiline]}
-                />
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Owner</Text>
+                  <View style={styles.chips}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: draftOwner === 'me' }}
+                      onPress={() => setDraftOwner('me')}
+                      style={[styles.chip, draftOwner === 'me' && styles.chipActive]}>
+                      <Text style={[styles.chipText, draftOwner === 'me' && styles.chipTextActive]}>You</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: draftOwner === 'guest' }}
+                      onPress={() => setDraftOwner('guest')}
+                      style={[styles.chip, draftOwner === 'guest' && styles.chipActive]}>
+                      <Text style={[styles.chipText, draftOwner === 'guest' && styles.chipTextActive]}>
+                        {personName.trim() || 'Them'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>How do {draftPronoun} want to follow up?</Text>
+                  <View style={styles.chips}>
+                    {SELECTABLE_FOLLOW_UP_CHANNELS.map((option) => (
+                      <Pressable
+                        key={option.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: draftChannel === option.id }}
+                        onPress={() => setDraftChannel(option.id)}
+                        style={[styles.chip, draftChannel === option.id && styles.chipActive]}>
+                        <Text style={[styles.chipText, draftChannel === option.id && styles.chipTextActive]}>{option.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <FollowUpDuePicker dueAt={draftDueAt} onChange={setDraftDueAt} label={`When should ${draftPronoun} do this?`} />
+
+                <View style={styles.fieldGroup}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: draftDetailOpen }}
+                    onPress={() => setDraftDetailOpen((value) => !value)}
+                    style={styles.detailToggle}>
+                    <Text style={styles.label}>What do {draftPronoun} need to do? (optional)</Text>
+                    {draftDetailOpen ? (
+                      <CaretUp size={16} color={colors.ink} weight="bold" />
+                    ) : (
+                      <CaretDown size={16} color={colors.ink} weight="bold" />
+                    )}
+                  </Pressable>
+                  {draftDetailOpen ? (
+                    <>
+                      <Text style={styles.linkHint}>Shown in your reminders so you know what this one&apos;s about.</Text>
+                      <TextInput
+                        value={draftTitle}
+                        onChangeText={setDraftTitle}
+                        placeholder="e.g. Send Sarah the revised product draft"
+                        placeholderTextColor={colors.muted}
+                        multiline
+                        style={[styles.input, styles.inputMultiline]}
+                      />
+                    </>
+                  ) : null}
+                </View>
               </>
-            ) : null}
-          </View>
-        </View>
+            );
+          })()}
+        </BottomSheet>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.x2 }]}>
         <Button loading={saving} disabled={saving} onPress={() => void submit()}>
           <CheckCircle size={19} color={colors.ink} weight="bold" />
-          Add follow-up
+          Save follow-ups
         </Button>
       </View>
 
@@ -460,12 +645,23 @@ const styles = StyleSheet.create({
   },
   personTriggerCopy: { flex: 1, gap: 2 },
   personTriggerName: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  form: {
-    gap: spacing.x4,
-    padding: spacing.x5,
+  actionList: { gap: spacing.x2 },
+  actionItem: { overflow: 'hidden', borderRadius: radius.medium, backgroundColor: colors.surface },
+  actionRow: { minHeight: 54, padding: spacing.x3, flexDirection: 'row', alignItems: 'center', gap: spacing.x3, borderRadius: radius.medium, backgroundColor: colors.surface },
+  actionCopy: { flex: 1, gap: 2 },
+  actionTitle: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  actionComposerToggle: {
+    minHeight: 46,
+    paddingHorizontal: spacing.x4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.x3,
     borderRadius: radius.large,
     backgroundColor: colors.surface,
   },
+  actionComposerToggleCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.x2 },
+  actionComposerToggleText: { color: colors.ink, fontSize: 13, fontWeight: '800' },
   fieldGroup: { gap: spacing.x3 },
   detailToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.x2 },
@@ -510,7 +706,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.medium,
     backgroundColor: colors.canvas,
   },
-  searchInput: { flex: 1, color: colors.ink, fontSize: 15 },
+  searchInput: { flex: 1, color: colors.ink, fontSize: 15, textAlign: 'left' },
   resultsList: { gap: spacing.x2, marginTop: spacing.x3 },
   resultCard: {
     gap: 2,
