@@ -83,7 +83,7 @@ export default function EditProfileScreen() {
       ) : (
         <View style={styles.content}>
           <Body>
-            These details are for your account only. Your public card is separate: edit it anytime from My Cards.
+            Account details only — your public card is edited from My Cards.
           </Body>
 
           <Panel style={styles.panel}>

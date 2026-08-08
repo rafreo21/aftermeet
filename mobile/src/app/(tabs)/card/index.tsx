@@ -52,7 +52,7 @@ export default function CardLibraryScreen() {
               </Title>
               <Body>
                 {session
-                  ? `You can create up to ${MAX_CARDS} cards. Open one to view details, share it, or make it your primary card.`
+                  ? 'Open a card to view, share, or set primary.'
                   : hasCards
                     ? 'Sign in to publish and sync your cards across devices.'
                     : 'Build your card locally, then sign in when you are ready to publish and share it.'}
