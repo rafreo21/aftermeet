@@ -260,7 +260,10 @@ export default function ConnectionDetailScreen() {
         kind: 'completed' as const,
         occurredAt: item.completedAt || '',
         title: item.title,
-        copy: item.encounterTitle ? `From ${item.encounterTitle}` : '',
+        // No "From {meeting title}" caption here — the meeting itself
+        // already appears as its own History cell in this same list, so
+        // repeating its title read as duplicated text right next to it.
+        copy: '',
         encounterId: item.encounterId,
         meeting: meetings.find((meeting) => meeting.id === item.encounterId) || null,
       })),

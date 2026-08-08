@@ -153,7 +153,9 @@ export default function ConnectionDetailPage() {
         kind: "completed",
         occurredAt: item.completedAt || "",
         title: item.title,
-        copy: item.encounterTitle ? `From ${item.encounterTitle}` : undefined,
+        // The meeting itself already has its own History cell in this same
+        // list, so repeating its title here read as duplicated text.
+        copy: undefined,
         encounterId: item.encounterId,
       })),
   ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings, recordedMeetings]);
