@@ -239,7 +239,10 @@ export async function fetchAllConnectionsMerged(accessToken: string): Promise<Co
       id: `contact-${contact.id}`,
       sourceId: contact.id,
       name,
-      subtitle: subtitle(contact.role, contact.company, 'Added by you'),
+      // Falls back to something distinct from "Added by you" — the source
+      // label right above this on the connection detail screen already says
+      // that, so repeating it here read as a visible duplicate.
+      subtitle: subtitle(contact.role, contact.company, 'No role or company added yet'),
       email: contact.email?.trim() || undefined,
       phone: contact.phone?.trim() || undefined,
       source: 'contact',

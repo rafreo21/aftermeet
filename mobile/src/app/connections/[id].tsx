@@ -236,8 +236,15 @@ export default function ConnectionDetailScreen() {
     [followUps],
   );
   const followUpPreview = useMemo(() => openFollowUps.slice(0, 2), [openFollowUps]);
+  // Quick Follow-up creates a placeholder encounter just to hold its task —
+  // no conversation happened, so it shouldn't read as a "Meeting" in History.
+  // Follow-ups already covers that task; History is only real conversations.
+  const recordedMeetings = useMemo(
+    () => meetings.filter((meeting) => meeting.durationSeconds > 0 || meeting.recording),
+    [meetings],
+  );
   const timeline = useMemo(() => [
-    ...meetings.map((meeting) => ({
+    ...recordedMeetings.map((meeting) => ({
       id: `meeting-${meeting.id}`,
       kind: 'meeting' as const,
       occurredAt: meeting.startedAt,
@@ -257,7 +264,7 @@ export default function ConnectionDetailScreen() {
         encounterId: item.encounterId,
         meeting: meetings.find((meeting) => meeting.id === item.encounterId) || null,
       })),
-  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings]);
+  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings, recordedMeetings]);
 
   async function confirmDelete() {
     if (!accessToken || !connection) return;
@@ -311,9 +318,9 @@ export default function ConnectionDetailScreen() {
   }
 
   const contextLine = connection?.subtitle || connectionSourceLabel(connection?.source || 'met');
-  const meetingCountLabel = meetings.length === 1
+  const meetingCountLabel = recordedMeetings.length === 1
     ? '1 conversation'
-    : `${meetings.length} conversations`;
+    : `${recordedMeetings.length} conversations`;
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top + spacing.x2 }]}>
@@ -336,7 +343,7 @@ export default function ConnectionDetailScreen() {
               <Title style={styles.name}>{connection.name}</Title>
               <Eyebrow>{connectionSourceLabel(connection.source)}</Eyebrow>
               <Body>{contextLine}</Body>
-              {meetings.length ? <Body style={styles.countLine}>{meetingCountLabel}</Body> : null}
+              {recordedMeetings.length ? <Body style={styles.countLine}>{meetingCountLabel}</Body> : null}
               <View style={styles.relationshipActions}>
                 <Button
                   style={styles.relationshipAction}
@@ -384,15 +391,15 @@ export default function ConnectionDetailScreen() {
             <View style={styles.content}>
               <View style={styles.section}>
                 <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>Relationship timeline</Text>
-                  {timeline.length > 3 ? (
+                  <Text style={styles.sectionTitle}>History</Text>
+                  {timeline.length > 2 ? (
                     <Pressable accessibilityRole="button" onPress={() => setMeetingsSheetOpen(true)}>
                       <Text style={styles.viewAll}>View all</Text>
                     </Pressable>
                   ) : null}
                 </View>
                 {timeline.length ? (
-                  timeline.slice(0, 3).map((item) => (
+                  timeline.slice(0, 2).map((item) => (
                     <Pressable
                       key={item.id}
                       accessibilityRole="button"
@@ -491,7 +498,7 @@ export default function ConnectionDetailScreen() {
         onSaveDirectory={() => void saveToDirectory()}
       />
 
-      <BottomSheet visible={meetingsSheetOpen} title="Relationship timeline" onClose={() => setMeetingsSheetOpen(false)}>
+      <BottomSheet visible={meetingsSheetOpen} title="History" onClose={() => setMeetingsSheetOpen(false)}>
         <View style={styles.list}>
           {timeline.map((item) => (
             <Pressable
@@ -619,7 +626,7 @@ const styles = StyleSheet.create({
   countLine: { color: colors.muted, fontSize: 13 },
   relationshipActions: { flexDirection: 'row', gap: spacing.x2, marginTop: spacing.x1 },
   relationshipAction: { flex: 1 },
-  scroll: { flex: 1, marginTop: spacing.x3 },
+  scroll: { flex: 1, marginTop: spacing.x5 },
   scrollContent: { paddingHorizontal: spacing.x5, gap: spacing.x3 },
   content: { gap: spacing.x5 },
   section: { gap: spacing.x3 },

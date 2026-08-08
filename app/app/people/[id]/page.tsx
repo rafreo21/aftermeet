@@ -24,6 +24,8 @@ type Meeting = {
   sharedSummary?: string;
   personName?: string;
   personEmail?: string;
+  durationSeconds?: number;
+  recording?: unknown;
 };
 
 type FollowUp = {
@@ -129,8 +131,14 @@ export default function ConnectionDetailPage() {
     [followUps],
   );
   const followUpPreview = useMemo(() => openFollowUps.slice(0, 2), [openFollowUps]);
+  // Quick Follow-up creates a placeholder encounter just to hold its task —
+  // no conversation happened, so it shouldn't read as a "Meeting" in History.
+  const recordedMeetings = useMemo(
+    () => meetings.filter((meeting) => (meeting.durationSeconds ?? 0) > 0 || meeting.recording),
+    [meetings],
+  );
   const timeline = useMemo<TimelineItem[]>(() => [
-    ...meetings.map((meeting): TimelineItem => ({
+    ...recordedMeetings.map((meeting): TimelineItem => ({
       id: `meeting-${meeting.id}`,
       kind: "meeting",
       occurredAt: meeting.startedAt,
@@ -148,7 +156,7 @@ export default function ConnectionDetailPage() {
         copy: item.encounterTitle ? `From ${item.encounterTitle}` : undefined,
         encounterId: item.encounterId,
       })),
-  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings]);
+  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)), [followUps, meetings, recordedMeetings]);
 
   async function confirmDelete() {
     if (!connection) return;
@@ -195,9 +203,9 @@ export default function ConnectionDetailPage() {
               <div>
                 <h1>{connection.name}</h1>
                 <p>{connection.subtitle}</p>
-                {meetings.length ? (
+                {recordedMeetings.length ? (
                   <small className="connections-count">
-                    {meetings.length === 1 ? "1 conversation" : `${meetings.length} conversations`}
+                    {recordedMeetings.length === 1 ? "1 conversation" : `${recordedMeetings.length} conversations`}
                   </small>
                 ) : null}
               </div>
@@ -209,7 +217,7 @@ export default function ConnectionDetailPage() {
 
             <section className="connections-section relationship-timeline">
               <div className="connections-section-head">
-                <h2>Relationship timeline</h2>
+                <h2>History</h2>
               </div>
               {timeline.length ? (
                 <div className="connections-list">
